@@ -234,6 +234,13 @@ export type ModelSettings = {
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
   'monitor_setting.channel_test_mode': 'scheduled_all' | 'passive_recovery'
+  'price_sync_setting.enabled': boolean
+  'price_sync_setting.source_url': string
+  'price_sync_setting.interval_hours': number
+  'price_sync_setting.apply_mode': 'decrease_only' | 'all' | 'dry_run'
+  'price_sync_setting.only_known_models': boolean
+  'price_sync_setting.exclude_models': string
+  'price_sync_setting.min_source_models': number
   'channel_affinity_setting.enabled': boolean
   'channel_affinity_setting.switch_on_success': boolean
   'channel_affinity_setting.keep_on_channel_disabled': boolean

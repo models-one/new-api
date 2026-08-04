@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import type { RatioType } from '../types'
 import {
   MODELS_DEV_PRESET_ID,
+  LITELLM_PRESET_ID,
+  LITELLM_PRESET_NAME,
   MODELS_DEV_PRESET_NAME,
   OFFICIAL_CHANNEL_ID,
   OFFICIAL_CHANNEL_NAME,
@@ -168,6 +170,7 @@ export function getUpstreamDisplayName(sourceName: string): string {
   const synthesizedPresets = [
     { name: OFFICIAL_CHANNEL_NAME, id: OFFICIAL_CHANNEL_ID },
     { name: MODELS_DEV_PRESET_NAME, id: MODELS_DEV_PRESET_ID },
+    { name: LITELLM_PRESET_NAME, id: LITELLM_PRESET_ID },
   ]
 
   for (const preset of synthesizedPresets) {

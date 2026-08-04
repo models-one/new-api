@@ -10,6 +10,9 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
+
+	"github.com/gin-gonic/gin"
 )
 
 // RegisterScheduledSystemTasks wires the periodic channel test, upstream model
@@ -22,6 +25,65 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
+	service.RegisterSystemTaskHandler(priceSyncHandler{})
+}
+
+// priceSyncHandler pulls the upstream model price table and merges the derived
+// ratios into the pricing options. It writes real selling prices, so it is off
+// by default and re-checks its own switch inside Run: the claim pass executes
+// any pending row regardless of Enabled().
+type priceSyncHandler struct{}
+
+func (priceSyncHandler) Type() string { return model.SystemTaskTypePriceSync }
+
+func (priceSyncHandler) Enabled() bool {
+	return ratio_setting.GetPriceSyncSetting().Enabled
+}
+
+func (priceSyncHandler) Interval() time.Duration {
+	hours := ratio_setting.GetPriceSyncSetting().IntervalHours
+	if hours < 1 {
+		hours = 6
+	}
+	return time.Duration(hours * float64(time.Hour))
+}
+
+func (priceSyncHandler) NewPayload() any { return nil }
+
+// priceSyncTaskPayload controls one price_sync run. A nil/empty payload is a
+// scheduled run, which obeys the configured apply mode and does nothing while
+// the feature is switched off. A manual trigger sets Manual=true so an admin can
+// force a run (optionally as a dry run) without enabling the schedule.
+type priceSyncTaskPayload struct {
+	Manual bool `json:"manual,omitempty"`
+	DryRun bool `json:"dry_run,omitempty"`
+}
+
+func (priceSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	// The runner has no panic recovery: an unhandled panic would leave this
+	// task row running until its lease expires and block every later run.
+	defer func() {
+		if r := recover(); r != nil {
+			finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, fmt.Errorf("price sync panic: %v", r))
+		}
+	}()
+
+	payload := priceSyncTaskPayload{}
+	if err := task.DecodePayload(&payload); err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	if !payload.Manual && !ratio_setting.GetPriceSyncSetting().Enabled {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, gin.H{"skipped": "price sync disabled"}, nil)
+		return
+	}
+
+	summary, err := runModelPriceSyncTaskOnce(ctx, payload.DryRun)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
 }
 
 // channelTestHandler runs the scheduled "test all channels" job. Enablement and

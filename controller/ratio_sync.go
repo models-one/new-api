@@ -43,6 +43,11 @@ const (
 	modelsDevHost               = "models.dev"
 	modelsDevPath               = "/api.json"
 	modelsDevInputCostRatioBase = 1000.0
+	liteLLMPresetID             = -102
+	liteLLMPresetName           = "LiteLLM 官方价格表"
+	liteLLMPresetBaseURL        = "https://raw.githubusercontent.com"
+	liteLLMPresetEndpoint       = "/Wei-Shaw/model-price-repo/refs/heads/main/model_prices_and_context_window.json"
+	liteLLMPriceFileName        = "model_prices_and_context_window.json"
 )
 
 func nearlyEqual(a, b float64) bool {
@@ -242,6 +247,7 @@ func FetchUpstreamRatios(c *gin.Context) {
 				fullURL = chItem.BaseURL + endpoint
 			}
 			isModelsDev := isModelsDevAPIEndpoint(fullURL)
+			isLiteLLM := isLiteLLMPriceEndpoint(fullURL)
 
 			uniqueName := chItem.Name
 			if chItem.ID != 0 {
@@ -331,6 +337,20 @@ func FetchUpstreamRatios(c *gin.Context) {
 				converted, err := convertModelsDevToRatioData(bytes.NewReader(bodyBytes))
 				if err != nil {
 					logger.LogWarn(c.Request.Context(), "models.dev parse failed from "+chItem.Name+": "+err.Error())
+					ch <- upstreamResult{Name: uniqueName, Err: err.Error()}
+					return
+				}
+				ch <- upstreamResult{Name: uniqueName, Data: converted}
+				return
+			}
+
+			// type5: LiteLLM model_prices_and_context_window.json -> bare
+			// model->cost map, per-token USD. Same source the price_sync
+			// scheduled task uses, exposed here for review-before-apply.
+			if isLiteLLM {
+				converted, err := convertLiteLLMToRatioData(bytes.NewReader(bodyBytes))
+				if err != nil {
+					logger.LogWarn(c.Request.Context(), "LiteLLM parse failed from "+chItem.Name+": "+err.Error())
 					ch <- upstreamResult{Name: uniqueName, Err: err.Error()}
 					return
 				}
@@ -984,6 +1004,111 @@ func convertModelsDevToRatioData(reader io.Reader) (map[string]any, error) {
 	return converted, nil
 }
 
+// liteLLMModelPricing is the subset of one entry of a LiteLLM
+// model_prices_and_context_window.json that maps onto new-api ratios. Costs are
+// USD per single token. Pointers distinguish "absent" from "free".
+type liteLLMModelPricing struct {
+	Mode                        string   `json:"mode"`
+	InputCostPerToken           *float64 `json:"input_cost_per_token"`
+	OutputCostPerToken          *float64 `json:"output_cost_per_token"`
+	CacheReadInputTokenCost     *float64 `json:"cache_read_input_token_cost"`
+	CacheCreationInputTokenCost *float64 `json:"cache_creation_input_token_cost"`
+}
+
+// liteLLMTokenBilledModes are the LiteLLM modes priced per text token, i.e. the
+// ones new-api's model_ratio / completion_ratio pair can represent. Image,
+// embedding, audio and realtime entries price a different unit and are skipped.
+var liteLLMTokenBilledModes = map[string]bool{
+	"chat":       true,
+	"responses":  true,
+	"completion": true,
+}
+
+// isPositiveFiniteCost rejects the values that must never become a ratio: a
+// missing or placeholder zero, a negative sentinel, and the NaN/Inf a huge JSON
+// number produces once multiplied out.
+func isPositiveFiniteCost(value float64) bool {
+	return value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+// isLiteLLMPriceEndpoint matches by file name rather than host so any mirror of
+// the LiteLLM table (or a self-hosted copy) is recognized.
+func isLiteLLMPriceEndpoint(rawURL string) bool {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return strings.HasSuffix(parsedURL.Path, liteLLMPriceFileName)
+}
+
+// convertLiteLLMToRatioData converts a LiteLLM price table into the same
+// {"model_ratio":…,"completion_ratio":…} shape the other upstream converters
+// produce. LiteLLM costs are per token, so the ratio derivation is the
+// OpenRouter one (price * 1000 * USD), not the models.dev per-million one.
+func convertLiteLLMToRatioData(reader io.Reader) (map[string]any, error) {
+	var table map[string]liteLLMModelPricing
+	if err := common.DecodeJson(reader, &table); err != nil {
+		return nil, fmt.Errorf("failed to decode LiteLLM price table: %w", err)
+	}
+
+	modelRatioMap := make(map[string]any)
+	completionRatioMap := make(map[string]any)
+	cacheRatioMap := make(map[string]any)
+	createCacheRatioMap := make(map[string]any)
+
+	for modelName, pricing := range table {
+		if modelName == "" || !liteLLMTokenBilledModes[pricing.Mode] {
+			continue
+		}
+		if pricing.InputCostPerToken == nil {
+			continue
+		}
+		// A zero or missing cost is a gap in the table far more often than a
+		// genuine giveaway, and pricing a model at zero here would make it free
+		// for every token class. Such entries are dropped, not zero priced.
+		inputCost := *pricing.InputCostPerToken
+		if !isPositiveFiniteCost(inputCost) {
+			continue
+		}
+
+		modelRatio := roundRatioValue(inputCost * 1000 * float64(ratio_setting.USD))
+		if !isPositiveFiniteCost(modelRatio) {
+			continue
+		}
+		modelRatioMap[modelName] = modelRatio
+
+		for target, cost := range map[*map[string]any]*float64{
+			&completionRatioMap:  pricing.OutputCostPerToken,
+			&cacheRatioMap:       pricing.CacheReadInputTokenCost,
+			&createCacheRatioMap: pricing.CacheCreationInputTokenCost,
+		} {
+			if cost == nil || !isPositiveFiniteCost(*cost) {
+				continue
+			}
+			derived := roundRatioValue(*cost / inputCost)
+			if isPositiveFiniteCost(derived) {
+				(*target)[modelName] = derived
+			}
+		}
+	}
+
+	if len(modelRatioMap) == 0 {
+		return nil, fmt.Errorf("LiteLLM price table contains no token-billed model")
+	}
+
+	converted := map[string]any{"model_ratio": modelRatioMap}
+	if len(completionRatioMap) > 0 {
+		converted["completion_ratio"] = completionRatioMap
+	}
+	if len(cacheRatioMap) > 0 {
+		converted["cache_ratio"] = cacheRatioMap
+	}
+	if len(createCacheRatioMap) > 0 {
+		converted["create_cache_ratio"] = createCacheRatioMap
+	}
+	return converted, nil
+}
+
 func GetSyncableChannels(c *gin.Context) {
 	channels, err := model.GetAllChannels(0, 0, true, false)
 	if err != nil {
@@ -1018,6 +1143,13 @@ func GetSyncableChannels(c *gin.Context) {
 		ID:      modelsDevPresetID,
 		Name:    modelsDevPresetName,
 		BaseURL: modelsDevPresetBaseURL,
+		Status:  1,
+	})
+
+	syncableChannels = append(syncableChannels, dto.SyncableChannel{
+		ID:      liteLLMPresetID,
+		Name:    liteLLMPresetName,
+		BaseURL: liteLLMPresetBaseURL,
 		Status:  1,
 	})
 

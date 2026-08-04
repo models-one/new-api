@@ -34,6 +34,36 @@ func CreateLogCleanupSystemTask(c *gin.Context) {
 	})
 }
 
+// CreateModelPriceSyncSystemTask triggers one price sync outside the schedule.
+// dry_run=true plans and records the differences without writing any ratio,
+// which is the intended way to preview an upstream price change.
+func CreateModelPriceSyncSystemTask(c *gin.Context) {
+	dryRun, _ := strconv.ParseBool(c.Query("dry_run"))
+
+	task, created, err := service.EnqueueSystemTask(model.SystemTaskTypePriceSync, priceSyncTaskPayload{
+		Manual: true,
+		DryRun: dryRun,
+	})
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !created {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"message": "已有价格同步任务正在运行或等待中",
+			"data":    task.ToResponse(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    task.ToResponse(),
+	})
+}
+
 func GetCurrentSystemTask(c *gin.Context) {
 	taskType := c.Query("type")
 	if taskType == "" {

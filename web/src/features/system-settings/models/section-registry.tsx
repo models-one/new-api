@@ -24,6 +24,7 @@ import { ClaudeSettingsCard } from './claude-settings-card'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
+import { PriceSyncSection } from './price-sync-section'
 import { RoutingReliabilitySection } from './routing-reliability-section'
 
 function formatJsonForEditor(value: string, fallback: string) {
@@ -85,6 +86,29 @@ const MODELS_SECTIONS = [
             settings['monitor_setting.auto_test_channel_minutes'],
           'monitor_setting.channel_test_mode':
             settings['monitor_setting.channel_test_mode'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'price-sync',
+    titleKey: 'Model Price Sync',
+    build: (settings: ModelSettings) => (
+      <PriceSyncSection
+        defaultValues={{
+          'price_sync_setting.enabled': settings['price_sync_setting.enabled'],
+          'price_sync_setting.source_url':
+            settings['price_sync_setting.source_url'],
+          'price_sync_setting.interval_hours':
+            settings['price_sync_setting.interval_hours'],
+          'price_sync_setting.apply_mode':
+            settings['price_sync_setting.apply_mode'],
+          'price_sync_setting.only_known_models':
+            settings['price_sync_setting.only_known_models'],
+          'price_sync_setting.exclude_models':
+            settings['price_sync_setting.exclude_models'],
+          'price_sync_setting.min_source_models':
+            settings['price_sync_setting.min_source_models'],
         }}
       />
     ),

@@ -23,6 +23,14 @@ import { useTranslation } from 'react-i18next'
 import { ErrorState } from '@/components/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -84,6 +92,7 @@ const TYPE_LABEL: Record<string, string> = {
   model_update: 'Batch upstream model update',
   midjourney_poll: 'Drawing task polling',
   async_task_poll: 'Async task polling',
+  price_sync: 'Model price sync',
 }
 
 const TYPE_DISPLAY_ID: Record<string, string> = {
@@ -102,6 +111,38 @@ function getProgress(task: SystemTask): number | null {
 
 type SystemTasksTableProps = {
   tasks: SystemTask[]
+}
+
+// A finished task's result is the only place some jobs report what they did —
+// the price sync stores its whole plan (applied changes, withheld price
+// increases, skip counts) there — so it needs a surface, not just the API.
+function TaskResultDialog({ task }: { task: SystemTask }) {
+  const { t } = useTranslation()
+
+  if (task.result === undefined || task.result === null) {
+    return <span className='text-muted-foreground'>-</span>
+  }
+
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={<Button variant='outline' size='sm' className='h-7 text-xs' />}
+      >
+        {t('View result')}
+      </DialogTrigger>
+      <DialogContent className='max-w-2xl'>
+        <DialogHeader>
+          <DialogTitle>{t(TYPE_LABEL[task.type] ?? task.type)}</DialogTitle>
+          <DialogDescription className='font-mono text-xs'>
+            {task.task_id}
+          </DialogDescription>
+        </DialogHeader>
+        <pre className='bg-muted max-h-[60vh] overflow-auto rounded-md p-3 text-xs'>
+          {JSON.stringify(task.result, null, 2)}
+        </pre>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function SystemTasksTable(props: SystemTasksTableProps) {
@@ -189,11 +230,17 @@ function SystemTasksTable(props: SystemTasksTableProps) {
                     toIntlLocale(i18n.language)
                   )}
                 </TableCell>
-                <TableCell
-                  className='text-destructive max-w-[220px] truncate py-3 pr-4 align-middle text-xs'
-                  title={task.error || undefined}
-                >
-                  {task.error || '-'}
+                <TableCell className='max-w-[220px] py-3 pr-4 align-middle text-xs'>
+                  {task.error ? (
+                    <span
+                      className='text-destructive block truncate'
+                      title={task.error}
+                    >
+                      {task.error}
+                    </span>
+                  ) : (
+                    <TaskResultDialog task={task} />
+                  )}
                 </TableCell>
               </TableRow>
             )

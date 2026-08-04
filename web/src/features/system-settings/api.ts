@@ -91,6 +91,18 @@ export async function resetModelRatios() {
   return res.data
 }
 
+// skipErrorHandler: a 409 here means "a sync is already running", which the
+// caller reports itself; the global handler would toast the raw backend string
+// on top of it.
+export async function triggerModelPriceSync(dryRun: boolean) {
+  const res = await api.post<{ success: boolean; message: string }>(
+    '/api/system-task/price-sync',
+    undefined,
+    { params: { dry_run: dryRun }, skipErrorHandler: true }
+  )
+  return res.data
+}
+
 export async function getUpstreamChannels() {
   const res = await api.get<UpstreamChannelsResponse>(
     '/api/ratio_sync/channels'
