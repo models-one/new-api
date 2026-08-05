@@ -147,6 +147,10 @@ const paymentSchema = z.object({
   StripeUnitPrice: z.coerce.number().min(0),
   StripeMinTopUp: z.coerce.number().min(0),
   StripePromotionCodesEnabled: z.boolean(),
+  NowPaymentsAPIKey: z.string(),
+  NowPaymentsIPNSecret: z.string(),
+  NowPaymentsUnitPrice: z.coerce.number().positive(),
+  NowPaymentsMinTopUp: z.coerce.number().min(1),
   CreemApiKey: z.string(),
   CreemWebhookSecret: z.string(),
   CreemTestMode: z.boolean(),
@@ -433,6 +437,10 @@ export function PaymentSettingsSection({
       StripeUnitPrice: values.StripeUnitPrice,
       StripeMinTopUp: values.StripeMinTopUp,
       StripePromotionCodesEnabled: values.StripePromotionCodesEnabled,
+      NowPaymentsAPIKey: values.NowPaymentsAPIKey.trim(),
+      NowPaymentsIPNSecret: values.NowPaymentsIPNSecret.trim(),
+      NowPaymentsUnitPrice: values.NowPaymentsUnitPrice,
+      NowPaymentsMinTopUp: values.NowPaymentsMinTopUp,
       CreemApiKey: values.CreemApiKey.trim(),
       CreemWebhookSecret: values.CreemWebhookSecret.trim(),
       CreemTestMode: values.CreemTestMode,
@@ -478,6 +486,10 @@ export function PaymentSettingsSection({
       StripeMinTopUp: initialRef.current.StripeMinTopUp,
       StripePromotionCodesEnabled:
         initialRef.current.StripePromotionCodesEnabled,
+      NowPaymentsAPIKey: initialRef.current.NowPaymentsAPIKey.trim(),
+      NowPaymentsIPNSecret: initialRef.current.NowPaymentsIPNSecret.trim(),
+      NowPaymentsUnitPrice: initialRef.current.NowPaymentsUnitPrice,
+      NowPaymentsMinTopUp: initialRef.current.NowPaymentsMinTopUp,
       CreemApiKey: initialRef.current.CreemApiKey.trim(),
       CreemWebhookSecret: initialRef.current.CreemWebhookSecret.trim(),
       CreemTestMode: initialRef.current.CreemTestMode,
@@ -598,6 +610,34 @@ export function PaymentSettingsSection({
       updates.push({
         key: 'StripePromotionCodesEnabled',
         value: sanitized.StripePromotionCodesEnabled,
+      })
+    }
+
+    if (sanitized.NowPaymentsAPIKey) {
+      updates.push({
+        key: 'NowPaymentsAPIKey',
+        value: sanitized.NowPaymentsAPIKey,
+      })
+    }
+
+    if (sanitized.NowPaymentsIPNSecret) {
+      updates.push({
+        key: 'NowPaymentsIPNSecret',
+        value: sanitized.NowPaymentsIPNSecret,
+      })
+    }
+
+    if (sanitized.NowPaymentsUnitPrice !== initial.NowPaymentsUnitPrice) {
+      updates.push({
+        key: 'NowPaymentsUnitPrice',
+        value: sanitized.NowPaymentsUnitPrice,
+      })
+    }
+
+    if (sanitized.NowPaymentsMinTopUp !== initial.NowPaymentsMinTopUp) {
+      updates.push({
+        key: 'NowPaymentsMinTopUp',
+        value: sanitized.NowPaymentsMinTopUp,
       })
     }
 
@@ -877,10 +917,11 @@ export function PaymentSettingsSection({
           />
           <Tabs defaultValue='general' className='min-w-0'>
             <div className='overflow-x-auto pb-1'>
-              <TabsList className='grid min-w-[44rem] grid-cols-6'>
+              <TabsList className='grid min-w-[52rem] grid-cols-7'>
                 <TabsTrigger value='general'>{t('General')}</TabsTrigger>
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
+                <TabsTrigger value='nowpayments'>NOWPayments</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
                 <TabsTrigger value='waffo'>Waffo</TabsTrigger>
@@ -1439,6 +1480,147 @@ export function PaymentSettingsSection({
                           />
                         </FormControl>
                       </SettingsSwitchItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent
+              value='nowpayments'
+              className={paymentTabContentClassName}
+            >
+              <div className='space-y-4'>
+                <div>
+                  <h3 className='text-lg font-medium'>NOWPayments</h3>
+                  <p className='text-muted-foreground text-sm'>
+                    {t('Hosted cryptocurrency checkout configuration')}
+                  </p>
+                </div>
+
+                <div className='rounded-md bg-blue-50 p-4 text-sm text-blue-900 dark:bg-blue-950 dark:text-blue-100'>
+                  <p className='mb-2 font-medium'>{t('IPN Configuration:')}</p>
+                  <ul className='list-inside list-disc space-y-1'>
+                    <li>
+                      {t('Webhook URL:')}{' '}
+                      <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
+                        {'<ServerAddress>/api/nowpayments/webhook'}
+                      </code>
+                    </li>
+                    <li>
+                      {t('The callback URL is included in every invoice.')}
+                    </li>
+                    <li>
+                      <a
+                        href='https://documenter.getpostman.com/view/7907941/2s93JusNJt'
+                        target='_blank'
+                        rel='noreferrer'
+                        className='underline hover:no-underline'
+                      >
+                        NOWPayments API
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsAPIKey'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('API Key')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='password'
+                            placeholder={t('Enter NOWPayments API key')}
+                            autoComplete='new-password'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'NOWPayments API key (leave blank unless updating)'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsIPNSecret'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('IPN Secret')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='password'
+                            placeholder={t('Enter NOWPayments IPN secret')}
+                            autoComplete='new-password'
+                            {...field}
+                            onChange={(event) =>
+                              field.onChange(event.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'NOWPayments IPN secret (leave blank unless updating)'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsUnitPrice'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {t('Unit price (USD / USD balance)')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type='number'
+                            step='0.01'
+                            min={0.01}
+                            {...safeNumberFieldProps(field)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Use 1 to charge one USD per USD of balance.')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsMinTopUp'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Minimum top-up (USD)')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='number'
+                            step='1'
+                            min={1}
+                            {...safeNumberFieldProps(field)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Minimum recharge amount in USD')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
                     )}
                   />
                 </div>

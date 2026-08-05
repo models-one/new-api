@@ -23,6 +23,7 @@ import { PAYMENT_TYPES } from '../constants'
 import {
   dispatchSelectedPayment,
   isStripePayment,
+  isNowPaymentsPayment,
   isWaffoPayment,
   isWaffoPancakePayment,
 } from './payment'
@@ -34,6 +35,8 @@ describe('payment type classification', () => {
     assert.equal(isWaffoPancakePayment(PAYMENT_TYPES.WAFFO_PANCAKE), true)
     assert.equal(isWaffoPancakePayment(PAYMENT_TYPES.WAFFO), false)
     assert.equal(isStripePayment(PAYMENT_TYPES.STRIPE), true)
+    assert.equal(isNowPaymentsPayment(PAYMENT_TYPES.NOWPAYMENTS), true)
+    assert.equal(isNowPaymentsPayment(PAYMENT_TYPES.STRIPE), false)
   })
 })
 

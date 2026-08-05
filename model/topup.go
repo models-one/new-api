@@ -29,6 +29,7 @@ const (
 	PaymentMethodCreem        = "creem"
 	PaymentMethodWaffo        = "waffo"
 	PaymentMethodWaffoPancake = "waffo_pancake"
+	PaymentMethodNowPayments  = "nowpayments"
 	PaymentMethodBalance      = "balance"
 )
 
@@ -38,6 +39,7 @@ const (
 	PaymentProviderCreem        = "creem"
 	PaymentProviderWaffo        = "waffo"
 	PaymentProviderWaffoPancake = "waffo_pancake"
+	PaymentProviderNowPayments  = "nowpayments"
 	PaymentProviderBalance      = "balance"
 )
 
@@ -585,5 +587,65 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 		RecordLog(topUp.UserId, LogTypeTopup, fmt.Sprintf("Waffo Pancake充值成功，充值额度: %v，支付金额: %.2f", logger.FormatQuota(quotaToAdd), topUp.Money))
 	}
 
+	return nil
+}
+
+func RechargeNowPayments(tradeNo string, callerIP string) (err error) {
+	if tradeNo == "" {
+		return errors.New("未提供支付单号")
+	}
+
+	var quotaToAdd int
+	topUp := &TopUp{}
+	refCol := "`trade_no`"
+	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
+		refCol = `"trade_no"`
+	}
+
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
+			return errors.New("充值订单不存在")
+		}
+		if topUp.PaymentProvider != PaymentProviderNowPayments {
+			return ErrPaymentMethodMismatch
+		}
+		if topUp.Status == common.TopUpStatusSuccess {
+			return nil
+		}
+		if topUp.Status != common.TopUpStatusPending {
+			return ErrTopUpStatusInvalid
+		}
+
+		quota, clamp := common.QuotaFromDecimalChecked(
+			decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
+		)
+		if clamp != nil || quota <= 0 {
+			return errors.New("无效的充值额度")
+		}
+		quotaToAdd = quota
+
+		topUp.CompleteTime = common.GetTimestamp()
+		topUp.Status = common.TopUpStatusSuccess
+		if err := tx.Save(topUp).Error; err != nil {
+			return err
+		}
+		return tx.Model(&User{}).
+			Where("id = ?", topUp.UserId).
+			Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error
+	})
+	if err != nil {
+		common.SysError("NOWPayments topup failed: " + err.Error())
+		return err
+	}
+
+	if quotaToAdd > 0 {
+		RecordTopupLog(
+			topUp.UserId,
+			fmt.Sprintf("NOWPayments充值成功，充值额度: %v，支付金额: %.2f", logger.FormatQuota(quotaToAdd), topUp.Money),
+			callerIP,
+			topUp.PaymentMethod,
+			PaymentMethodNowPayments,
+		)
+	}
 	return nil
 }

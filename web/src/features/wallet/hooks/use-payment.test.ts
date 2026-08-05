@@ -20,7 +20,7 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
 import { PAYMENT_TYPES } from '../constants'
-import { requestPaymentAmount } from './use-payment'
+import { requestPaymentAmount, requestSelectedPayment } from './use-payment'
 
 describe('payment amount routing', () => {
   test('uses the dedicated Waffo amount calculator', async () => {
@@ -34,6 +34,10 @@ describe('payment amount routing', () => {
         calls.push('stripe')
         return { success: true, data: '2' }
       },
+      nowPayments: async () => {
+        calls.push('nowpayments')
+        return { success: true, data: '3' }
+      },
       waffo: async (request) => {
         calls.push(`waffo:${request.amount}`)
         return { success: true, data: '18.75' }
@@ -46,5 +50,56 @@ describe('payment amount routing', () => {
 
     assert.equal(amount, 18.75)
     assert.deepEqual(calls, ['waffo:120'])
+  })
+
+  test('uses the dedicated NOWPayments amount calculator', async () => {
+    const calls: string[] = []
+    const amount = await requestPaymentAmount(50, PAYMENT_TYPES.NOWPAYMENTS, {
+      regular: async () => {
+        calls.push('regular')
+        return { success: true, data: '1' }
+      },
+      stripe: async () => ({ success: true, data: '2' }),
+      nowPayments: async (request) => {
+        calls.push(`nowpayments:${request.amount}`)
+        return { success: true, data: '49.99' }
+      },
+      waffo: async () => ({ success: true, data: '3' }),
+      waffoPancake: async () => ({ success: true, data: '4' }),
+    })
+
+    assert.equal(amount, 49.99)
+    assert.deepEqual(calls, ['nowpayments:50'])
+  })
+})
+
+describe('payment request routing', () => {
+  test('sends nowpayments to its hosted invoice endpoint requester', async () => {
+    const calls: string[] = []
+
+    const response = await requestSelectedPayment(
+      50.9,
+      PAYMENT_TYPES.NOWPAYMENTS,
+      {
+        regular: async () => {
+          calls.push('regular')
+          return { message: 'error' }
+        },
+        stripe: async () => {
+          calls.push('stripe')
+          return { message: 'error' }
+        },
+        nowPayments: async (request) => {
+          calls.push(`nowpayments:${request.amount}`)
+          return {
+            message: 'success',
+            data: { invoice_url: 'https://nowpayments.io/payment/?iid=1' },
+          }
+        },
+      }
+    )
+
+    assert.deepEqual(calls, ['nowpayments:50'])
+    assert.equal(response.message, 'success')
   })
 })

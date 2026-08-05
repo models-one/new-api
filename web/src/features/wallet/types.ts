@@ -39,6 +39,11 @@ export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
   url?: string
 }
 export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
+export type NowPaymentsPaymentResponse = ApiResponse<{
+  invoice_url?: string
+  invoice_id?: string | number
+  order_id?: string
+}>
 export type AffiliateCodeResponse = ApiResponse<string>
 export type AffiliateTransferResponse = ApiResponse
 export type CreemPaymentResponse = ApiResponse<{ checkout_url: string }>
@@ -124,12 +129,16 @@ export interface TopupInfo {
   enable_online_topup: boolean
   /** Whether Stripe topup is enabled */
   enable_stripe_topup: boolean
+  /** Whether NOWPayments topup is enabled */
+  enable_nowpayments_topup?: boolean
   /** Available payment methods */
   pay_methods: PaymentMethod[]
   /** Minimum topup amount for online topup */
   min_topup: number
   /** Minimum topup amount for Stripe */
   stripe_min_topup: number
+  /** Minimum topup amount for NOWPayments */
+  nowpayments_min_topup?: number
   /** Preset amount options */
   amount_options: number[]
   /** Discount rates by amount */
@@ -184,6 +193,11 @@ export interface PaymentRequest {
   amount: number
   /** Payment method identifier */
   payment_method: string
+}
+
+export interface NowPaymentsPaymentRequest {
+  /** Topup amount */
+  amount: number
 }
 
 /**

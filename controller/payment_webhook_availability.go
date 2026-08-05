@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"math"
 	"strings"
 
 	"github.com/QuantumNous/new-api/setting"
@@ -26,6 +27,22 @@ func isStripeWebhookConfigured() bool {
 
 func isStripeWebhookEnabled() bool {
 	return isStripeTopUpEnabled()
+}
+
+func isNowPaymentsTopUpEnabled() bool {
+	if !isPaymentComplianceConfirmed() {
+		return false
+	}
+	return strings.TrimSpace(setting.NowPaymentsAPIKey) != "" &&
+		strings.TrimSpace(setting.NowPaymentsIPNSecret) != "" &&
+		setting.NowPaymentsUnitPrice > 0 &&
+		!math.IsNaN(setting.NowPaymentsUnitPrice) &&
+		!math.IsInf(setting.NowPaymentsUnitPrice, 0) &&
+		setting.NowPaymentsMinTopUp > 0
+}
+
+func isNowPaymentsWebhookEnabled() bool {
+	return isNowPaymentsTopUpEnabled()
 }
 
 func isCreemTopUpEnabled() bool {

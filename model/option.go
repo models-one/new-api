@@ -89,6 +89,10 @@ func InitOptionMap() {
 	common.OptionMap["StripePriceId"] = setting.StripePriceId
 	common.OptionMap["StripeUnitPrice"] = strconv.FormatFloat(setting.StripeUnitPrice, 'f', -1, 64)
 	common.OptionMap["StripePromotionCodesEnabled"] = strconv.FormatBool(setting.StripePromotionCodesEnabled)
+	common.OptionMap["NowPaymentsAPIKey"] = setting.NowPaymentsAPIKey
+	common.OptionMap["NowPaymentsIPNSecret"] = setting.NowPaymentsIPNSecret
+	common.OptionMap["NowPaymentsUnitPrice"] = strconv.FormatFloat(setting.NowPaymentsUnitPrice, 'f', -1, 64)
+	common.OptionMap["NowPaymentsMinTopUp"] = strconv.Itoa(setting.NowPaymentsMinTopUp)
 	common.OptionMap["CreemApiKey"] = setting.CreemApiKey
 	common.OptionMap["CreemProducts"] = setting.CreemProducts
 	common.OptionMap["CreemTestMode"] = strconv.FormatBool(setting.CreemTestMode)
@@ -437,6 +441,14 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.StripeMinTopUp, _ = strconv.Atoi(value)
 	case "StripePromotionCodesEnabled":
 		setting.StripePromotionCodesEnabled = value == "true"
+	case "NowPaymentsAPIKey":
+		setting.NowPaymentsAPIKey = value
+	case "NowPaymentsIPNSecret":
+		setting.NowPaymentsIPNSecret = value
+	case "NowPaymentsUnitPrice":
+		setting.NowPaymentsUnitPrice, _ = strconv.ParseFloat(value, 64)
+	case "NowPaymentsMinTopUp":
+		setting.NowPaymentsMinTopUp, _ = strconv.Atoi(value)
 	case "CreemApiKey":
 		setting.CreemApiKey = value
 	case "CreemProducts":

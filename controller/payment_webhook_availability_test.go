@@ -67,6 +67,36 @@ func TestCreemWebhookEnabledRequiresTopUpAndWebhookConfig(t *testing.T) {
 	require.False(t, isCreemWebhookEnabled())
 }
 
+func TestNowPaymentsWebhookEnabledRequiresAPIKeyAndIPNSecret(t *testing.T) {
+	confirmPaymentComplianceForTest(t)
+	originalAPIKey := setting.NowPaymentsAPIKey
+	originalIPNSecret := setting.NowPaymentsIPNSecret
+	originalUnitPrice := setting.NowPaymentsUnitPrice
+	originalMinTopUp := setting.NowPaymentsMinTopUp
+	t.Cleanup(func() {
+		setting.NowPaymentsAPIKey = originalAPIKey
+		setting.NowPaymentsIPNSecret = originalIPNSecret
+		setting.NowPaymentsUnitPrice = originalUnitPrice
+		setting.NowPaymentsMinTopUp = originalMinTopUp
+	})
+
+	setting.NowPaymentsAPIKey = "api-key"
+	setting.NowPaymentsIPNSecret = ""
+	setting.NowPaymentsUnitPrice = 1
+	setting.NowPaymentsMinTopUp = 1
+	require.False(t, isNowPaymentsWebhookEnabled())
+
+	setting.NowPaymentsIPNSecret = "ipn-secret"
+	require.True(t, isNowPaymentsWebhookEnabled())
+
+	setting.NowPaymentsAPIKey = ""
+	require.False(t, isNowPaymentsWebhookEnabled())
+
+	setting.NowPaymentsAPIKey = "api-key"
+	setting.NowPaymentsUnitPrice = 0
+	require.False(t, isNowPaymentsWebhookEnabled())
+}
+
 func TestWaffoWebhookEnabledRequiresTopUpAndWebhookConfig(t *testing.T) {
 	confirmPaymentComplianceForTest(t)
 	originalEnabled := setting.WaffoEnabled

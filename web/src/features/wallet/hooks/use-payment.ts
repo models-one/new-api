@@ -23,19 +23,30 @@ import { toast } from 'sonner'
 import {
   calculateAmount,
   calculateStripeAmount,
+  calculateNowPaymentsAmount,
   calculateWaffoAmount,
   calculateWaffoPancakeAmount,
   requestPayment,
   requestStripePayment,
+  requestNowPaymentsPayment,
   isApiSuccess,
 } from '../api'
 import {
   isStripePayment,
+  isNowPaymentsPayment,
   isWaffoPayment,
   isWaffoPancakePayment,
   submitPaymentForm,
 } from '../lib'
-import type { AmountRequest, AmountResponse } from '../types'
+import type {
+  AmountRequest,
+  AmountResponse,
+  NowPaymentsPaymentRequest,
+  NowPaymentsPaymentResponse,
+  PaymentRequest,
+  PaymentResponse,
+  StripePaymentResponse,
+} from '../types'
 
 // ============================================================================
 // Payment Hook
@@ -46,6 +57,7 @@ type AmountCalculator = (request: AmountRequest) => Promise<AmountResponse>
 export interface PaymentAmountCalculators {
   regular: AmountCalculator
   stripe: AmountCalculator
+  nowPayments: AmountCalculator
   waffo: AmountCalculator
   waffoPancake: AmountCalculator
 }
@@ -53,6 +65,7 @@ export interface PaymentAmountCalculators {
 const defaultPaymentAmountCalculators: PaymentAmountCalculators = {
   regular: calculateAmount,
   stripe: calculateStripeAmount,
+  nowPayments: calculateNowPaymentsAmount,
   waffo: calculateWaffoAmount,
   waffoPancake: calculateWaffoPancakeAmount,
 }
@@ -65,6 +78,8 @@ export async function requestPaymentAmount(
   let calculator = calculators.regular
   if (isStripePayment(paymentType)) {
     calculator = calculators.stripe
+  } else if (isNowPaymentsPayment(paymentType)) {
+    calculator = calculators.nowPayments
   } else if (isWaffoPayment(paymentType)) {
     calculator = calculators.waffo
   } else if (isWaffoPancakePayment(paymentType)) {
@@ -77,6 +92,37 @@ export async function requestPaymentAmount(
   }
 
   return Number.parseFloat(response.data)
+}
+
+export interface PaymentRequesters {
+  regular: (request: PaymentRequest) => Promise<PaymentResponse>
+  stripe: (request: PaymentRequest) => Promise<StripePaymentResponse>
+  nowPayments: (
+    request: NowPaymentsPaymentRequest
+  ) => Promise<NowPaymentsPaymentResponse>
+}
+
+const defaultPaymentRequesters: PaymentRequesters = {
+  regular: requestPayment,
+  stripe: requestStripePayment,
+  nowPayments: requestNowPaymentsPayment,
+}
+
+export async function requestSelectedPayment(
+  topupAmount: number,
+  paymentType: string,
+  requesters: PaymentRequesters = defaultPaymentRequesters
+): Promise<
+  PaymentResponse | StripePaymentResponse | NowPaymentsPaymentResponse
+> {
+  const amount = Math.floor(topupAmount)
+  if (isStripePayment(paymentType)) {
+    return requesters.stripe({ amount, payment_method: 'stripe' })
+  }
+  if (isNowPaymentsPayment(paymentType)) {
+    return requesters.nowPayments({ amount })
+  }
+  return requesters.regular({ amount, payment_method: paymentType })
 }
 
 export function usePayment() {
@@ -112,17 +158,8 @@ export function usePayment() {
         setProcessing(true)
 
         const isStripe = isStripePayment(paymentType)
-        const amount = Math.floor(topupAmount)
-
-        const response = isStripe
-          ? await requestStripePayment({
-              amount,
-              payment_method: 'stripe',
-            })
-          : await requestPayment({
-              amount,
-              payment_method: paymentType,
-            })
+        const isNowPayments = isNowPaymentsPayment(paymentType)
+        const response = await requestSelectedPayment(topupAmount, paymentType)
 
         if (!isApiSuccess(response)) {
           toast.error(response.message || i18next.t('Payment request failed'))
@@ -130,14 +167,40 @@ export function usePayment() {
         }
 
         // Handle Stripe payment
-        if (isStripe && response.data?.pay_link) {
-          window.open(response.data.pay_link as string, '_blank')
+        const stripeLink =
+          isStripe && response.data && 'pay_link' in response.data
+            ? response.data.pay_link
+            : undefined
+        if (typeof stripeLink === 'string' && stripeLink) {
+          window.open(stripeLink, '_blank')
           toast.success(i18next.t('Redirecting to payment page...'))
           return true
         }
 
-        // Handle non-Stripe payment
-        if (!isStripe && response.data) {
+        const invoiceUrl =
+          isNowPayments && response.data && 'invoice_url' in response.data
+            ? response.data.invoice_url
+            : undefined
+        if (typeof invoiceUrl === 'string' && invoiceUrl) {
+          try {
+            const redirectUrl = new URL(invoiceUrl)
+            if (
+              redirectUrl.protocol !== 'http:' &&
+              redirectUrl.protocol !== 'https:'
+            ) {
+              throw new Error('unsupported redirect protocol')
+            }
+            toast.success(i18next.t('Redirecting to payment page...'))
+            window.location.href = redirectUrl.toString()
+            return true
+          } catch {
+            toast.error(i18next.t('Invalid payment redirect URL'))
+            return false
+          }
+        }
+
+        // Handle Epay form submission.
+        if (!isStripe && !isNowPayments && response.data) {
           const url = (response as unknown as { url?: string }).url
           if (url) {
             submitPaymentForm(url, response.data)

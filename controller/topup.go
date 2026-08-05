@@ -25,7 +25,7 @@ func GetTopUpInfo(c *gin.Context) {
 	complianceConfirmed := operation_setting.IsPaymentComplianceConfirmed()
 
 	// 获取支付方式
-	payMethods := operation_setting.PayMethods
+	payMethods := append([]map[string]string(nil), operation_setting.PayMethods...)
 	if !complianceConfirmed {
 		payMethods = []map[string]string{}
 	}
@@ -49,6 +49,27 @@ func GetTopUpInfo(c *gin.Context) {
 				"min_topup": strconv.Itoa(setting.StripeMinTopUp),
 			}
 			payMethods = append(payMethods, stripeMethod)
+		}
+	}
+
+	// NOWPayments uses a dedicated hosted checkout instead of the Epay form flow.
+	enableNowPayments := isNowPaymentsTopUpEnabled()
+	if enableNowPayments {
+		hasNowPayments := false
+		for _, method := range payMethods {
+			if method["type"] == model.PaymentMethodNowPayments {
+				hasNowPayments = true
+				break
+			}
+		}
+		if !hasNowPayments {
+			payMethods = append(payMethods, map[string]string{
+				"name":      "NOWPayments",
+				"type":      model.PaymentMethodNowPayments,
+				"icon":      "SiBitcoin",
+				"color":     "#10B981",
+				"min_topup": strconv.Itoa(setting.NowPaymentsMinTopUp),
+			})
 		}
 	}
 
@@ -99,6 +120,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"enable_online_topup":              isEpayTopUpEnabled(),
 		"enable_stripe_topup":              isStripeTopUpEnabled(),
 		"enable_creem_topup":               isCreemTopUpEnabled(),
+		"enable_nowpayments_topup":         enableNowPayments,
 		"enable_waffo_topup":               enableWaffo,
 		"enable_waffo_pancake_topup":       enableWaffoPancake,
 		"enable_redemption":                complianceConfirmed,
@@ -114,6 +136,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"pay_methods":             payMethods,
 		"min_topup":               operation_setting.MinTopUp,
 		"stripe_min_topup":        setting.StripeMinTopUp,
+		"nowpayments_min_topup":   setting.NowPaymentsMinTopUp,
 		"waffo_min_topup":         setting.WaffoMinTopUp,
 		"waffo_pancake_min_topup": setting.WaffoPancakeMinTopUp,
 		"amount_options":          operation_setting.GetPaymentSetting().AmountOptions,
