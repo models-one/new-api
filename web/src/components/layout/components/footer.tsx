@@ -42,6 +42,8 @@ interface FooterProps {
   className?: string
 }
 
+const CUSTOMER_SUPPORT_EMAIL = 'support@models.one'
+
 const NEW_API_FOOTER_ATTRIBUTION_KEY = [
   'footer',
   'new' + 'api',
@@ -76,13 +78,18 @@ function FooterLinkItem(props: { link: FooterLink }) {
   )
 }
 
-// Renders User Agreement / Privacy Policy links inline with the parent's
-// copyright row when either is configured in System Settings → Site. Emits
-// fragmented siblings so the parent flex container's gap controls spacing.
-function LegalLinks(props: { leadingSeparator?: boolean }) {
+// Renders legal links and the customer support contact inline with the
+// parent's copyright row. Fragmented siblings let the parent gap control
+// spacing while keeping the support email visible in every footer variant.
+function FooterInfoLinks(props: { leadingSeparator?: boolean }) {
   const { t } = useTranslation()
   const { status } = useStatus()
-  const items: { key: string; label: string; href: string }[] = []
+  const items: {
+    key: string
+    label: string
+    href: string
+    external?: boolean
+  }[] = []
   if (status?.user_agreement_enabled) {
     items.push({
       key: 'user-agreement',
@@ -97,9 +104,13 @@ function LegalLinks(props: { leadingSeparator?: boolean }) {
       href: '/privacy-policy',
     })
   }
-  if (items.length === 0) {
-    return null
-  }
+  items.push({
+    key: 'customer-support',
+    label: CUSTOMER_SUPPORT_EMAIL,
+    href: `mailto:${CUSTOMER_SUPPORT_EMAIL}`,
+    external: true,
+  })
+
   return (
     <>
       {items.map((item, index) => (
@@ -109,12 +120,21 @@ function LegalLinks(props: { leadingSeparator?: boolean }) {
               ·
             </span>
           )}
-          <Link
-            to={item.href}
-            className='hover:text-foreground transition-colors duration-200'
-          >
-            {item.label}
-          </Link>
+          {item.external ? (
+            <a
+              href={item.href}
+              className='hover:text-foreground transition-colors duration-200'
+            >
+              {item.label}
+            </a>
+          ) : (
+            <Link
+              to={item.href}
+              className='hover:text-foreground transition-colors duration-200'
+            >
+              {item.label}
+            </Link>
+          )}
         </Fragment>
       ))}
     </>
@@ -237,7 +257,7 @@ export function Footer(props: FooterProps) {
               dangerouslySetInnerHTML={{ __html: footerHtml }}
             />
             <div className='border-border/60 text-muted-foreground/45 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t pt-4 text-xs sm:w-auto sm:justify-end sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5'>
-              <LegalLinks />
+              <FooterInfoLinks />
               <ProjectAttribution currentYear={currentYear} inline />
             </div>
           </div>
@@ -272,14 +292,14 @@ export function Footer(props: FooterProps) {
           {/* Links columns */}
           {isDemoSiteMode && (
             <div className='grid grid-cols-3 gap-8 md:gap-16'>
-              {displayColumns.map((column, index) => (
-                <div key={index}>
+              {displayColumns.map((column) => (
+                <div key={column.title}>
                   <p className='text-muted-foreground/50 mb-3 text-xs font-medium tracking-wider uppercase'>
                     {t(column.title)}
                   </p>
                   <ul className='space-y-2.5'>
-                    {column.links.map((link, linkIndex) => (
-                      <li key={linkIndex}>
+                    {column.links.map((link) => (
+                      <li key={`${link.href}-${link.text}`}>
                         <FooterLinkItem link={link} />
                       </li>
                     ))}
@@ -298,7 +318,7 @@ export function Footer(props: FooterProps) {
               &copy; {currentYear} {displayName}.{' '}
               {props.copyright ?? t('footer.defaultCopyright')}
             </span>
-            <LegalLinks leadingSeparator />
+            <FooterInfoLinks leadingSeparator />
           </div>
           {/* <ProjectAttribution currentYear={currentYear} /> */}
         </div>
