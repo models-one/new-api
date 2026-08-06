@@ -5200,6 +5200,7 @@
     "When enabled, MjProxy callbacks are accepted (reveals server IP).": "有効にすると、MjProxy のコールバックを受け入れます (サーバーの IP を公開します)。",
     "When enabled, newly created tokens start in the first auto group.": "有効にすると、新しく作成されたトークンは最初の自動グループで開始されます。",
     "When enabled, prompts are scanned before reaching upstream models.": "有効にすると、プロンプトはアップストリームモデルに到達する前にスキャンされます。",
+    "When enabled, the minimum payment amount is 10 USD.": "有効にすると、最低支払額は10 USDです。",
     "When enabled, the store field will be blocked": "有効にすると、ストアフィールドはブロックされます",
     "When enabled, users can pick this group when creating tokens.": "有効にすると、ユーザーはトークン作成時にこのグループを選択できます。",
     "When enabled, violation requests will incur additional charges.": "有効にすると、違反リクエストに追加料金が発生します。",

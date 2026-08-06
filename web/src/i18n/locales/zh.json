@@ -5200,6 +5200,7 @@
     "When enabled, MjProxy callbacks are accepted (reveals server IP).": "启用时，接受 MjProxy 回调 (会泄露服务器 IP)。",
     "When enabled, newly created tokens start in the first auto group.": "启用后，新创建的令牌将从第一个自动分组开始。",
     "When enabled, prompts are scanned before reaching upstream models.": "启用后，提示将在到达上游模型之前被扫描。",
+    "When enabled, the minimum payment amount is 10 USD.": "开启后，最低付款金额为 10 USD。",
     "When enabled, the store field will be blocked": "开启后将阻止 store 字段透传",
     "When enabled, users can pick this group when creating tokens.": "启用后，用户创建令牌时可以选择该分组。",
     "When enabled, violation requests will incur additional charges.": "开启后，违规请求将额外扣费。",

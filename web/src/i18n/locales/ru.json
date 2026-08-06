@@ -5200,6 +5200,7 @@
     "When enabled, MjProxy callbacks are accepted (reveals server IP).": "При включении принимаются обратные вызовы MjProxy (раскрывает IP сервера).",
     "When enabled, newly created tokens start in the first auto group.": "При включении вновь созданные токены начинаются в первой автогруппе.",
     "When enabled, prompts are scanned before reaching upstream models.": "При включении запросы сканируются перед достижением вышестоящих моделей.",
+    "When enabled, the minimum payment amount is 10 USD.": "При включении минимальная сумма платежа составляет 10 USD.",
     "When enabled, the store field will be blocked": "Если включено, поле магазина будет заблокировано",
     "When enabled, users can pick this group when creating tokens.": "Если включено, пользователи могут выбрать эту группу при создании токенов.",
     "When enabled, violation requests will incur additional charges.": "При включении за нарушения будут начисляться дополнительные расходы.",

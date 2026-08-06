@@ -1650,6 +1650,9 @@ export function PaymentSettingsSection({
                           <FormDescription>
                             {t(
                               'Add NOWPayments service and network fees to the amount paid by the customer.'
+                            )}{' '}
+                            {t(
+                              'When enabled, the minimum payment amount is 10 USD.'
                             )}
                           </FormDescription>
                         </SettingsSwitchContent>

@@ -5200,6 +5200,7 @@
     "When enabled, MjProxy callbacks are accepted (reveals server IP).": "Khi được bật, các callback của MjProxy được chấp nhận (lộ IP máy chủ).",
     "When enabled, newly created tokens start in the first auto group.": "Khi được bật, các token mới được tạo sẽ bắt đầu trong nhóm tự động đầu tiên.",
     "When enabled, prompts are scanned before reaching upstream models.": "Khi được bật,",
+    "When enabled, the minimum payment amount is 10 USD.": "Khi bật, số tiền thanh toán tối thiểu là 10 USD.",
     "When enabled, the store field will be blocked": "Khi được bật, trường store sẽ bị chặn",
     "When enabled, users can pick this group when creating tokens.": "Khi bật, người dùng có thể chọn nhóm này khi tạo token.",
     "When enabled, violation requests will incur additional charges.": "Khi bật, các yêu cầu vi phạm sẽ phải chịu phí bổ sung.",
