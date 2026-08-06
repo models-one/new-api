@@ -29,6 +29,7 @@ type NowPaymentsInvoiceParams struct {
 	IPNCallbackURL   string  `json:"ipn_callback_url"`
 	SuccessURL       string  `json:"success_url"`
 	CancelURL        string  `json:"cancel_url"`
+	FeePaidByUser    bool    `json:"is_fee_paid_by_user"`
 }
 
 type NowPaymentsInvoice struct {

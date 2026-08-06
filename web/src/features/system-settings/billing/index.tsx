@@ -82,6 +82,7 @@ const defaultBillingSettings: BillingSettings = {
   NowPaymentsIPNSecret: '',
   NowPaymentsUnitPrice: 1,
   NowPaymentsMinTopUp: 1,
+  NowPaymentsFeePaidByUser: false,
   CreemApiKey: '',
   CreemWebhookSecret: '',
   CreemTestMode: false,

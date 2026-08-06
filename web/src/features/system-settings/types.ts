@@ -309,6 +309,7 @@ export type BillingSettings = {
   NowPaymentsIPNSecret: string
   NowPaymentsUnitPrice: number
   NowPaymentsMinTopUp: number
+  NowPaymentsFeePaidByUser: boolean
   CreemApiKey: string
   CreemWebhookSecret: string
   CreemTestMode: boolean

@@ -171,6 +171,7 @@ func RequestNowPaymentsPay(c *gin.Context) {
 		IPNCallbackURL:   ipnCallbackURL,
 		SuccessURL:       successURL,
 		CancelURL:        cancelURL,
+		FeePaidByUser:    setting.NowPaymentsFeePaidByUser,
 	})
 	if err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("NOWPayments 创建 invoice 失败 user_id=%d trade_no=%s error=%q", userID, tradeNo, err.Error()))

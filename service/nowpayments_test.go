@@ -40,6 +40,7 @@ func TestNowPaymentsClientCreatesHostedInvoice(t *testing.T) {
 		assert.Equal(t, float64(49.99), body["price_amount"])
 		assert.Equal(t, "usd", body["price_currency"])
 		assert.Equal(t, "order-1", body["order_id"])
+		assert.Equal(t, true, body["is_fee_paid_by_user"])
 		assert.NotContains(t, body, "pay_currency")
 
 		writer.Header().Set("Content-Type", "application/json")
@@ -61,6 +62,7 @@ func TestNowPaymentsClientCreatesHostedInvoice(t *testing.T) {
 		IPNCallbackURL:   "https://example.com/api/nowpayments/webhook",
 		SuccessURL:       "https://example.com/wallet?pay=success",
 		CancelURL:        "https://example.com/wallet?pay=cancelled",
+		FeePaidByUser:    true,
 	})
 
 	require.NoError(t, err)

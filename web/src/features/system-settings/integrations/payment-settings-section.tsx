@@ -151,6 +151,7 @@ const paymentSchema = z.object({
   NowPaymentsIPNSecret: z.string(),
   NowPaymentsUnitPrice: z.coerce.number().positive(),
   NowPaymentsMinTopUp: z.coerce.number().min(1),
+  NowPaymentsFeePaidByUser: z.boolean(),
   CreemApiKey: z.string(),
   CreemWebhookSecret: z.string(),
   CreemTestMode: z.boolean(),
@@ -441,6 +442,7 @@ export function PaymentSettingsSection({
       NowPaymentsIPNSecret: values.NowPaymentsIPNSecret.trim(),
       NowPaymentsUnitPrice: values.NowPaymentsUnitPrice,
       NowPaymentsMinTopUp: values.NowPaymentsMinTopUp,
+      NowPaymentsFeePaidByUser: values.NowPaymentsFeePaidByUser,
       CreemApiKey: values.CreemApiKey.trim(),
       CreemWebhookSecret: values.CreemWebhookSecret.trim(),
       CreemTestMode: values.CreemTestMode,
@@ -490,6 +492,8 @@ export function PaymentSettingsSection({
       NowPaymentsIPNSecret: initialRef.current.NowPaymentsIPNSecret.trim(),
       NowPaymentsUnitPrice: initialRef.current.NowPaymentsUnitPrice,
       NowPaymentsMinTopUp: initialRef.current.NowPaymentsMinTopUp,
+      NowPaymentsFeePaidByUser:
+        initialRef.current.NowPaymentsFeePaidByUser,
       CreemApiKey: initialRef.current.CreemApiKey.trim(),
       CreemWebhookSecret: initialRef.current.CreemWebhookSecret.trim(),
       CreemTestMode: initialRef.current.CreemTestMode,
@@ -638,6 +642,16 @@ export function PaymentSettingsSection({
       updates.push({
         key: 'NowPaymentsMinTopUp',
         value: sanitized.NowPaymentsMinTopUp,
+      })
+    }
+
+    if (
+      sanitized.NowPaymentsFeePaidByUser !==
+      initial.NowPaymentsFeePaidByUser
+    ) {
+      updates.push({
+        key: 'NowPaymentsFeePaidByUser',
+        value: sanitized.NowPaymentsFeePaidByUser,
       })
     }
 
@@ -1621,6 +1635,32 @@ export function PaymentSettingsSection({
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='NowPaymentsFeePaidByUser'
+                    render={({ field }) => (
+                      <SettingsSwitchItem className='md:col-span-2'>
+                        <SettingsSwitchContent>
+                          <FormLabel htmlFor='nowpayments-fee-paid-by-user'>
+                            {t('Customer pays NOWPayments fees')}
+                          </FormLabel>
+                          <FormDescription>
+                            {t(
+                              'Add NOWPayments service and network fees to the amount paid by the customer.'
+                            )}
+                          </FormDescription>
+                        </SettingsSwitchContent>
+                        <FormControl>
+                          <Switch
+                            id='nowpayments-fee-paid-by-user'
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </SettingsSwitchItem>
                     )}
                   />
                 </div>

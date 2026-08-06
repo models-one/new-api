@@ -152,6 +152,8 @@ const BILLING_SECTIONS = [
           NowPaymentsIPNSecret: settings.NowPaymentsIPNSecret,
           NowPaymentsUnitPrice: settings.NowPaymentsUnitPrice,
           NowPaymentsMinTopUp: settings.NowPaymentsMinTopUp,
+          NowPaymentsFeePaidByUser:
+            settings.NowPaymentsFeePaidByUser ?? false,
           CreemApiKey: settings.CreemApiKey,
           CreemWebhookSecret: settings.CreemWebhookSecret,
           CreemTestMode: settings.CreemTestMode,

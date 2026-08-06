@@ -1,8 +1,9 @@
 package setting
 
 var (
-	NowPaymentsAPIKey    = ""
-	NowPaymentsIPNSecret = ""
-	NowPaymentsUnitPrice = 1.0
-	NowPaymentsMinTopUp  = 1
+	NowPaymentsAPIKey        = ""
+	NowPaymentsIPNSecret     = ""
+	NowPaymentsUnitPrice     = 1.0
+	NowPaymentsMinTopUp      = 1
+	NowPaymentsFeePaidByUser = false
 )
