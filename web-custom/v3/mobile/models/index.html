@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Models.one - Explore AI Models</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#7df4ff",
+                        "surface-container-highest": "#313441",
+                        "on-error-container": "#ffdad6",
+                        "secondary": "#adc6ff",
+                        "on-secondary-fixed": "#001a42",
+                        "on-primary": "#00363a",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "surface": "#0f131e",
+                        "tertiary": "#fdf2ff",
+                        "surface-container-lowest": "#0a0e19",
+                        "on-tertiary-fixed-variant": "#6900b3",
+                        "outline": "#849495",
+                        "on-tertiary-fixed": "#2c0051",
+                        "on-secondary-fixed-variant": "#004395",
+                        "surface-container": "#1b1f2b",
+                        "on-tertiary-container": "#842bd2",
+                        "surface-container-high": "#262a36",
+                        "surface-variant": "#313441",
+                        "on-tertiary": "#490080",
+                        "inverse-on-surface": "#2c303c",
+                        "glass-border": "rgba(255, 255, 255, 0.1)",
+                        "surface-bright": "#353945",
+                        "primary": "#dbfcff",
+                        "inverse-primary": "#006970",
+                        "inverse-surface": "#dfe2f2",
+                        "secondary-fixed": "#d8e2ff",
+                        "on-background": "#dfe2f2",
+                        "error": "#ffb4ab",
+                        "code-gray": "#1E293B",
+                        "electric-cyan": "#00F0FF",
+                        "on-surface-variant": "#b9cacb",
+                        "background": "#0f131e",
+                        "surface-container-low": "#171b27",
+                        "tertiary-fixed": "#f0dbff",
+                        "on-surface": "#dfe2f2",
+                        "tertiary-container": "#eacfff",
+                        "on-primary-fixed-variant": "#004f54",
+                        "surface-tint": "#00dbe9",
+                        "on-error": "#690005",
+                        "secondary-container": "#0566d9",
+                        "surface-dim": "#0f131e",
+                        "space-black": "#05070A",
+                        "plasma-purple": "#A855F7",
+                        "primary-fixed-dim": "#00dbe9",
+                        "on-primary-container": "#006970",
+                        "tertiary-fixed-dim": "#ddb7ff",
+                        "on-secondary": "#002e6a",
+                        "primary-container": "#00f0ff",
+                        "on-primary-fixed": "#002022",
+                        "outline-variant": "#3b494b",
+                        "error-container": "#93000a",
+                        "on-secondary-container": "#e6ecff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin-desktop": "48px",
+                        "unit": "8px",
+                        "margin-mobile": "16px",
+                        "container-max": "1280px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "code-label": ["JetBrains Mono"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "body-lg": ["Inter"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "label-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "headline-md": ["32px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "code-label": ["14px", { "lineHeight": "1.4", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-lg": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "display-lg": ["72px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "label-sm": ["12px", { "lineHeight": "1.2", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #05070A;
+            color: #dfe2f2;
+        }
+        .glow-effect:hover {
+            box-shadow: 0 0 16px rgba(0, 240, 255, 0.4);
+        }
+        .gradient-border-featured {
+            position: relative;
+        }
+        .gradient-border-featured::before {
+            content: "";
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(45deg, #adc6ff, #A855F7);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col pt-16 pb-24 md:pb-0 font-body-md text-body-md">
+<!-- TopAppBar (Desktop Only) -->
+<header class="hidden md:flex bg-surface/80 dark:bg-surface/80 backdrop-blur-xl fixed top-0 left-0 w-full z-50 justify-between items-center px-margin-desktop h-16 border-b border-glass-border">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-electric-cyan" style="font-variation-settings: 'FILL' 1;">hub</span>
+<span class="font-headline-md text-headline-md font-bold text-electric-cyan">Models.one</span>
+</div>
+<nav class="flex gap-8">
+<a class="text-on-surface-variant hover:text-primary transition-all duration-300 ease-in-out" href="#">Dashboard</a>
+<a class="text-primary dark:text-primary-fixed transition-all duration-300 ease-in-out font-bold" href="#">Models</a>
+<a class="text-on-surface-variant hover:text-primary transition-all duration-300 ease-in-out" href="#">Integrations</a>
+<a class="text-on-surface-variant hover:text-primary transition-all duration-300 ease-in-out" href="#">Settings</a>
+</nav>
+<div class="flex items-center gap-4">
+<img alt="User Avatar" class="w-8 h-8 rounded-full border border-glass-border object-cover" data-alt="A small circular avatar placeholder image showing a stylized geometric human silhouette in deep blues and cyan, suitable for a futuristic tech dashboard profile picture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1f5arX3CbU4EWCj0qXOPkR1Yz18Te_1NxdgjP7OMa8anEQw4IirtL56OgpvoVKd1Lp-Ke_8izSqfjyOGqPJ9nfZ0g1NRrmolQDu8NE2VEtoqH6lgyjB86XbFMRyaNtBZ_mzej15iFmD4g9zC8s9Qk_faV50WYjiRhqcljSUah_ywNPZgOs-o8Vg2wpAtLT7mDGcAXhev27EcDhyX8_umAMf98cjvm8Tt3ykrtNe7RwB1b3uuJXaTmog"/>
+</div>
+</header>
+<!-- TopAppBar (Mobile Anchor) -->
+<header class="md:hidden bg-surface/80 dark:bg-surface/80 backdrop-blur-xl fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-mobile h-16 border-b border-glass-border">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-electric-cyan" style="font-variation-settings: 'FILL' 1;">hub</span>
+<span class="font-headline-md text-headline-md font-bold text-electric-cyan">Models.one</span>
+</div>
+<img alt="User Avatar" class="w-8 h-8 rounded-full border border-glass-border object-cover" data-alt="A small circular avatar placeholder image showing a stylized geometric human silhouette in deep blues and cyan, suitable for a futuristic tech dashboard profile picture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbnSJN6B4vR9110rmSedRn07tIAVaLVLiGvCzGIUeX_r0KODgTGCOT_szM-SOaeoQyKOZJ5LQdh6k_G9EacO5V3AEJaEhxaRn99QJ0kvtqYaKw8t_NXceZFePP7_j_6wfTcPmoVDuBi-qp7s_3l2e_IwF9_VeH_n4T0VKMl34fdcT4Dg4hdjdQkBri4cjHTtP4HjD3V_B64xcnrklWH6ck8C5ynNNhESHbGzfoBz4C0f8vlYLSsC0VLw"/>
+</header>
+<!-- Main Content -->
+<main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8 mt-16 md:mt-0 flex flex-col md:flex-row gap-gutter">
+<!-- Sidebar Filter (Desktop) -->
+<aside class="hidden md:flex flex-col w-64 shrink-0 gap-8">
+<div>
+<h3 class="font-headline-md text-body-lg font-bold text-primary mb-4">Providers</h3>
+<ul class="flex flex-col gap-2">
+<li>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="form-checkbox rounded bg-surface border-glass-border text-electric-cyan focus:ring-electric-cyan/50 focus:ring-offset-surface" type="checkbox"/>
+<span class="text-on-surface-variant group-hover:text-primary transition-colors">OpenAI</span>
+</label>
+</li>
+<li>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="form-checkbox rounded bg-surface border-glass-border text-electric-cyan focus:ring-electric-cyan/50 focus:ring-offset-surface" type="checkbox"/>
+<span class="text-on-surface-variant group-hover:text-primary transition-colors">Anthropic</span>
+</label>
+</li>
+<li>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="form-checkbox rounded bg-surface border-glass-border text-electric-cyan focus:ring-electric-cyan/50 focus:ring-offset-surface" type="checkbox"/>
+<span class="text-on-surface-variant group-hover:text-primary transition-colors">Google</span>
+</label>
+</li>
+</ul>
+</div>
+</aside>
+<!-- Main Model Grid -->
+<div class="flex-1 flex flex-col gap-6">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+<div>
+<h1 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary mb-2">Explore Models</h1>
+<p class="text-on-surface-variant">Discover and route to the best AI models for your workload.</p>
+</div>
+<div class="relative w-full md:w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full bg-[#0B0F1A] border border-glass-border rounded-lg py-2 pl-10 pr-4 text-on-surface focus:border-electric-cyan focus:ring-1 focus:ring-electric-cyan transition-colors outline-none font-body-md text-body-md" placeholder="Search models..." type="text"/>
+</div>
+</div>
+<!-- Grid Container -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+<!-- Model Card 1 (Featured) -->
+<div class="bg-[#111827] rounded-xl p-6 flex flex-col gap-4 gradient-border-featured">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface flex items-center justify-center border border-glass-border">
+<span class="material-symbols-outlined text-electric-cyan">smart_toy</span>
+</div>
+<div>
+<h3 class="font-headline-md text-body-lg font-bold text-primary">GPT-4 Turbo</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">OpenAI</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded bg-electric-cyan/10 text-electric-cyan font-code-label text-code-label text-xs border border-electric-cyan/20">Chat</span>
+</div>
+<div class="flex gap-4 font-code-label text-code-label text-xs text-on-surface-variant py-4 border-y border-glass-border">
+<div class="flex flex-col gap-1">
+<span>Input</span>
+<span class="text-primary">$10.00 / 1M</span>
+</div>
+<div class="flex flex-col gap-1">
+<span>Output</span>
+<span class="text-primary">$30.00 / 1M</span>
+</div>
+<div class="flex flex-col gap-1 ml-auto text-right">
+<span>Context</span>
+<span class="text-primary">128k</span>
+</div>
+</div>
+<div class="mt-auto pt-2 flex justify-end">
+<button class="bg-electric-cyan text-space-black font-headline-md text-body-md font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity glow-effect">Select Model</button>
+</div>
+</div>
+<!-- Model Card 2 -->
+<div class="bg-[#111827] border border-glass-border rounded-xl p-6 flex flex-col gap-4">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface flex items-center justify-center border border-glass-border">
+<span class="material-symbols-outlined text-plasma-purple">psychiatry</span>
+</div>
+<div>
+<h3 class="font-headline-md text-body-lg font-bold text-primary">Claude 3 Opus</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Anthropic</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded bg-electric-cyan/10 text-electric-cyan font-code-label text-code-label text-xs border border-electric-cyan/20">Reasoning</span>
+</div>
+<div class="flex gap-4 font-code-label text-code-label text-xs text-on-surface-variant py-4 border-y border-glass-border">
+<div class="flex flex-col gap-1">
+<span>Input</span>
+<span class="text-primary">$15.00 / 1M</span>
+</div>
+<div class="flex flex-col gap-1">
+<span>Output</span>
+<span class="text-primary">$75.00 / 1M</span>
+</div>
+<div class="flex flex-col gap-1 ml-auto text-right">
+<span>Context</span>
+<span class="text-primary">200k</span>
+</div>
+</div>
+<div class="mt-auto pt-2 flex justify-end">
+<button class="bg-transparent border border-glass-border text-white font-headline-md text-body-md font-bold px-4 py-2 rounded-lg hover:bg-white/5 transition-colors">Select Model</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden bg-surface/80 dark:bg-surface/80 backdrop-blur-xl fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-4 pt-2 shadow-lg rounded-t-xl border-t border-glass-border">
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:text-primary scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined text-2xl mb-1">dashboard</span>
+<span class="font-label-sm text-label-sm text-[10px]">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-electric-cyan bg-primary/10 rounded-xl p-2 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined text-2xl mb-1" style="font-variation-settings: 'FILL' 1;">memory</span>
+<span class="font-label-sm text-label-sm text-[10px] font-bold">Models</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:text-primary scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined text-2xl mb-1">terminal</span>
+<span class="font-label-sm text-label-sm text-[10px]">Integrations</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:text-primary scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined text-2xl mb-1">settings</span>
+<span class="font-label-sm text-label-sm text-[10px]">Settings</span>
+</a>
+</nav>
+<script src="/v3/app.js"></script>
+</body></html>

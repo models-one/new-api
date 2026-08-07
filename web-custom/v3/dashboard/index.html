@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dashboard - Models.one</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Hanken+Grotesk:wght@600;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-primary": "#006970",
+                        "on-tertiary-fixed": "#2c0051",
+                        "background": "#0f131e",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#262a36",
+                        "surface-variant": "#313441",
+                        "on-secondary-fixed-variant": "#004395",
+                        "outline-variant": "#3b494b",
+                        "surface-bright": "#353945",
+                        "error-container": "#93000a",
+                        "inverse-surface": "#dfe2f2",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-container": "#e6ecff",
+                        "primary-fixed-dim": "#00dbe9",
+                        "primary-container": "#00f0ff",
+                        "on-tertiary-fixed-variant": "#6900b3",
+                        "surface-container": "#1b1f2b",
+                        "on-surface-variant": "#b9cacb",
+                        "on-background": "#dfe2f2",
+                        "plasma-purple": "#A855F7",
+                        "on-error": "#690005",
+                        "surface-dim": "#0f131e",
+                        "tertiary-fixed": "#f0dbff",
+                        "primary": "#dbfcff",
+                        "tertiary": "#fdf2ff",
+                        "surface-container-highest": "#313441",
+                        "outline": "#849495",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "space-black": "#05070A",
+                        "on-secondary-fixed": "#001a42",
+                        "tertiary-container": "#eacfff",
+                        "surface-tint": "#00dbe9",
+                        "secondary-container": "#0566d9",
+                        "glass-border": "rgba(255, 255, 255, 0.1)",
+                        "electric-cyan": "#00F0FF",
+                        "secondary-fixed": "#d8e2ff",
+                        "on-secondary": "#002e6a",
+                        "code-gray": "#1E293B",
+                        "tertiary-fixed-dim": "#ddb7ff",
+                        "inverse-on-surface": "#2c303c",
+                        "primary-fixed": "#7df4ff",
+                        "on-primary-fixed-variant": "#004f54",
+                        "surface": "#0f131e",
+                        "on-primary-container": "#006970",
+                        "surface-container-low": "#171b27",
+                        "on-tertiary-container": "#842bd2",
+                        "secondary": "#adc6ff",
+                        "on-surface": "#dfe2f2",
+                        "on-primary-fixed": "#002022",
+                        "on-primary": "#00363a",
+                        "surface-container-lowest": "#0a0e19",
+                        "on-tertiary": "#490080"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "container-max": "1280px",
+                        "gutter": "24px",
+                        "margin-desktop": "48px",
+                        "unit": "8px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "label-sm": ["Inter"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "code-label": ["JetBrains Mono"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "headline-md": ["32px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "display-lg": ["72px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "label-sm": ["12px", { "lineHeight": "1.2", "fontWeight": "600" }],
+                        "headline-lg": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "code-label": ["14px", { "lineHeight": "1.4", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-panel {
+            background-color: rgba(17, 24, 39, 0.6);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glow-button {
+            box-shadow: 0 0 16px rgba(0, 240, 255, 0.3);
+            transition: box-shadow 0.2s ease, transform 0.1s ease;
+        }
+        .glow-button:hover {
+            box-shadow: 0 0 24px rgba(0, 240, 255, 0.5);
+            transform: scale(0.98);
+        }
+        .status-dot-pulse {
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(0, 240, 255, 0); }
+            100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(0, 240, 255, 0); }
+        }
+        /* Chart Mockup Styles */
+        .chart-line-1 { stroke: #00F0FF; stroke-width: 2; fill: none; filter: drop-shadow(0 0 8px rgba(0,240,255,0.4)); }
+        .chart-line-2 { stroke: #A855F7; stroke-width: 2; fill: none; stroke-dasharray: 4,4; }
+        .chart-grid { stroke: rgba(255,255,255,0.05); stroke-width: 1; }
+    </style>
+</head>
+<body class="bg-space-black text-on-surface font-body-md antialiased min-h-screen flex selection:bg-electric-cyan/30 selection:text-electric-cyan">
+<!-- SideNavBar (Shared Component) -->
+<nav class="bg-surface-container-low text-electric-cyan font-body-md h-screen w-64 fixed left-0 top-0 border-r border-glass-border flex flex-col h-full p-4 space-y-2 z-40 hidden md:flex">
+<!-- Header -->
+<div class="flex items-center gap-3 px-2 py-4 mb-4 border-b border-glass-border/50">
+<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center overflow-hidden border border-glass-border">
+<img class="w-full h-full object-cover" data-alt="Futurist tech logo placeholder image. A highly geometric, sharp-edged 3D logo rendered in a deep space environment. The logo emits a vibrant electric cyan glow against a pitch-black background. High contrast, precise, cutting-edge corporate identity." src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"/>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-electric-cyan text-xl tracking-tight">Models.one</h1>
+<p class="text-on-surface-variant text-xs uppercase tracking-wider font-semibold">Enterprise Console</p>
+</div>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 space-y-1">
+<!-- Active Tab: Dashboard -->
+<a class="bg-secondary-container text-on-secondary-container font-bold rounded-lg px-4 py-3 flex items-center gap-3 Active: opacity-80 group" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span>Dashboard</span>
+</a>
+<!-- Inactive Tabs -->
+<a class="text-on-surface-variant hover:bg-surface-variant px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-electric-cyan transition-colors">vpn_key</span>
+<span>API Keys</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-variant px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-electric-cyan transition-colors">hub</span>
+<span>Models</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-variant px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-electric-cyan transition-colors">bar_chart</span>
+<span>Usage</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-variant px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-electric-cyan transition-colors">insights</span>
+<span>Analytics</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-variant px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-surface-variant transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:text-electric-cyan transition-colors">settings</span>
+<span>Settings</span>
+</a>
+</div>
+<!-- CTA & Footer Actions -->
+<div class="pt-4 border-t border-glass-border/50 space-y-4">
+<button class="w-full bg-electric-cyan text-space-black font-headline-md font-bold py-2 px-4 rounded-lg glow-button text-sm uppercase tracking-wider">
+                Upgrade Plan
+            </button>
+<div class="space-y-1">
+<a class="text-on-surface-variant hover:bg-surface-variant px-4 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">help</span>
+<span>Help Center</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-variant px-4 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-64 p-margin-mobile md:p-margin-desktop min-h-screen relative overflow-hidden">
+<!-- Background Ambient Glow -->
+<div class="absolute top-0 right-0 w-[500px] h-[500px] bg-secondary-container/10 rounded-full blur-[120px] pointer-events-none"></div>
+<div class="absolute bottom-0 left-1/4 w-[400px] h-[400px] bg-plasma-purple/5 rounded-full blur-[100px] pointer-events-none"></div>
+<!-- Page Header -->
+<header class="flex justify-between items-end mb-10 relative z-10">
+<div>
+<h2 class="font-headline-lg text-headline-lg font-bold text-on-surface mb-1">Dashboard</h2>
+<p class="text-on-surface-variant font-body-lg text-body-lg">Overview of your routing infrastructure &amp; API performance.</p>
+</div>
+<div class="hidden sm:flex items-center gap-4">
+<span class="flex items-center gap-2 text-sm text-on-surface-variant">
+<span class="w-2 h-2 rounded-full bg-electric-cyan status-dot-pulse"></span>
+                    System Operational
+                </span>
+</div>
+</header>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-unit md:gap-gutter relative z-10">
+<!-- 1. Balance & Top Up Card (Col span 4) -->
+<div class="glass-panel rounded-xl p-6 md:col-span-4 flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-surface-variant rounded-lg border border-glass-border">
+<span class="material-symbols-outlined text-electric-cyan">account_balance_wallet</span>
+</div>
+<span class="text-label-sm font-label-sm text-on-surface-variant uppercase tracking-widest border border-glass-border px-2 py-1 rounded">Prepaid</span>
+</div>
+<p class="text-on-surface-variant text-sm mb-1">Current Balance</p>
+<h3 class="font-display-lg text-display-lg text-on-surface flex items-baseline gap-1">
+                        $4,250<span class="text-body-lg text-on-surface-variant">.00</span>
+</h3>
+<p class="text-electric-cyan text-sm flex items-center gap-1 mt-2">
+<span class="material-symbols-outlined text-[16px]">trending_down</span>
+                        Est. runout in 14 days
+                    </p>
+</div>
+<div class="mt-8 pt-4 border-t border-glass-border">
+<button class="w-full bg-transparent border border-electric-cyan text-electric-cyan hover:bg-electric-cyan/10 font-headline-md font-bold py-3 rounded-lg transition-colors duration-200 uppercase text-sm tracking-wider">
+                        Top Up Balance
+                    </button>
+</div>
+</div>
+<!-- 2. Main API Usage Chart (Col span 8) -->
+<div class="glass-panel rounded-xl p-6 md:col-span-8">
+<div class="flex justify-between items-center mb-6">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface text-xl">API Volume</h3>
+<p class="text-sm text-on-surface-variant">Requests vs Tokens Processed (Last 7 Days)</p>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1 bg-surface-variant rounded text-sm text-on-surface hover:text-electric-cyan transition-colors">24h</button>
+<button class="px-3 py-1 bg-electric-cyan/20 border border-electric-cyan/30 rounded text-sm text-electric-cyan font-semibold">7d</button>
+<button class="px-3 py-1 bg-surface-variant rounded text-sm text-on-surface hover:text-electric-cyan transition-colors">30d</button>
+</div>
+</div>
+<!-- Chart Area (SVG Mockup) -->
+<div class="w-full h-[220px] relative">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 800 220">
+<!-- Grid -->
+<line class="chart-grid" x1="0" x2="800" y1="55" y2="55"></line>
+<line class="chart-grid" x1="0" x2="800" y1="110" y2="110"></line>
+<line class="chart-grid" x1="0" x2="800" y1="165" y2="165"></line>
+<line class="chart-grid" x1="0" x2="800" y1="220" y2="220"></line>
+<!-- Line 1: Requests -->
+<path class="chart-line-1" d="M0,180 C100,170 200,200 300,120 C400,40 500,150 600,90 C700,30 750,60 800,20"></path>
+<!-- Line 2: Tokens -->
+<path class="chart-line-2" d="M0,200 C150,190 250,210 350,160 C450,110 550,180 650,130 C750,80 780,100 800,70"></path>
+</svg>
+<!-- Legend -->
+<div class="absolute top-0 right-0 flex gap-4 text-xs font-code-label">
+<div class="flex items-center gap-2"><span class="w-3 h-[2px] bg-electric-cyan"></span>Requests</div>
+<div class="flex items-center gap-2"><span class="w-3 h-[2px] bg-plasma-purple border-b border-dashed border-plasma-purple"></span>Tokens (M)</div>
+</div>
+</div>
+</div>
+<!-- 3. Upstream Provider Status Grid (Col span 12) -->
+<div class="md:col-span-12 mt-4">
+<h3 class="font-headline-md text-headline-md text-on-surface text-lg mb-4">Upstream Providers</h3>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-unit md:gap-gutter">
+<!-- Provider: OpenAI -->
+<div class="bg-surface border border-glass-border rounded-xl p-4 flex flex-col justify-between hover:border-electric-cyan/50 transition-colors">
+<div class="flex justify-between items-center mb-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-space-black border border-glass-border flex items-center justify-center">
+<span class="text-xs font-bold">OAI</span>
+</div>
+<span class="font-semibold text-on-surface">OpenAI</span>
+</div>
+<span class="text-xs bg-electric-cyan/10 text-electric-cyan px-2 py-1 rounded-full border border-electric-cyan/20 flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-electric-cyan"></span> Healthy
+                            </span>
+</div>
+<div class="flex justify-between text-sm">
+<span class="text-on-surface-variant">Avg Latency</span>
+<span class="font-code-label text-electric-cyan">342ms</span>
+</div>
+</div>
+<!-- Provider: Anthropic -->
+<div class="bg-surface border border-glass-border rounded-xl p-4 flex flex-col justify-between hover:border-electric-cyan/50 transition-colors">
+<div class="flex justify-between items-center mb-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-space-black border border-glass-border flex items-center justify-center">
+<span class="text-xs font-bold text-plasma-purple">ANT</span>
+</div>
+<span class="font-semibold text-on-surface">Anthropic</span>
+</div>
+<span class="text-xs bg-electric-cyan/10 text-electric-cyan px-2 py-1 rounded-full border border-electric-cyan/20 flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-electric-cyan"></span> Healthy
+                            </span>
+</div>
+<div class="flex justify-between text-sm">
+<span class="text-on-surface-variant">Avg Latency</span>
+<span class="font-code-label text-electric-cyan">410ms</span>
+</div>
+</div>
+<!-- Provider: Gemini -->
+<div class="bg-surface border border-glass-border rounded-xl p-4 flex flex-col justify-between hover:border-electric-cyan/50 transition-colors">
+<div class="flex justify-between items-center mb-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-space-black border border-glass-border flex items-center justify-center">
+<span class="text-xs font-bold text-secondary">GEM</span>
+</div>
+<span class="font-semibold text-on-surface">Gemini</span>
+</div>
+<span class="text-xs bg-surface-variant text-on-surface-variant px-2 py-1 rounded-full border border-glass-border border-dashed flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span> Degraded
+                            </span>
+</div>
+<div class="flex justify-between text-sm">
+<span class="text-on-surface-variant">Avg Latency</span>
+<span class="font-code-label text-error">1,204ms</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 4. Active API Keys List (Col span 12) -->
+<div class="glass-panel rounded-xl md:col-span-12 mt-4 overflow-hidden">
+<div class="px-6 py-5 border-b border-glass-border flex justify-between items-center">
+<h3 class="font-headline-md text-headline-md text-on-surface text-lg">Active API Keys</h3>
+<button class="text-sm text-electric-cyan flex items-center gap-1 hover:underline">
+<span class="material-symbols-outlined text-[18px]">add</span> Create Key
+                    </button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-variant/30 text-on-surface-variant text-xs uppercase tracking-wider font-label-sm">
+<th class="px-6 py-4 font-semibold">Key Name</th>
+<th class="px-6 py-4 font-semibold">Key Preview</th>
+<th class="px-6 py-4 font-semibold">Environment</th>
+<th class="px-6 py-4 font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="text-sm divide-y divide-glass-border/30">
+<tr class="hover:bg-surface-variant/20 transition-colors">
+<td class="px-6 py-4 font-medium text-on-surface">Production Main</td>
+<td class="px-6 py-4 font-code-label text-on-surface-variant">sk-prod-...8f9a</td>
+<td class="px-6 py-4">
+<span class="bg-primary-fixed-dim/20 text-electric-cyan px-2 py-1 rounded text-xs border border-electric-cyan/20">Production</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-on-surface p-1"><span class="material-symbols-outlined text-[20px]">content_copy</span></button>
+<button class="text-on-surface-variant hover:text-error p-1 ml-2"><span class="material-symbols-outlined text-[20px]">delete</span></button>
+</td>
+</tr>
+<tr class="hover:bg-surface-variant/20 transition-colors">
+<td class="px-6 py-4 font-medium text-on-surface">Staging App</td>
+<td class="px-6 py-4 font-code-label text-on-surface-variant">sk-stg-...2b4c</td>
+<td class="px-6 py-4">
+<span class="bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs border border-glass-border">Staging</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-on-surface p-1"><span class="material-symbols-outlined text-[20px]">content_copy</span></button>
+<button class="text-on-surface-variant hover:text-error p-1 ml-2"><span class="material-symbols-outlined text-[20px]">delete</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+<script src="/v3/app.js"></script>
+</body></html>

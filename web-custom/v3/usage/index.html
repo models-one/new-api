@@ -1,0 +1,423 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Models.one - Usage &amp; Billing</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Hanken+Grotesk:wght@600;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#313441",
+                        "surface-container-low": "#171b27",
+                        "on-error-container": "#ffdad6",
+                        "secondary": "#adc6ff",
+                        "on-secondary-fixed": "#001a42",
+                        "surface": "#0f131e",
+                        "plasma-purple": "#A855F7",
+                        "surface-bright": "#353945",
+                        "on-secondary-fixed-variant": "#004395",
+                        "space-black": "#05070A",
+                        "secondary-container": "#0566d9",
+                        "code-gray": "#1E293B",
+                        "inverse-surface": "#dfe2f2",
+                        "glass-border": "rgba(255, 255, 255, 0.1)",
+                        "outline-variant": "#3b494b",
+                        "tertiary-fixed-dim": "#ddb7ff",
+                        "on-secondary": "#002e6a",
+                        "on-tertiary-container": "#842bd2",
+                        "primary-container": "#00f0ff",
+                        "on-secondary-container": "#e6ecff",
+                        "surface-container-lowest": "#0a0e19",
+                        "tertiary-fixed": "#f0dbff",
+                        "outline": "#849495",
+                        "surface-container": "#1b1f2b",
+                        "primary": "#dbfcff",
+                        "on-primary-container": "#006970",
+                        "background": "#0f131e",
+                        "on-surface": "#dfe2f2",
+                        "tertiary": "#fdf2ff",
+                        "on-primary-fixed-variant": "#004f54",
+                        "on-tertiary": "#490080",
+                        "on-background": "#dfe2f2",
+                        "on-primary-fixed": "#002022",
+                        "surface-container-high": "#262a36",
+                        "on-tertiary-fixed-variant": "#6900b3",
+                        "electric-cyan": "#00F0FF",
+                        "on-primary": "#00363a",
+                        "inverse-primary": "#006970",
+                        "error": "#ffb4ab",
+                        "surface-container-highest": "#313441",
+                        "surface-tint": "#00dbe9",
+                        "error-container": "#93000a",
+                        "secondary-fixed": "#d8e2ff",
+                        "primary-fixed-dim": "#00dbe9",
+                        "on-surface-variant": "#b9cacb",
+                        "on-tertiary-fixed": "#2c0051",
+                        "on-error": "#690005",
+                        "surface-dim": "#0f131e",
+                        "tertiary-container": "#eacfff",
+                        "primary-fixed": "#7df4ff",
+                        "inverse-on-surface": "#2c303c",
+                        "secondary-fixed-dim": "#adc6ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "unit": "8px",
+                        "container-max": "1280px",
+                        "margin-desktop": "48px",
+                        "gutter": "24px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Inter"],
+                        "code-label": ["JetBrains Mono"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-lg": ["Inter"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", { "lineHeight": "1.2", "fontWeight": "600" }],
+                        "code-label": ["14px", { "lineHeight": "1.4", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-lg": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "display-lg": ["72px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "headline-md": ["32px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #05070A; color: #dfe2f2; }
+        .glass-panel { background: rgba(17, 24, 39, 0.6); backdrop-filter: blur(24px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .glow-hover:hover { box-shadow: 0 0 16px rgba(0, 240, 255, 0.3); }
+
+        /* Material Symbols Fill override helper */
+        .material-symbols-fill { font-variation-settings: 'FILL' 1; }
+    </style>
+</head>
+<body class="font-body-md min-h-screen flex text-on-surface">
+<!-- SideNavBar -->
+<nav class="h-screen w-64 fixed left-0 top-0 border-r border-glass-border bg-surface-container-lowest flex flex-col py-unit px-4 z-50">
+<!-- Brand -->
+<div class="mb-8 px-2 py-4"><div class="flex items-center gap-3">
+  <img src="https://lh3.googleusercontent.com/aida/AP1WRLtLWsVIzoNs-rWaTyNG6jDWMqpirXov7oOoFLSZEXGcWzhYv640B5yLWQtXOPilFTodc9lX3Xd9RHQXRI_kdFVjmtUsLDXRfRhGXghhwPV7-SRn40LZovKsshLjzp_uuHQQlHvVwP2BdevdjBCy2VCAy6qO_T5ugXI8QjmKNvuOmcy8ZK7STp-v-q40rL6vCfr9NutebBnl-sDPTbVydr7yJ0nlzc2kiF6fsJ_zeJt-v8HCNaPlEDO6SZjL" alt="Models.one Logo" class="w-10 h-10 object-cover rounded">
+  <div>
+    <h1 class="font-headline-md text-[20px] font-bold text-electric-cyan leading-tight">Models.one</h1>
+    <p class="font-label-sm text-label-sm text-on-surface-variant">API Gateway</p>
+  </div>
+</div></div>
+<!-- Navigation Links -->
+<ul class="flex-grow space-y-1">
+<li class="">
+<a class="flex items-center px-3 py-2 rounded-lg text-on-surface-variant font-medium hover:bg-surface-variant/20 hover:text-primary transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">dashboard</span>
+                    Dashboard
+                </a>
+</li>
+<li class="">
+<a class="flex items-center px-3 py-2 rounded-lg text-on-surface-variant font-medium hover:bg-surface-variant/20 hover:text-primary transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">vpn_key</span>
+                    API Keys
+                </a>
+</li>
+<li class="">
+<a class="flex items-center px-3 py-2 rounded-lg text-on-surface-variant font-medium hover:bg-surface-variant/20 hover:text-primary transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">model_training</span>
+                    Models
+                </a>
+</li>
+<li class="">
+<a class="flex items-center px-3 py-2 rounded-lg nav-item-active transition-transform duration-150 scale-[0.98]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">data_usage</span>
+                    Usage
+                </a>
+</li>
+<li class="">
+<a class="flex items-center px-3 py-2 rounded-lg text-on-surface-variant font-medium hover:bg-surface-variant/20 hover:text-primary transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">analytics</span>
+                    Analytics
+                </a>
+</li>
+<li class="">
+<a class="flex items-center px-3 py-2 rounded-lg text-on-surface-variant font-medium hover:bg-surface-variant/20 hover:text-primary transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">settings</span>
+                    Settings
+                </a>
+</li>
+</ul>
+<!-- Footer / CTA -->
+<div class="mt-auto space-y-4 pt-4 border-t border-glass-border">
+<button class="w-full btn-primary py-2 rounded font-label-sm text-label-sm uppercase tracking-wide">Upgrade to Pro</button>
+<ul class="space-y-1">
+<li class="">
+<a class="flex items-center px-3 py-2 text-on-surface-variant font-medium hover:bg-surface-variant/20 hover:text-primary transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">help</span>
+<span class="font-label-sm text-label-sm">Help</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center px-3 py-2 text-on-surface-variant font-medium hover:bg-surface-variant/20 hover:text-primary transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">logout</span>
+<span class="font-label-sm text-label-sm">Logout</span>
+</a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="ml-64 flex-1 flex flex-col min-h-screen">
+<!-- TopNavBar -->
+<header class="docked full-width top-0 sticky border-b border-glass-border backdrop-blur-xl bg-surface/80 dark:bg-surface/80 flex justify-between items-center w-full h-16 px-gutter z-40">
+<div class="flex gap-6">
+<a class="text-on-surface-variant font-label-sm text-label-sm hover:text-primary transition-colors" href="#">Docs</a>
+<a class="text-on-surface-variant font-label-sm text-label-sm hover:text-primary transition-colors" href="#">Support</a>
+<a class="text-on-surface-variant font-label-sm text-label-sm hover:text-primary transition-colors" href="#">Changelog</a>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative hidden md:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="bg-[#0B0F1A] border border-glass-border rounded-full pl-10 pr-4 py-1.5 text-sm font-body-md text-on-surface focus:outline-none focus:border-electric-cyan focus:ring-1 focus:ring-electric-cyan w-64 transition-all" placeholder="Search..." type="text">
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Canvas -->
+<main class="flex-1 p-gutter max-w-[1280px] mx-auto w-full">
+<div class="mb-10">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Usage &amp; Billing</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Monitor your API consumption and manage your billing details.</p>
+</div>
+<!-- Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+<!-- Current Spend Card -->
+<div class="glass-panel rounded-xl p-6 col-span-1 md:col-span-1 flex flex-col justify-between relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+<span class="material-symbols-outlined text-6xl">payments</span>
+</div>
+<div>
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-2">Current Spend (Nov)</h3>
+<div class="flex items-baseline gap-2">
+<span class="font-headline-lg text-headline-lg text-white">$432.50</span>
+<span class="font-body-md text-body-md text-on-surface-variant">/ $1,000 limit</span>
+</div>
+</div>
+<div class="mt-6">
+<div class="w-full bg-surface-variant rounded-full h-2 mb-2">
+<div class="bg-electric-cyan h-2 rounded-full shadow-[0_0_8px_rgba(0,240,255,0.5)]" style="width: 43%"></div>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant text-right">43% of monthly limit</p>
+</div>
+</div>
+<!-- Projected Spend Card -->
+<div class="glass-panel rounded-xl p-6 col-span-1 md:col-span-1 flex flex-col justify-between">
+<div>
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-2">Projected Spend</h3>
+<div class="flex items-baseline gap-2">
+<span class="font-headline-md text-headline-md text-white">$610.00</span>
+</div>
+</div>
+<div class="mt-6 flex items-center gap-2 text-primary-fixed">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+<span class="font-label-sm text-label-sm">Based on current usage velocity</span>
+</div>
+</div>
+<!-- Payment Method Card -->
+<div class="glass-panel rounded-xl p-6 col-span-1 md:col-span-1 flex flex-col justify-between border-l-2 border-secondary-container">
+<div>
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-4">Payment Method</h3>
+<div class="flex items-center gap-3 bg-[#05070A] p-3 rounded-lg border border-glass-border">
+<span class="material-symbols-outlined text-secondary">credit_card</span>
+<div>
+<p class="font-body-md text-body-md text-white text-sm">•••• •••• •••• 4242</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Expires 12/25</p>
+</div>
+</div>
+</div>
+<button class="mt-4 w-full bg-transparent border border-glass-border text-white font-label-sm text-label-sm py-2 rounded-lg hover:bg-surface-variant transition-colors">
+                        Manage Payment
+                    </button>
+</div>
+</div>
+<!-- Detailed Usage Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+<div class="lg:col-span-2 glass-panel rounded-xl p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline-md text-headline-md text-xl">Usage by Model</h3>
+<select class="bg-[#0B0F1A] border border-glass-border rounded-lg px-3 py-1.5 text-sm font-label-sm text-on-surface focus:outline-none focus:border-electric-cyan">
+<option>November 2023</option>
+<option>October 2023</option>
+</select>
+</div>
+<div class="space-y-4">
+<!-- Model Row 1 -->
+<div class="flex items-center justify-between p-4 bg-[#05070A] rounded-lg border border-glass-border hover:border-surface-tint transition-colors">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded bg-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-electric-cyan text-sm">smart_toy</span>
+</div>
+<div>
+<p class="font-code-label text-code-label text-white">gpt-4-turbo</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">1.2M tokens</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-code-label text-code-label text-white">$120.00</p>
+<p class="font-label-sm text-label-sm text-electric-cyan">28%</p>
+</div>
+</div>
+<!-- Model Row 2 -->
+<div class="flex items-center justify-between p-4 bg-[#05070A] rounded-lg border border-glass-border hover:border-surface-tint transition-colors">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded bg-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-plasma-purple text-sm">psychology</span>
+</div>
+<div>
+<p class="font-code-label text-code-label text-white">claude-2.1</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">850K tokens</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-code-label text-code-label text-white">$85.00</p>
+<p class="font-label-sm text-label-sm text-plasma-purple">20%</p>
+</div>
+</div>
+<!-- Model Row 3 -->
+<div class="flex items-center justify-between p-4 bg-[#05070A] rounded-lg border border-glass-border hover:border-surface-tint transition-colors">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded bg-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-sm">speed</span>
+</div>
+<div>
+<p class="font-code-label text-code-label text-white">mixtral-8x7b</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">4.5M tokens</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-code-label text-code-label text-white">$45.00</p>
+<p class="font-label-sm text-label-sm text-secondary">10%</p>
+</div>
+</div>
+</div>
+</div>
+<!-- API Keys Quick View -->
+<div class="glass-panel rounded-xl p-6">
+<h3 class="font-headline-md text-headline-md text-xl mb-6">Top API Keys</h3>
+<div class="space-y-4">
+<div class="border-b border-glass-border pb-3">
+<div class="flex justify-between mb-1">
+<span class="font-code-label text-code-label text-xs text-on-surface">Production_Main</span>
+<span class="font-label-sm text-label-sm text-electric-cyan">$210.50</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1">
+<div class="bg-electric-cyan h-1 rounded-full" style="width: 50%"></div>
+</div>
+</div>
+<div class="border-b border-glass-border pb-3">
+<div class="flex justify-between mb-1">
+<span class="font-code-label text-code-label text-xs text-on-surface">Staging_Env</span>
+<span class="font-label-sm text-label-sm text-plasma-purple">$85.20</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1">
+<div class="bg-plasma-purple h-1 rounded-full" style="width: 25%"></div>
+</div>
+</div>
+<div class="pb-3">
+<div class="flex justify-between mb-1">
+<span class="font-code-label text-code-label text-xs text-on-surface">Dev_Local_Testing</span>
+<span class="font-label-sm text-label-sm text-secondary">$12.00</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1">
+<div class="bg-secondary h-1 rounded-full" style="width: 5%"></div>
+</div>
+</div>
+</div>
+<button class="mt-4 w-full text-center text-sm font-label-sm text-on-surface-variant hover:text-white transition-colors">
+                        View All Keys →
+                     </button>
+</div>
+</div>
+<!-- Invoices Table -->
+<div class="glass-panel rounded-xl overflow-hidden mb-10">
+<div class="p-6 border-b border-glass-border flex justify-between items-center bg-surface-container-low/50">
+<h3 class="font-headline-md text-headline-md text-xl">Invoice History</h3>
+<button class="flex items-center gap-2 text-sm font-label-sm text-electric-cyan hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-sm">download</span>
+                        Download All
+                    </button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-glass-border/50 text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider bg-[#05070A]/50">
+<th class="p-4 font-semibold">Date</th>
+<th class="p-4 font-semibold">Invoice ID</th>
+<th class="p-4 font-semibold">Amount</th>
+<th class="p-4 font-semibold">Status</th>
+<th class="p-4 font-semibold text-right">Action</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-sm">
+<tr class="border-b border-glass-border/20 hover:bg-surface-variant/20 transition-colors">
+<td class="p-4 text-white">Oct 01, 2023</td>
+<td class="p-4 font-code-label text-code-label text-on-surface-variant text-xs">INV-2023-10</td>
+<td class="p-4 text-white">$385.00</td>
+<td class="p-4">
+<span class="px-2 py-1 rounded text-xs font-label-sm bg-electric-cyan/10 text-electric-cyan border border-electric-cyan/20">Paid</span>
+</td>
+<td class="p-4 text-right">
+<button class="text-on-surface-variant hover:text-white"><span class="material-symbols-outlined text-sm">receipt_long</span></button>
+</td>
+</tr>
+<tr class="border-b border-glass-border/20 hover:bg-surface-variant/20 transition-colors">
+<td class="p-4 text-white">Sep 01, 2023</td>
+<td class="p-4 font-code-label text-code-label text-on-surface-variant text-xs">INV-2023-09</td>
+<td class="p-4 text-white">$412.50</td>
+<td class="p-4">
+<span class="px-2 py-1 rounded text-xs font-label-sm bg-electric-cyan/10 text-electric-cyan border border-electric-cyan/20">Paid</span>
+</td>
+<td class="p-4 text-right">
+<button class="text-on-surface-variant hover:text-white"><span class="material-symbols-outlined text-sm">receipt_long</span></button>
+</td>
+</tr>
+<tr class="hover:bg-surface-variant/20 transition-colors">
+<td class="p-4 text-white">Aug 01, 2023</td>
+<td class="p-4 font-code-label text-code-label text-on-surface-variant text-xs">INV-2023-08</td>
+<td class="p-4 text-white">$290.00</td>
+<td class="p-4">
+<span class="px-2 py-1 rounded text-xs font-label-sm bg-electric-cyan/10 text-electric-cyan border border-electric-cyan/20">Paid</span>
+</td>
+<td class="p-4 text-right">
+<button class="text-on-surface-variant hover:text-white"><span class="material-symbols-outlined text-sm">receipt_long</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+</div>
+
+
+<script src="/v3/app.js"></script>
+</body></html>
