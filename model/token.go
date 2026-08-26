@@ -27,6 +27,7 @@ type Token struct {
 	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
 	Group              string         `json:"group" gorm:"default:''"`
+	AutoGroups         string         `json:"auto_groups" gorm:"type:text"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
@@ -302,7 +303,7 @@ func (token *Token) Update() (err error) {
 		}
 	}()
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "auto_groups", "cross_group_retry").Updates(token).Error
 	return err
 }
 
@@ -354,6 +355,42 @@ func (token *Token) GetModelLimitsMap() map[string]bool {
 		limitsMap[limit] = true
 	}
 	return limitsMap
+}
+
+const maxTokenAutoGroups = 64
+
+func (token *Token) GetAutoGroups() []string {
+	groups := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, group := range strings.Split(token.AutoGroups, ",") {
+		group = strings.TrimSpace(group)
+		if group == "" {
+			continue
+		}
+		if _, exists := seen[group]; exists {
+			continue
+		}
+		seen[group] = struct{}{}
+		groups = append(groups, group)
+	}
+	return groups
+}
+
+func (token *Token) NormalizeAutoGroups() error {
+	groups := token.GetAutoGroups()
+	if len(groups) > maxTokenAutoGroups {
+		return fmt.Errorf("自动分组数量不能超过 %d 个", maxTokenAutoGroups)
+	}
+	for _, group := range groups {
+		if len(group) > 64 {
+			return errors.New("自动分组名称不能超过 64 个字符")
+		}
+	}
+	token.AutoGroups = strings.Join(groups, ",")
+	if token.AutoGroups != "" {
+		token.Group = "auto"
+	}
+	return nil
 }
 
 func DisableModelLimits(tokenId int) error {

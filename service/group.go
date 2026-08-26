@@ -3,9 +3,12 @@ package service
 import (
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/gin-gonic/gin"
 )
 
 func GetUserUsableGroups(userGroup string) map[string]string {
@@ -52,6 +55,14 @@ func GetUserAutoGroup(userGroup string) []string {
 		}
 	}
 	return autoGroups
+}
+
+func GetRequestAutoGroups(c *gin.Context, userGroup string) []string {
+	tokenAutoGroups := common.GetContextKeyStringSlice(c, constant.ContextKeyTokenAutoGroups)
+	if len(tokenAutoGroups) > 0 {
+		return append([]string(nil), tokenAutoGroups...)
+	}
+	return GetUserAutoGroup(userGroup)
 }
 
 // GetGroupsEnabledModels 按 groups 顺序获取各分组启用的模型并去重

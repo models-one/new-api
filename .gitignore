@@ -8,6 +8,8 @@ upload
 build
 *.db-journal
 logs
+!web-custom/src/features/logs/
+!web-custom/src/features/logs/**
 web/dist
 web/node_modules
 .env

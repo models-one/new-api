@@ -1,0 +1,119 @@
+import {
+  Outlet,
+  createRootRouteWithContext,
+  createRoute,
+  createRouter,
+  lazyRouteComponent,
+} from '@tanstack/react-router'
+import type { QueryClient } from '@tanstack/react-query'
+
+import { AppShell } from '@/components/layout/AppShell'
+import { NotFoundPage } from '@/components/system/NotFoundPage'
+import { RouteErrorPage } from '@/components/system/RouteErrorPage'
+import { RouteLoading } from '@/components/system/RouteLoading'
+import { requireConsoleAuthentication } from '@/lib/console-auth-guard'
+import { queryClient } from '@/lib/query-client'
+
+type RouterContext = {
+  queryClient: QueryClient
+}
+
+const rootRoute = createRootRouteWithContext<RouterContext>()({
+  component: Outlet,
+  errorComponent: RouteErrorPage,
+  notFoundComponent: NotFoundPage,
+})
+
+const landingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: lazyRouteComponent(() => import('@/features/landing/LandingPage'), 'LandingPage'),
+})
+
+const consoleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'console',
+  beforeLoad: ({ location }) => requireConsoleAuthentication(location.href),
+  component: AppShell,
+})
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/dashboard',
+  component: lazyRouteComponent(() => import('@/features/dashboard/DashboardPage'), 'DashboardPage'),
+})
+
+const settingsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/settings',
+  component: lazyRouteComponent(() => import('@/features/settings/SettingsPage'), 'SettingsPage'),
+})
+
+const modelsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/models',
+  component: lazyRouteComponent(() => import('@/features/models/ModelsPage'), 'ModelsPage'),
+})
+
+const usageRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/usage',
+  component: lazyRouteComponent(() => import('@/features/usage/UsagePage'), 'UsagePage'),
+})
+
+const analyticsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/analytics',
+  component: lazyRouteComponent(() => import('@/features/analytics/AnalyticsPage'), 'AnalyticsPage'),
+})
+
+const logsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/logs',
+  component: lazyRouteComponent(() => import('@/features/logs/LogsPage'), 'LogsPage'),
+})
+
+const organizationRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/organization',
+  component: lazyRouteComponent(
+    () => import('@/features/organization/OrganizationPage'),
+    'OrganizationPage',
+  ),
+})
+
+const walletRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/wallet',
+  component: lazyRouteComponent(() => import('@/features/wallet/WalletPage'), 'WalletPage'),
+})
+
+const routeTree = rootRoute.addChildren([
+  landingRoute,
+  consoleRoute.addChildren([
+    dashboardRoute,
+    settingsRoute,
+    modelsRoute,
+    usageRoute,
+    analyticsRoute,
+    logsRoute,
+    organizationRoute,
+    walletRoute,
+  ]),
+])
+
+export const router = createRouter({
+  context: { queryClient },
+  routeTree,
+  defaultPreload: 'intent',
+  defaultPendingComponent: RouteLoading,
+  defaultPendingMs: 150,
+  defaultPendingMinMs: 250,
+  scrollRestoration: true,
+})
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
