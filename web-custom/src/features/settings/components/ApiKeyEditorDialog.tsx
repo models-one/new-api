@@ -1,171 +1,367 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import ArrowDownIcon from 'lucide-react/dist/esm/icons/arrow-down'
 import ArrowUpIcon from 'lucide-react/dist/esm/icons/arrow-up'
 import CheckIcon from 'lucide-react/dist/esm/icons/check'
-import XIcon from 'lucide-react/dist/esm/icons/x'
-import { useEffect, useState } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/Button'
+import { Input, NumberInput } from '@/components/form'
+import { Dialog, toast } from '@/components/overlay'
+import { Button, Skeleton } from '@/components/ui'
 import { GroupRouteBadge } from '@/features/settings/components/GroupRouteBadge'
-import { modelGroupById, modelGroups, providers } from '@/features/settings/data'
-import type { ApiKeyDraft, ApiKeyRecord } from '@/features/settings/types'
+import { LoadErrorAlert } from '@/features/settings/components/LoadErrorAlert'
+import {
+  NEVER_EXPIRES,
+  groupFieldsFor,
+  toGroupRoutes,
+  tokenGroupNames,
+  usesAutoRouting,
+} from '@/features/settings/routing'
+import type { ApiKeyEditorTarget } from '@/features/settings/types'
+import { createToken, updateToken, type TokenDraft } from '@/lib/api/tokens'
+import type { UserGroupMap } from '@/lib/api/user'
+import { formatNumber, fromUnixSeconds, quotaToCurrency, toUnixSeconds } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
+type GroupsState = {
+  data: UserGroupMap | undefined
+  isPending: boolean
+  isError: boolean
+  error: unknown
+  isFetching: boolean
+  refetch: () => void
+}
+
 type ApiKeyEditorDialogProps = {
-  apiKey?: ApiKeyRecord
-  onClose: () => void
-  onSave: (draft: ApiKeyDraft) => void
+  target: ApiKeyEditorTarget
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** `/api/user/self/groups` — the only real source of selectable groups. */
+  groups: GroupsState
+  /** `quota_per_unit` from `/api/status`. */
+  quotaPerUnit: number
+}
+
+/** `model.Token.Name` is rejected by the backend beyond this length. */
+const MAX_NAME_LENGTH = 50
+
+/** `<input type="datetime-local">` wants local wall-clock time, not an ISO instant. */
+function toDateTimeLocal(seconds: number): string {
+  const date = fromUnixSeconds(seconds)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function ToggleField(props: {
+  checked: boolean
+  description?: string
+  disabled?: boolean
+  label: string
+  onChange: (checked: boolean) => void
+}) {
+  const inputId = useId()
+
+  return (
+    <div className="flex items-start gap-3">
+      <input
+        checked={props.checked}
+        className="field mt-0.5 size-4 min-h-4 shrink-0 accent-primary"
+        disabled={props.disabled}
+        id={inputId}
+        onChange={(event) => props.onChange(event.target.checked)}
+        type="checkbox"
+      />
+      <div className="min-w-0">
+        <label className="text-sm font-semibold text-foreground" htmlFor={inputId}>
+          {props.label}
+        </label>
+        {props.description ? (
+          <p className="mt-1 text-xs leading-5 text-muted">{props.description}</p>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 export function ApiKeyEditorDialog(props: ApiKeyEditorDialogProps) {
   const { t } = useTranslation()
-  const onClose = props.onClose
-  const [name, setName] = useState(props.apiKey?.name ?? '')
-  const [selectedGroupIds, setSelectedGroupIds] = useState(props.apiKey?.groupIds ?? [])
-  const canSave = name.trim().length > 0 && selectedGroupIds.length > 0
+  const queryClient = useQueryClient()
+  const existing = props.target.mode === 'edit' ? props.target.token : undefined
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  const [name, setName] = useState(existing?.name ?? '')
+  const [selectedGroups, setSelectedGroups] = useState(() => (
+    existing ? tokenGroupNames(existing) : []
+  ))
+  const [crossGroupRetry, setCrossGroupRetry] = useState(existing?.cross_group_retry ?? false)
+  const [unlimitedQuota, setUnlimitedQuota] = useState(existing?.unlimited_quota ?? true)
+  const [quotaAmount, setQuotaAmount] = useState(() => (
+    existing ? String(quotaToCurrency(existing.remain_quota, props.quotaPerUnit)) : ''
+  ))
+  const [neverExpires, setNeverExpires] = useState(
+    existing === undefined || existing.expired_time === NEVER_EXPIRES,
+  )
+  const [expiresAt, setExpiresAt] = useState(() => (
+    existing && existing.expired_time !== NEVER_EXPIRES ? toDateTimeLocal(existing.expired_time) : ''
+  ))
 
-  const toggleGroup = (groupId: string) => {
-    setSelectedGroupIds((currentGroups) => {
-      if (currentGroups.includes(groupId)) {
-        return currentGroups.filter((currentGroupId) => currentGroupId !== groupId)
+  const groupOptions = Object.entries(props.groups.data ?? {})
+  const quotaUnits = Math.round(Number(quotaAmount) * props.quotaPerUnit)
+  const autoRouting = usesAutoRouting(selectedGroups)
+
+  const nameValid = name.trim().length > 0 && name.trim().length <= MAX_NAME_LENGTH
+  const quotaValid = unlimitedQuota || (quotaAmount !== '' && Number.isFinite(quotaUnits) && quotaUnits >= 0)
+  const expiryValid = neverExpires || Number.isFinite(new Date(expiresAt).getTime())
+
+  const save = useMutation({
+    mutationFn: () => {
+      const groupFields = groupFieldsFor(selectedGroups)
+      const draft: TokenDraft = {
+        name: name.trim(),
+        remain_quota: unlimitedQuota ? 0 : quotaUnits,
+        expired_time: neverExpires ? NEVER_EXPIRES : toUnixSeconds(new Date(expiresAt)),
+        unlimited_quota: unlimitedQuota,
+        // Not editable here — carried over so the update does not silently clear them.
+        model_limits_enabled: existing?.model_limits_enabled ?? false,
+        model_limits: existing?.model_limits ?? '',
+        allow_ips: existing?.allow_ips ?? '',
+        group: groupFields.group,
+        auto_groups: groupFields.auto_groups,
+        // The relay reads this flag only in `auto` mode, so storing it otherwise is a lie.
+        cross_group_retry: autoRouting && crossGroupRetry,
       }
-      return [...currentGroups, groupId]
+      if (existing) return updateToken({ ...draft, id: existing.id })
+      return createToken(draft)
+    },
+    onSuccess: async () => {
+      toast.success(existing ? t('API key updated') : t('API key created'))
+      props.onOpenChange(false)
+      await queryClient.invalidateQueries({ queryKey: ['tokens'] })
+    },
+  })
+
+  const toggleGroup = (groupName: string) => {
+    setSelectedGroups((current) => (
+      current.includes(groupName)
+        ? current.filter((candidate) => candidate !== groupName)
+        : [...current, groupName]
+    ))
+  }
+
+  const moveGroup = (groupName: string, offset: -1 | 1) => {
+    setSelectedGroups((current) => {
+      const index = current.indexOf(groupName)
+      const target = index + offset
+      if (index < 0 || target < 0 || target >= current.length) return current
+      const next = [...current]
+      next[index] = next[target]
+      next[target] = groupName
+      return next
     })
   }
 
-  const moveGroup = (groupId: string, offset: -1 | 1) => {
-    setSelectedGroupIds((currentGroups) => {
-      const currentIndex = currentGroups.indexOf(groupId)
-      const targetIndex = currentIndex + offset
-      if (currentIndex < 0 || targetIndex < 0 || targetIndex >= currentGroups.length) {
-        return currentGroups
-      }
-      const nextGroups = [...currentGroups]
-      nextGroups[currentIndex] = nextGroups[targetIndex]
-      nextGroups[targetIndex] = groupId
-      return nextGroups
-    })
-  }
+  const canSave = nameValid && quotaValid && expiryValid && !save.isPending
 
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) props.onClose()
-    }}>
-      <section
-        aria-labelledby="api-key-editor-title"
-        aria-modal="true"
-        className="panel flex max-h-[min(860px,calc(100svh-2rem))] w-full max-w-4xl flex-col overflow-hidden"
-        role="dialog"
-      >
-        <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
-          <h2 className="text-xl font-bold" id="api-key-editor-title">
-            {props.apiKey ? t('Edit API key') : t('New API key')}
-          </h2>
-          <Button aria-label={t('Close')} className="size-9 min-h-9 px-0" onClick={props.onClose} title={t('Close')} variant="quiet">
-            <XIcon aria-hidden="true" />
+    <Dialog
+      footer={(
+        <>
+          <Button disabled={save.isPending} onClick={() => props.onOpenChange(false)} variant="quiet">
+            {t('Cancel')}
           </Button>
-        </header>
+          <Button aria-busy={save.isPending} disabled={!canSave} onClick={() => save.mutate()}>
+            {existing ? t('Update key') : t('Create key')}
+          </Button>
+        </>
+      )}
+      onOpenChange={(nextOpen) => {
+        if (save.isPending && !nextOpen) return
+        props.onOpenChange(nextOpen)
+      }}
+      open={props.open}
+      size="lg"
+      title={existing ? t('Edit API key') : t('New API key')}
+    >
+      <Input
+        autoFocus
+        label={t('Key name')}
+        maxLength={MAX_NAME_LENGTH}
+        onChange={(event) => setName(event.target.value)}
+        placeholder={t('API key name')}
+        required
+        value={name}
+      />
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-          <label className="flex flex-col gap-2 text-sm font-semibold">
-            {t('Key name')}
-            <input
-              aria-label={t('Key name')}
-              autoFocus
-              className="field px-3 text-sm font-normal"
-              maxLength={50}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={t('API key name')}
-              value={name}
-            />
-          </label>
-
-          <section className="mt-6 border-y border-border py-5">
-            <div className="flex items-center justify-between gap-4">
-              <h3 className="text-sm font-bold">{t('Group priority')}</h3>
-              <span className="mono text-xs text-muted">{t('{{count}} groups selected', { count: selectedGroupIds.length })}</span>
-            </div>
-            {selectedGroupIds.length > 0 ? (
-              <ol className="mt-3 flex flex-col gap-2">
-                {selectedGroupIds.map((groupId, index) => {
-                  const group = modelGroupById.get(groupId)
-                  if (!group) return null
-                  return (
-                    <li className="flex min-w-0 items-center gap-2 rounded-[4px] border border-border bg-surface-high/40 p-2" key={group.id}>
-                      <span className="mono grid size-7 shrink-0 place-items-center text-xs text-muted">{index + 1}</span>
-                      <GroupRouteBadge className="min-w-0" group={group} />
-                      <div className="ml-auto flex shrink-0 gap-1">
-                        <Button aria-label={`${t('Move group up')}: ${group.name}`} className="size-8 min-h-8 px-0" disabled={index === 0} onClick={() => moveGroup(group.id, -1)} title={t('Move group up')} variant="quiet">
-                          <ArrowUpIcon aria-hidden="true" />
-                        </Button>
-                        <Button aria-label={`${t('Move group down')}: ${group.name}`} className="size-8 min-h-8 px-0" disabled={index === selectedGroupIds.length - 1} onClick={() => moveGroup(group.id, 1)} title={t('Move group down')} variant="quiet">
-                          <ArrowDownIcon aria-hidden="true" />
-                        </Button>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ol>
-            ) : (
-              <p className="mt-3 text-sm text-destructive">{t('Select at least one group.')}</p>
-            )}
-          </section>
-
-          <section className="mt-5">
-            <h3 className="text-sm font-bold">{t('Available model groups')}</h3>
-            <div className="mt-3 divide-y divide-border border-y border-border">
-              {providers.map((provider) => {
-                const providerGroups = modelGroups.filter((group) => group.providerId === provider.id)
-                return (
-                  <div className="grid gap-3 py-4 sm:grid-cols-[150px_1fr] sm:items-start" key={provider.id}>
-                    <p className="pt-2 text-sm font-semibold text-foreground">{provider.name}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {providerGroups.map((group) => {
-                        const selected = selectedGroupIds.includes(group.id)
-                        return (
-                          <button
-                            aria-checked={selected}
-                            aria-label={`${group.name} x${group.ratio}`}
-                            className={cn(
-                              'inline-flex min-h-10 items-center gap-2 rounded-[4px] border px-3 py-2 text-left text-xs font-semibold transition-colors',
-                              selected ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border bg-surface-high/40 text-muted hover:border-border-strong hover:text-foreground',
-                            )}
-                            key={group.id}
-                            onClick={() => toggleGroup(group.id)}
-                            role="checkbox"
-                            type="button"
-                          >
-                            <span className={cn('grid size-4 place-items-center border', selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-surface')}>
-                              {selected ? <CheckIcon aria-hidden="true" className="size-3" /> : null}
-                            </span>
-                            <span>{group.name}</span>
-                            <span className="mono text-[10px] opacity-80">x{group.ratio}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
+      <section className="mt-6 border-t border-border pt-5">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-sm font-bold">{t('Group priority')}</h3>
+          <span className="mono text-xs text-muted">
+            {t('{{count}} groups selected', { count: selectedGroups.length })}
+          </span>
         </div>
 
-        <footer className="flex flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
-          <Button onClick={props.onClose} variant="quiet">{t('Cancel')}</Button>
-          <Button disabled={!canSave} onClick={() => props.onSave({ name: name.trim(), groupIds: selectedGroupIds })}>
-            {props.apiKey ? t('Update key') : t('Create key')}
-          </Button>
-        </footer>
+        {selectedGroups.length > 0 ? (
+          <ol className="mt-3 flex flex-col gap-2">
+            {toGroupRoutes(selectedGroups, props.groups.data).map((route, index) => (
+              <li
+                className="flex min-w-0 items-center gap-2 rounded-[4px] border border-border bg-surface-high/40 p-2"
+                key={route.name}
+              >
+                <span className="mono grid size-7 shrink-0 place-items-center text-xs text-muted">
+                  {index + 1}
+                </span>
+                <GroupRouteBadge
+                  className="min-w-0"
+                  groupsKnown={props.groups.data !== undefined}
+                  route={route}
+                />
+                <div className="ml-auto flex shrink-0 gap-1">
+                  <Button
+                    aria-label={`${t('Move group up')}: ${route.name}`}
+                    disabled={index === 0}
+                    onClick={() => moveGroup(route.name, -1)}
+                    size="icon-sm"
+                    title={t('Move group up')}
+                    variant="quiet"
+                  >
+                    <ArrowUpIcon aria-hidden="true" />
+                  </Button>
+                  <Button
+                    aria-label={`${t('Move group down')}: ${route.name}`}
+                    disabled={index === selectedGroups.length - 1}
+                    onClick={() => moveGroup(route.name, 1)}
+                    size="icon-sm"
+                    title={t('Move group down')}
+                    variant="quiet"
+                  >
+                    <ArrowDownIcon aria-hidden="true" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-3 text-sm text-muted">
+            {t('No group selected: this key routes through your account default group.')}
+          </p>
+        )}
+
+        <div className="mt-4">
+          <ToggleField
+            checked={autoRouting && crossGroupRetry}
+            description={autoRouting
+              ? t('Retries the next group in this list when the current one has no channel for the model.')
+              : t('Only has an effect once a key routes through two or more groups.')}
+            disabled={!autoRouting}
+            label={t('Cross-group retry')}
+            onChange={setCrossGroupRetry}
+          />
+        </div>
       </section>
-    </div>
+
+      <section className="mt-5 border-t border-border pt-5">
+        <h3 className="text-sm font-bold">{t('Available groups')}</h3>
+        <p className="mt-1 text-xs leading-5 text-muted">
+          {t('A group is a billing label your operator configured: a name, a description and a ratio.')}
+        </p>
+
+        {props.groups.isError ? (
+          <LoadErrorAlert
+            className="mt-3"
+            error={props.groups.error}
+            isRetrying={props.groups.isFetching}
+            onRetry={props.groups.refetch}
+          />
+        ) : null}
+
+        {props.groups.isPending ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Skeleton height={40} label={t('Loading groups')} variant="block" width={160} />
+            <Skeleton height={40} variant="block" width={160} />
+          </div>
+        ) : null}
+
+        {!props.groups.isPending && !props.groups.isError && groupOptions.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">{t('Your account has no selectable groups.')}</p>
+        ) : null}
+
+        {groupOptions.length > 0 ? (
+          <div aria-label={t('Available groups')} className="mt-3 flex flex-wrap gap-2" role="group">
+            {groupOptions.map(([groupName, group]) => {
+              const selected = selectedGroups.includes(groupName)
+              return (
+                <button
+                  aria-checked={selected}
+                  aria-label={`${groupName} x${group.ratio}`}
+                  className={cn(
+                    'inline-flex min-h-10 items-center gap-2 rounded-[4px] border px-3 py-2 text-left text-xs font-semibold transition-colors',
+                    selected
+                      ? 'border-primary/50 bg-primary/10 text-primary'
+                      : 'border-border bg-surface-high/40 text-muted hover:border-border-strong hover:text-foreground',
+                  )}
+                  key={groupName}
+                  onClick={() => toggleGroup(groupName)}
+                  role="checkbox"
+                  title={group.desc}
+                  type="button"
+                >
+                  <span
+                    className={cn(
+                      'grid size-4 place-items-center border',
+                      selected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-surface',
+                    )}
+                  >
+                    {selected ? <CheckIcon aria-hidden="true" className="size-3" /> : null}
+                  </span>
+                  <span>{groupName}</span>
+                  <span className="mono text-[10px] opacity-80">x{group.ratio}</span>
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="mt-5 flex flex-col gap-4 border-t border-border pt-5">
+        <h3 className="text-sm font-bold">{t('Quota and expiry')}</h3>
+
+        <ToggleField
+          checked={unlimitedQuota}
+          description={t('An unlimited key draws on your account balance instead of its own budget.')}
+          label={t('Unlimited quota')}
+          onChange={setUnlimitedQuota}
+        />
+
+        {unlimitedQuota ? null : (
+          <NumberInput
+            description={t('Stored as {{units}} quota units, using the divisor from /api/status.', {
+              units: formatNumber(quotaUnits),
+            })}
+            label={t('Remaining quota')}
+            min={0}
+            onChange={(event) => setQuotaAmount(event.target.value)}
+            prefix="$"
+            step="any"
+            value={quotaAmount}
+          />
+        )}
+
+        <ToggleField
+          checked={neverExpires}
+          label={t('Never expires')}
+          onChange={setNeverExpires}
+        />
+
+        {neverExpires ? null : (
+          <Input
+            label={t('Expires at')}
+            onChange={(event) => setExpiresAt(event.target.value)}
+            type="datetime-local"
+            value={expiresAt}
+          />
+        )}
+      </section>
+    </Dialog>
   )
 }

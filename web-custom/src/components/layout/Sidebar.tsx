@@ -37,7 +37,9 @@ const primaryNavigation: NavigationItem[] = [
 
 const workspaceNavigation: NavigationItem[] = [
   { labelKey: 'API Logs', to: '/logs', icon: FileClockIcon },
-  { labelKey: 'Organization', to: '/organization', icon: UsersIcon },
+  // URL kept as /organization: router/web-router.go only serves this console for a fixed
+  // path whitelist, and /referral is not on it yet.
+  { labelKey: 'Referrals', to: '/organization', icon: UsersIcon },
   { labelKey: 'Wallet', to: '/wallet', icon: CreditCardIcon },
 ]
 

@@ -1,0 +1,29 @@
+{
+  "amount_options": [
+    10,
+    20,
+    50,
+    100,
+    200,
+    500
+  ],
+  "creem_products": "[]",
+  "discount": {},
+  "enable_creem_topup": false,
+  "enable_nowpayments_topup": false,
+  "enable_online_topup": false,
+  "enable_redemption": false,
+  "enable_stripe_topup": false,
+  "enable_waffo_pancake_topup": false,
+  "enable_waffo_topup": false,
+  "min_topup": 1,
+  "nowpayments_min_topup": 1,
+  "pay_methods": [],
+  "payment_compliance_confirmed": false,
+  "payment_compliance_terms_version": "v1",
+  "stripe_min_topup": 1,
+  "topup_link": "",
+  "waffo_min_topup": 1,
+  "waffo_pancake_min_topup": 1,
+  "waffo_pay_methods": null
+}

@@ -1,76 +1,367 @@
-import BotIcon from 'lucide-react/dist/esm/icons/bot'
-import BrainCircuitIcon from 'lucide-react/dist/esm/icons/brain-circuit'
-import CpuIcon from 'lucide-react/dist/esm/icons/cpu'
-import ListFilterIcon from 'lucide-react/dist/esm/icons/list-filter'
-import SearchIcon from 'lucide-react/dist/esm/icons/search'
-import ScaleIcon from 'lucide-react/dist/esm/icons/scale'
-import type { ComponentType, SVGProps } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import BoxesIcon from 'lucide-react/dist/esm/icons/boxes'
+import CircleDollarSignIcon from 'lucide-react/dist/esm/icons/circle-dollar-sign'
+import ServerIcon from 'lucide-react/dist/esm/icons/server'
+import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
-import { PageHeader } from '@/components/ui/PageHeader'
-import { Panel } from '@/components/ui/Panel'
+import { NativeSelect, SearchInput, type NativeSelectOption } from '@/components/form'
+import { toErrorMessage } from '@/components/overlay'
+import { EmptyState } from '@/components/system/EmptyState'
+import {
+  Alert,
+  Button,
+  PageHeader,
+  Pagination,
+  Panel,
+  SegmentedControl,
+  Skeleton,
+  StatCard,
+  type SegmentedControlOption,
+} from '@/components/ui'
+import { ModelCard } from '@/features/models/components/ModelCard'
+import { ModelComparePanel } from '@/features/models/components/ModelComparePanel'
+import {
+  MAX_COMPARED_MODELS,
+  MODELS_PER_PAGE,
+  MODELS_PER_PAGE_OPTIONS,
+  countProviders,
+  endpointTypeOptions,
+  formatMultiplier,
+  groupMultiplier,
+  modelEndpointTypes,
+  modelGroups,
+  modelMatchesSearch,
+} from '@/features/models/model-presentation'
+import { pricingQuery } from '@/lib/api/pricing'
+import { selfUserQuery } from '@/lib/api/user'
+import { formatNumber } from '@/lib/format'
 
-type ModelInfo = {
-  name: string
-  provider: string
-  descriptionKey: string
-  context: string
-  input: string
-  output: string
-  tags: string[]
-  featured?: boolean
-  icon: ComponentType<SVGProps<SVGSVGElement>>
-}
+/** Which slice of the catalogue the availability toggle shows. */
+type AvailabilityFilter = 'all' | 'group'
 
-const models: ModelInfo[] = [
-  { name: 'GPT-4 Turbo', provider: 'OpenAI', descriptionKey: 'Broad reasoning model for complex instruction following and production workloads.', context: '128K', input: '$10.00', output: '$30.00', tags: ['Chat', 'Reasoning', 'Vision'], featured: true, icon: BotIcon },
-  { name: 'Claude 3 Opus', provider: 'Anthropic', descriptionKey: 'High-capability model for nuanced analysis, coding, and long-form tasks.', context: '200K', input: '$15.00', output: '$75.00', tags: ['Analysis', 'Coding', 'Long context'], icon: BrainCircuitIcon },
-  { name: 'Gemini 1.5 Pro', provider: 'Google', descriptionKey: 'Multimodal model optimized for large documents and mixed media inputs.', context: '1M', input: '$7.00', output: '$21.00', tags: ['Multimodal', 'Vision', 'Long context'], icon: CpuIcon },
-]
+const SKELETON_CARDS = 6
 
 export function ModelsPage() {
   const { t } = useTranslation()
-  const [query, setQuery] = useState('')
-  const [featuredOnly, setFeaturedOnly] = useState(false)
-  const [selectedModels, setSelectedModels] = useState<string[]>([])
-  const visibleModels = useMemo(() => models.filter((model) => model.name.toLowerCase().includes(query.toLowerCase()) && (!featuredOnly || model.featured)), [featuredOnly, query])
 
-  const toggleModel = (name: string) => {
-    setSelectedModels((current) => current.includes(name) ? current.filter((model) => model !== name) : [...current, name].slice(-2))
+  const pricing = useQuery(pricingQuery())
+  const self = useQuery(selfUserQuery())
+
+  const [search, setSearch] = useState('')
+  const [endpointFilter, setEndpointFilter] = useState('')
+  const [availability, setAvailability] = useState<AvailabilityFilter>('all')
+  const [groupChoice, setGroupChoice] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(MODELS_PER_PAGE)
+  const [compared, setCompared] = useState<string[]>([])
+
+  // The account group decides which pricing group is preselected, so the catalogue
+  // waits for both queries rather than briefly pricing every model in the wrong group.
+  const isLoading = pricing.isLoading || self.isLoading
+
+  const payload = pricing.data
+  const models = useMemo(() => payload?.data ?? [], [payload])
+  const vendors = useMemo(() => payload?.vendors ?? [], [payload])
+  const groupNames = useMemo(() => Object.keys(payload?.usable_group ?? {}), [payload])
+
+  // The user's own group is the natural default; fall back to whatever the server
+  // published when the account group is not a selectable pricing group.
+  const ownGroup = self.data?.group ?? ''
+  let defaultGroup = groupNames[0] ?? ''
+  if (groupNames.includes('default')) defaultGroup = 'default'
+  if (groupNames.includes(ownGroup)) defaultGroup = ownGroup
+
+  const selectedGroup =
+    groupChoice !== null && groupNames.includes(groupChoice) ? groupChoice : defaultGroup
+  const groupRatio = groupMultiplier(payload?.group_ratio ?? {}, selectedGroup)
+
+  const availableInGroupCount = models.filter(
+    (model) => selectedGroup === '' || modelGroups(model).includes(selectedGroup),
+  ).length
+
+  const filtered = useMemo(() => {
+    const matches = models.filter((model) => {
+      if (!modelMatchesSearch(model, vendors, search)) return false
+      if (endpointFilter !== '' && !modelEndpointTypes(model).includes(endpointFilter)) {
+        return false
+      }
+      if (availability === 'group' && selectedGroup !== '') {
+        return modelGroups(model).includes(selectedGroup)
+      }
+      return true
+    })
+    // `/api/pricing` builds its rows from a map, so the order it returns is arbitrary;
+    // sorting by name keeps the grid from reshuffling between fetches.
+    return matches.sort((left, right) => left.model_name.localeCompare(right.model_name))
+  }, [availability, endpointFilter, models, search, selectedGroup, vendors])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const currentPage = Math.min(page, pageCount)
+  const visibleModels = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  const comparedModels = useMemo(
+    () => compared.flatMap((name) => models.filter((model) => model.model_name === name)),
+    [compared, models],
+  )
+
+  // `usable_group` maps a group name to the label the server publishes for it, which is
+  // operator-written text in the server's own language and is shown verbatim.
+  const groupOptions: NativeSelectOption[] = groupNames.map((name) => {
+    const description = payload?.usable_group[name] ?? ''
+    return {
+      value: name,
+      label: description === '' || description === name ? name : `${name} · ${description}`,
+    }
+  })
+
+  const endpointOptions: NativeSelectOption[] = [
+    { value: '', label: t('All endpoints') },
+    ...endpointTypeOptions(models).map((type) => ({ value: type, label: type })),
+  ]
+
+  const availabilityOptions: SegmentedControlOption<AvailabilityFilter>[] = [
+    { id: 'all', label: t('All models'), count: models.length },
+    { id: 'group', label: t('Available in this group'), count: availableInGroupCount },
+  ]
+
+  const toggleCompare = (modelName: string) => {
+    setCompared((current) =>
+      current.includes(modelName)
+        ? current.filter((name) => name !== modelName)
+        : [...current, modelName].slice(-MAX_COMPARED_MODELS),
+    )
+  }
+
+  const resetFilters = () => {
+    setSearch('')
+    setEndpointFilter('')
+    setAvailability('all')
+    setPage(1)
+  }
+
+  if (pricing.isError) {
+    return (
+      <div className="flex flex-col gap-8">
+        <PageHeader
+          description={t('Every model this gateway publishes, priced for the group you select.')}
+          title={t('Explore models')}
+        />
+        <Alert
+          action={
+            <Button
+              aria-busy={pricing.isFetching}
+              disabled={pricing.isFetching}
+              onClick={() => void pricing.refetch()}
+              variant="outline"
+            >
+              {t('Try again')}
+            </Button>
+          }
+          icon={<TriangleAlertIcon aria-hidden="true" />}
+          title={t('Could not load the model catalogue')}
+          tone="destructive"
+        >
+          {toErrorMessage(pricing.error)}
+        </Alert>
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader description={t('Compare capabilities, context windows, and pricing across available routes.')} title={t('Explore models')} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-        <label className="field relative flex h-11 w-full items-center sm:w-80"><SearchIcon aria-hidden="true" className="absolute left-3 size-4 text-muted" /><span className="sr-only">{t('Search models')}</span><input aria-label={t('Search models')} className="h-full w-full bg-transparent pl-10 pr-3 text-sm outline-none" onChange={(event) => setQuery(event.target.value)} placeholder={t('Search models')} type="search" value={query} /></label>
-        <Button aria-pressed={featuredOnly} onClick={() => setFeaturedOnly((enabled) => !enabled)} variant={featuredOnly ? 'primary' : 'outline'}><ListFilterIcon aria-hidden="true" />{t('Featured only')}</Button>
+      <PageHeader
+        description={t('Every model this gateway publishes, priced for the group you select.')}
+        title={t('Explore models')}
+      />
+
+      {self.isError ? (
+        <Alert icon={<TriangleAlertIcon aria-hidden="true" />} tone="warning">
+          {t('Your account group could not be loaded, so the default pricing group is shown.')}
+        </Alert>
+      ) : null}
+
+      {isLoading ? (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }, (_unused, index) => (
+            <Skeleton className="h-36" key={index} variant="block" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            icon={<BoxesIcon />}
+            label={t('Models published')}
+            value={formatNumber(models.length)}
+          />
+          <StatCard
+            icon={<ServerIcon />}
+            iconTone="info"
+            label={t('Providers listed')}
+            value={formatNumber(countProviders(models, vendors))}
+          />
+          <StatCard
+            footer={t('Applied to every price on this page.')}
+            icon={<CircleDollarSignIcon />}
+            iconTone="secondary"
+            label={t('Group ratio')}
+            value={
+              groupRatio === undefined ? (
+                <span className="text-xl">{t('Not published')}</span>
+              ) : (
+                formatMultiplier(groupRatio)
+              )
+            }
+          />
+        </div>
+      )}
+
+      {groupRatio === undefined && !isLoading && groupNames.length > 0 ? (
+        <Alert icon={<TriangleAlertIcon aria-hidden="true" />} tone="warning">
+          {t('This pricing group has no published multiplier, so prices cannot be shown.')}
+        </Alert>
+      ) : null}
+
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <NativeSelect
+            className="sm:w-56"
+            disabled={groupOptions.length === 0}
+            label={t('Pricing group')}
+            onChange={(event) => {
+              setGroupChoice(event.target.value)
+              setPage(1)
+            }}
+            options={groupOptions}
+            value={selectedGroup}
+          />
+          <NativeSelect
+            className="sm:w-48"
+            label={t('Endpoint')}
+            onChange={(event) => {
+              setEndpointFilter(event.target.value)
+              setPage(1)
+            }}
+            options={endpointOptions}
+            value={endpointFilter}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <SegmentedControl
+            className="self-start"
+            label={t('Model filters')}
+            onChange={(next) => {
+              setAvailability(next)
+              setPage(1)
+            }}
+            options={availabilityOptions}
+            value={availability}
+          />
+          <SearchInput
+            className="sm:w-72"
+            debounceMs={200}
+            description={t('Filters this list in your browser.')}
+            label={t('Search models')}
+            onValueChange={(next) => {
+              setSearch(next)
+              setPage(1)
+            }}
+            placeholder={t('Search models')}
+            value={search}
+          />
+        </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        {visibleModels.map((model) => {
-          const Icon = model.icon
-          const selected = selectedModels.includes(model.name)
-          return <Panel className="flex min-h-[430px] flex-col p-6" key={model.name}>
-            <div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-[4px] border border-primary/25 bg-primary/10 text-primary"><Icon aria-hidden="true" className="size-5" /></span><div><h2 className="text-lg font-bold">{model.name}</h2><p className="text-sm text-muted">{model.provider}</p></div></div>{model.featured && <Badge tone="primary">{t('Featured')}</Badge>}</div>
-            <p className="mt-6 min-h-20 text-sm leading-6 text-muted">{t(model.descriptionKey)}</p>
-            <dl className="mt-5 divide-y divide-border border-y border-border text-sm"><div className="flex justify-between py-3"><dt className="text-muted">{t('Context window')}</dt><dd className="mono font-semibold">{model.context} {t('tokens')}</dd></div><div className="grid grid-cols-2 divide-x divide-border py-3"><div><dt className="text-xs text-muted">{t('Input per 1M')}</dt><dd className="mono mt-1 text-primary">{model.input}</dd></div><div className="pl-4"><dt className="text-xs text-muted">{t('Output per 1M')}</dt><dd className="mono mt-1 text-secondary">{model.output}</dd></div></div></dl>
-            <div className="mt-5 flex flex-wrap gap-2">{model.tags.map((tag) => <Badge key={tag} tone="muted">{t(tag)}</Badge>)}</div>
-            <Button aria-pressed={selected} className="mt-auto w-full" onClick={() => toggleModel(model.name)} variant={selected ? 'primary' : 'outline'}>{t(selected ? 'Selected' : 'Select model')}</Button>
+      <section
+        aria-busy={pricing.isFetching || self.isFetching}
+        aria-label={t('Model catalogue')}
+        className="flex flex-col gap-5"
+      >
+        {isLoading ? (
+          <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: SKELETON_CARDS }, (_unused, index) => (
+              <Skeleton
+                className="h-80"
+                key={index}
+                label={index === 0 ? t('Loading models') : undefined}
+                variant="block"
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {!isLoading && models.length === 0 ? (
+          <Panel>
+            <EmptyState
+              description={t('No model prices have been configured on this gateway yet.')}
+              title={t('No models are published yet')}
+            />
           </Panel>
-        })}
-      </div>
+        ) : null}
 
-      {visibleModels.length === 0 && <Panel className="p-10 text-center" muted><p className="text-muted">{t('No models match this search.')}</p></Panel>}
+        {!isLoading && models.length > 0 && filtered.length === 0 ? (
+          <Panel>
+            <EmptyState
+              action={
+                <Button onClick={resetFilters} variant="outline">
+                  {t('Reset filters')}
+                </Button>
+              }
+              description={t('Try a different search term, endpoint, or pricing group.')}
+              title={t('No models match these filters')}
+            />
+          </Panel>
+        ) : null}
 
-      <Panel className="flex min-h-40 flex-col items-center justify-center border-dashed p-8 text-center" muted>
-        <ScaleIcon aria-hidden="true" className="size-6 text-muted" />
-        <h2 className="mt-4 text-lg font-bold">{selectedModels.length === 0 ? t('Select models to compare') : t('Comparison ready')}</h2>
-        <p className="mt-2 text-sm text-muted">{selectedModels.length === 0 ? t('Choose up to two models to prepare a side-by-side comparison.') : selectedModels.join(' / ')}</p>
-      </Panel>
+        {visibleModels.length > 0 ? (
+          <>
+            <p className="text-sm text-muted">
+              {/* The total counts what the current filters match, not the whole catalogue. */}
+              {t('Showing {{shown}} of {{total}} models', {
+                shown: visibleModels.length,
+                total: filtered.length,
+              })}
+            </p>
+
+            <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+              {visibleModels.map((model) => (
+                <ModelCard
+                  compared={compared.includes(model.model_name)}
+                  endpointCatalog={payload?.supported_endpoint ?? {}}
+                  groupRatio={groupRatio}
+                  key={model.model_name}
+                  model={model}
+                  onToggleCompare={toggleCompare}
+                  selectedGroup={selectedGroup}
+                  vendors={vendors}
+                />
+              ))}
+            </div>
+
+            {filtered.length > pageSize ? (
+              <Pagination
+                label={t('Model pages')}
+                onPageChange={setPage}
+                onPageSizeChange={(next) => {
+                  setPageSize(next)
+                  setPage(1)
+                }}
+                page={currentPage}
+                pageSize={pageSize}
+                pageSizeLabel={t('Models per page')}
+                pageSizeOptions={MODELS_PER_PAGE_OPTIONS}
+                total={filtered.length}
+              />
+            ) : null}
+          </>
+        ) : null}
+      </section>
+
+      {models.length > 0 && !isLoading ? (
+        <ModelComparePanel groupRatio={groupRatio} models={comparedModels} vendors={vendors} />
+      ) : null}
     </div>
   )
 }

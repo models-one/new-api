@@ -1,79 +1,176 @@
-import CreditCardIcon from 'lucide-react/dist/esm/icons/credit-card'
-import DownloadIcon from 'lucide-react/dist/esm/icons/download'
-import GaugeIcon from 'lucide-react/dist/esm/icons/gauge'
-import TrendingUpIcon from 'lucide-react/dist/esm/icons/trending-up'
+import { useQuery } from '@tanstack/react-query'
+import InfoIcon from 'lucide-react/dist/esm/icons/info'
+import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
-import { PageHeader } from '@/components/ui/PageHeader'
-import { Panel } from '@/components/ui/Panel'
-
-const modelUsage = [
-  { name: 'gpt-4-turbo', tokens: '1.2M', cost: '$120.00', share: '28%', tone: 'primary' as const },
-  { name: 'claude-3-opus', tokens: '850K', cost: '$85.00', share: '20%', tone: 'secondary' as const },
-  { name: 'mixtral-8x7b', tokens: '4.5M', cost: '$45.00', share: '10%', tone: 'muted' as const },
-]
-
-const topKeys = [
-  { name: 'Production_Main', cost: '$210.50', width: '72%' },
-  { name: 'Staging_Env', cost: '$85.20', width: '31%' },
-  { name: 'Dev_Local_Testing', cost: '$12.00', width: '8%' },
-]
-
-const invoices = [
-  { date: 'Oct 01, 2023', id: 'INV-2023-10', amount: '$385.00', statusKey: 'Paid' },
-  { date: 'Sep 01, 2023', id: 'INV-2023-09', amount: '$342.20', statusKey: 'Paid' },
-  { date: 'Aug 01, 2023', id: 'INV-2023-08', amount: '$298.40', statusKey: 'Paid' },
-]
+import { NativeSelect } from '@/components/form'
+import { Alert, PageHeader, Panel } from '@/components/ui'
+import {
+  MIN_PROJECTION_DAYS,
+  formatBillingMonth,
+  projectMonthlyQuota,
+  recentBillingMonths,
+  resolveBillingWindow,
+} from '@/features/usage/billing-month'
+import { KeySpendPanel } from '@/features/usage/components/KeySpendPanel'
+import { ModelUsagePanel } from '@/features/usage/components/ModelUsagePanel'
+import { OrderHistoryPanel } from '@/features/usage/components/OrderHistoryPanel'
+import { SpendSummary, SpendSummarySkeleton } from '@/features/usage/components/SpendSummary'
+import { UsageErrorAlert } from '@/features/usage/components/UsageErrorAlert'
+import { aggregateByToken, selfFlowQuery, sumFlowQuota } from '@/features/usage/flow'
+import { buildModelSpend } from '@/features/usage/usage'
+import { useQuotaPerUnit, useServerStatus } from '@/hooks/use-server-status'
+import { selfQuotaDataQuery } from '@/lib/api/usage-data'
+import { formatDate } from '@/lib/format'
 
 export function UsagePage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+
+  // Pinned at mount so the option list cannot shift underneath the selection.
+  const months = useMemo(() => recentBillingMonths(new Date()), [])
+  const [selectedId, setSelectedId] = useState(months[0].id)
+  const selectedMonth = months.find((month) => month.id === selectedId) ?? months[0]
+
+  // Recomputed every render, but the window end is floored to the hour, so the
+  // query keys below stay stable instead of changing on each pass.
+  const billingWindow = resolveBillingWindow(selectedMonth, new Date())
+
+  const usageQuery = useQuery(selfQuotaDataQuery(billingWindow.start, billingWindow.end))
+  const flowQuery = useQuery(selfFlowQuery(billingWindow.start, billingWindow.end))
+  const { data: serverStatus } = useServerStatus()
+  const quotaPerUnit = useQuotaPerUnit()
+
+  const spend = buildModelSpend(usageQuery.data ?? [])
+  const flowRows = flowQuery.data ?? []
+  const keys = aggregateByToken(flowRows)
+  // Only meaningful once BOTH answers are in: comparing a loaded total against a
+  // still-empty one would report the whole window as unattributed.
+  const unattributedQuota =
+    usageQuery.data && flowQuery.data
+      ? Math.max(0, spend.totals.quota - sumFlowQuota(flowRows))
+      : 0
+
+  const windowStart = formatDate(billingWindow.start, i18n.language)
+  const windowEnd = formatDate(billingWindow.end, i18n.language)
+  const monthLabel = formatBillingMonth(selectedMonth, i18n.language)
+
+  const awaitingProjection =
+    billingWindow.isCurrentMonth
+    && !usageQuery.isPending
+    && !usageQuery.isError
+    && spend.totals.quota > 0
+    && projectMonthlyQuota(spend.totals.quota, billingWindow) === null
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader description={t('Monitor API consumption, monthly spend, and billing history.')} title={t('Usage and billing')} />
+      <PageHeader
+        action={(
+          <NativeSelect
+            hideLabel
+            label={t('Billing month')}
+            onChange={(event) => setSelectedId(event.target.value)}
+            options={months.map((month) => ({
+              label: formatBillingMonth(month, i18n.language),
+              value: month.id,
+            }))}
+            size="sm"
+            value={selectedId}
+          />
+        )}
+        description={t('Your API spend for the selected month, and your recent top-up orders.')}
+        title={t('Usage and billing')}
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Panel className="p-6">
-          <div className="flex items-start justify-between"><p className="eyebrow">{t('Current spend')}</p><GaugeIcon aria-hidden="true" className="size-5 text-primary" /></div>
-          <p className="mono mt-4 text-4xl font-bold">$432.50</p>
-          <p className="mt-1 text-sm text-muted">{t('$1,000 monthly limit')}</p>
-          <div className="mt-6 h-1.5 overflow-hidden bg-surface-high"><div className="h-full w-[43%] bg-primary" /></div>
-          <p className="mt-2 text-right text-xs text-muted">43%</p>
-        </Panel>
-        <Panel className="p-6">
-          <div className="flex items-start justify-between"><p className="eyebrow">{t('Projected spend')}</p><TrendingUpIcon aria-hidden="true" className="size-5 text-secondary" /></div>
-          <p className="mono mt-4 text-4xl font-bold">$610.00</p>
-          <p className="mt-6 text-sm text-primary">{t('Based on current usage velocity')}</p>
-        </Panel>
-        <Panel className="p-6">
-          <div className="flex items-start justify-between"><p className="eyebrow">{t('Payment method')}</p><CreditCardIcon aria-hidden="true" className="size-5 text-info" /></div>
-          <p className="mono mt-4 text-lg">•••• •••• •••• 4242</p>
-          <p className="mt-1 text-sm text-muted">{t('Expires 12/25')}</p>
-          <Button className="mt-5 w-full" variant="quiet">{t('Manage payment')}</Button>
-        </Panel>
+      {billingWindow.clamped ? (
+        <Alert
+          icon={<InfoIcon />}
+          title={t('Only 30 days of {{month}} can be charted', { month: monthLabel })}
+          tone="info"
+        >
+          {t(
+            'One usage request may cover at most 30 days, so this page charts {{start}} to {{end}} and leaves out the earlier days of the month.',
+            { end: windowEnd, start: windowStart },
+          )}
+        </Alert>
+      ) : null}
+
+      {serverStatus?.enable_data_export === false ? (
+        <Alert
+          icon={<TriangleAlertIcon />}
+          title={t('Usage collection is turned off')}
+          tone="warning"
+        >
+          {t(
+            'This server has usage data collection disabled, so no per-model usage is recorded and the charts below stay empty.',
+          )}
+        </Alert>
+      ) : null}
+
+      {usageQuery.isError ? (
+        <UsageErrorAlert
+          error={usageQuery.error}
+          isRetrying={usageQuery.isFetching}
+          onRetry={() => void usageQuery.refetch()}
+          title={t('Your usage could not be loaded')}
+        />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {usageQuery.isPending ? (
+            <SpendSummarySkeleton />
+          ) : (
+            <SpendSummary
+              isFetching={usageQuery.isFetching}
+              quotaPerUnit={quotaPerUnit}
+              totals={spend.totals}
+              window={billingWindow}
+            />
+          )}
+
+          {awaitingProjection ? (
+            <p className="text-xs leading-5 text-muted">
+              {t(
+                'A projection appears once this month has {{days}} full day of recorded usage.',
+                { days: MIN_PROJECTION_DAYS },
+              )}
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      <div className={usageQuery.isError ? 'grid gap-5' : 'grid gap-5 xl:grid-cols-[1fr_340px]'}>
+        {usageQuery.isError ? null : (
+          <ModelUsagePanel
+            isFetching={usageQuery.isFetching}
+            isPending={usageQuery.isPending}
+            models={spend.models}
+            quotaPerUnit={quotaPerUnit}
+          />
+        )}
+
+        {flowQuery.isError ? (
+          <Panel className="p-6">
+            <h2 className="text-lg font-bold">{t('Top API keys')}</h2>
+            <UsageErrorAlert
+              className="mt-4"
+              error={flowQuery.error}
+              isRetrying={flowQuery.isFetching}
+              onRetry={() => void flowQuery.refetch()}
+              title={t('Spend per key could not be loaded')}
+            />
+          </Panel>
+        ) : (
+          <KeySpendPanel
+            isFetching={flowQuery.isFetching}
+            isPending={flowQuery.isPending}
+            keys={keys}
+            quotaPerUnit={quotaPerUnit}
+            unattributedQuota={unattributedQuota}
+          />
+        )}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
-        <Panel className="p-6">
-          <div className="flex items-center justify-between gap-4"><h2 className="text-lg font-bold">{t('Usage by model')}</h2><select aria-label={t('Billing month')} className="field px-3 text-sm" defaultValue="nov"><option value="nov">November 2023</option><option value="oct">October 2023</option></select></div>
-          <div className="mt-5 divide-y divide-border border-y border-border">
-            {modelUsage.map((model) => <div className="flex items-center justify-between gap-4 py-4" key={model.name}><div className="min-w-0"><p className="mono truncate font-semibold">{model.name}</p><p className="mt-1 text-xs text-muted">{model.tokens} {t('tokens')}</p></div><div className="text-right"><p className="mono font-semibold">{model.cost}</p><Badge className="mt-1" tone={model.tone}>{model.share}</Badge></div></div>)}
-          </div>
-        </Panel>
-
-        <Panel className="p-6">
-          <h2 className="text-lg font-bold">{t('Top API keys')}</h2>
-          <div className="mt-6 flex flex-col gap-5">{topKeys.map((key) => <div key={key.name}><div className="mb-2 flex justify-between gap-3 text-xs"><span className="mono truncate">{key.name}</span><span className="text-primary">{key.cost}</span></div><div className="h-1 bg-surface-high"><div className="h-full bg-primary" style={{ width: key.width }} /></div></div>)}</div>
-          <Button className="mt-6 w-full" variant="quiet">{t('View all keys')}</Button>
-        </Panel>
-      </div>
-
-      <Panel className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="text-lg font-bold">{t('Invoice history')}</h2><Button variant="quiet"><DownloadIcon aria-hidden="true" />{t('Download all')}</Button></div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[680px] border-collapse text-left text-sm"><thead className="bg-surface-high/40 text-xs text-muted"><tr><th className="px-5 py-3">{t('Date')}</th><th className="px-5 py-3">{t('Invoice ID')}</th><th className="px-5 py-3">{t('Amount')}</th><th className="px-5 py-3">{t('Status')}</th><th className="px-5 py-3 text-right">{t('Action')}</th></tr></thead><tbody>{invoices.map((invoice) => <tr className="border-t border-border" key={invoice.id}><td className="px-5 py-4">{invoice.date}</td><td className="mono px-5 py-4 text-muted">{invoice.id}</td><td className="mono px-5 py-4">{invoice.amount}</td><td className="px-5 py-4"><Badge tone="success">{t(invoice.statusKey)}</Badge></td><td className="px-5 py-4 text-right"><Button aria-label={t('Download invoice')} className="size-9 min-h-9 px-0" title={t('Download invoice')} variant="quiet"><DownloadIcon aria-hidden="true" /></Button></td></tr>)}</tbody></table></div>
-      </Panel>
+      <OrderHistoryPanel />
     </div>
   )
 }

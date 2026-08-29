@@ -73,12 +73,18 @@ const logsRoute = createRoute({
   component: lazyRouteComponent(() => import('@/features/logs/LogsPage'), 'LogsPage'),
 })
 
-const organizationRoute = createRoute({
+/**
+ * The referral page. The URL stays `/organization` on purpose: `router/web-router.go`
+ * only serves this custom console for a fixed whitelist of paths, and `/referral` is not
+ * on it — moving the URL would make a hard refresh fall back to the legacy dashboard.
+ * Renaming it needs that Go whitelist updated first.
+ */
+const referralRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: '/organization',
   component: lazyRouteComponent(
-    () => import('@/features/organization/OrganizationPage'),
-    'OrganizationPage',
+    () => import('@/features/referral/ReferralPage'),
+    'ReferralPage',
   ),
 })
 
@@ -97,7 +103,7 @@ const routeTree = rootRoute.addChildren([
     usageRoute,
     analyticsRoute,
     logsRoute,
-    organizationRoute,
+    referralRoute,
     walletRoute,
   ]),
 ])

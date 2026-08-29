@@ -1,54 +1,180 @@
-import ActivityIcon from 'lucide-react/dist/esm/icons/activity'
-import CircleCheckIcon from 'lucide-react/dist/esm/icons/circle-check'
-import GaugeIcon from 'lucide-react/dist/esm/icons/gauge'
-import InfoIcon from 'lucide-react/dist/esm/icons/info'
+import CircleAlertIcon from 'lucide-react/dist/esm/icons/circle-alert'
+import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { PageHeader } from '@/components/ui/PageHeader'
-import { Panel } from '@/components/ui/Panel'
-import { cn } from '@/lib/utils'
-
-const distributions = [
-  { name: 'gpt-4-turbo', value: 45, color: 'bg-primary' },
-  { name: 'claude-3-opus', value: 30, color: 'bg-secondary' },
-  { name: 'llama-3-70b', value: 15, color: 'bg-info' },
-  { name: 'mixtral-8x7b', value: 10, color: 'bg-muted' },
-]
+import { toErrorMessage } from '@/components/overlay'
+import { Alert, Button, PageHeader, SegmentedControl, type SegmentedControlOption } from '@/components/ui'
+import { ModelTokenPanel } from '@/features/analytics/components/ModelTokenPanel'
+import { PlatformHealthPanel } from '@/features/analytics/components/PlatformHealthPanel'
+import { UsageSummary, UsageSummarySkeleton } from '@/features/analytics/components/UsageSummary'
+import { VolumePanel, type VolumeMetric } from '@/features/analytics/components/VolumePanel'
+import {
+  ANALYTICS_RANGE_IDS,
+  alignedWindowEnd,
+  resolveAnalyticsWindow,
+  type AnalyticsRangeId,
+} from '@/features/analytics/range'
+import { buildModelShares, buildVolumeSeries, sumUsage } from '@/features/analytics/usage'
+import { useQuotaPerUnit, useServerStatus } from '@/hooks/use-server-status'
+import { perfSummaryQuery } from '@/lib/api/metrics'
+import { selfQuotaDataQuery } from '@/lib/api/usage-data'
 
 export function AnalyticsPage() {
   const { t } = useTranslation()
-  const [range, setRange] = useState('7d')
+  const [rangeId, setRangeId] = useState<AnalyticsRangeId>('7d')
+  const [metric, setMetric] = useState<VolumeMetric>('requests')
+
+  // Recomputed every render but pinned to a 5 minute grid, so the query keys
+  // below stay stable instead of changing on each pass.
+  const analyticsWindow = resolveAnalyticsWindow(rangeId, alignedWindowEnd())
+
+  const usageQuery = useQuery(selfQuotaDataQuery(analyticsWindow.start, analyticsWindow.end))
+  const previousUsageQuery = useQuery(
+    selfQuotaDataQuery(analyticsWindow.previousStart, analyticsWindow.previousEnd),
+  )
+  const perfQuery = useQuery(perfSummaryQuery(analyticsWindow.hours))
+
+  const { data: serverStatus } = useServerStatus()
+  const quotaPerUnit = useQuotaPerUnit()
+
+  const rangeLabels: Record<AnalyticsRangeId, string> = {
+    '24h': t('24h'),
+    '7d': t('7d'),
+    '30d': t('30d'),
+  }
+  const rangeCaptions: Record<AnalyticsRangeId, string> = {
+    '24h': t('24 hours'),
+    '7d': t('7 days'),
+    '30d': t('30 days'),
+  }
+  const rangeOptions: SegmentedControlOption<AnalyticsRangeId>[] = ANALYTICS_RANGE_IDS.map(
+    (id) => ({ id, label: rangeLabels[id] }),
+  )
+
+  const points = usageQuery.data ?? []
+  const totals = sumUsage(points)
+  const previousTotals = previousUsageQuery.data
+    ? sumUsage(previousUsageQuery.data)
+    : undefined
+  const buckets = buildVolumeSeries(points, analyticsWindow)
+  const shares = buildModelShares(points)
+
+  const comparisonCaption = t('vs previous {{range}}', { range: rangeCaptions[rangeId] })
+  const hasBaseline =
+    previousTotals !== undefined
+    && (previousTotals.requests > 0 || previousTotals.tokens > 0 || previousTotals.quota > 0)
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        action={<div aria-label={t('Analytics range')} className="grid grid-cols-3 gap-1" role="group">{['24h', '7d', '30d'].map((item) => <button aria-pressed={range === item} className={cn('min-h-10 border border-border px-4 text-sm text-muted', range === item && 'border-primary bg-primary/10 text-primary')} key={item} onClick={() => setRange(item)} type="button">{item}</button>)}</div>}
-        description={t('Inspect traffic quality, latency, errors, and model token distribution.')}
+        action={
+          <SegmentedControl
+            label={t('Analytics range')}
+            onChange={setRangeId}
+            options={rangeOptions}
+            value={rangeId}
+          />
+        }
+        description={t(
+          'Your own requests, tokens and spend for the selected range, alongside service-wide model performance.',
+        )}
         title={t('Advanced analytics')}
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Panel className="p-6"><div className="flex items-start justify-between"><p className="eyebrow">{t('Total requests')}</p><ActivityIcon aria-hidden="true" className="size-5 text-primary" /></div><p className="mono mt-4 text-4xl font-bold">2.4M</p><p className="mt-4 text-sm text-success">+12.5% <span className="text-muted">{t('vs last period')}</span></p></Panel>
-        <Panel className="p-6"><div className="flex items-start justify-between"><p className="eyebrow">{t('Average latency')}</p><GaugeIcon aria-hidden="true" className="size-5 text-secondary" /></div><p className="mono mt-4 text-4xl font-bold">142<span className="text-lg text-muted">ms</span></p><p className="mt-4 text-sm text-primary">-4.2% <span className="text-muted">{t('vs last period')}</span></p></Panel>
-        <Panel className="p-6"><div className="flex items-start justify-between"><p className="eyebrow">{t('Success rate')}</p><CircleCheckIcon aria-hidden="true" className="size-5 text-success" /></div><p className="mono mt-4 text-4xl font-bold">99.98<span className="text-lg text-muted">%</span></p><p className="mt-4 text-sm text-muted">0.0% {t('vs last period')}</p></Panel>
-      </div>
+      {serverStatus?.enable_data_export === false ? (
+        <Alert icon={<TriangleAlertIcon />} title={t('Usage collection is turned off')} tone="warning">
+          {t(
+            'This server has usage data collection disabled, so no per-model usage is recorded and the charts below stay empty.',
+          )}
+        </Alert>
+      ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
-        <Panel className="p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><h2 className="text-lg font-bold">{t('Latency and error rate')}</h2><div className="flex gap-4 text-xs text-muted"><span className="flex items-center gap-2"><span className="size-2 bg-primary" />{t('Latency')}</span><span className="flex items-center gap-2"><span className="size-2 bg-secondary" />{t('Errors')}</span></div></div>
-          <div className="data-grid relative mt-8 h-[340px] border-b border-l border-border">
-            <svg aria-label={t('Latency and error chart')} className="absolute inset-0 size-full" preserveAspectRatio="none" role="img" viewBox="0 0 100 100"><path d="M0 78 C13 62 22 79 36 60 S52 35 66 50 S83 51 100 28" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" vectorEffect="non-scaling-stroke" /><path d="M0 92 C18 93 21 82 38 90 S54 96 67 80 S82 95 100 75" fill="none" stroke="var(--color-secondary)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /></svg>
-            <div className="absolute inset-x-3 bottom-2 flex justify-between text-[11px] text-muted"><span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span></div>
+      {usageQuery.isError ? (
+        <Alert
+          action={
+            <Button
+              aria-busy={usageQuery.isFetching}
+              disabled={usageQuery.isFetching}
+              onClick={() => void usageQuery.refetch()}
+              size="sm"
+              variant="outline"
+            >
+              {t('Try again')}
+            </Button>
+          }
+          icon={<CircleAlertIcon />}
+          title={t('Your usage data could not be loaded')}
+          tone="destructive"
+        >
+          {toErrorMessage(usageQuery.error)}
+        </Alert>
+      ) : null}
+
+      {usageQuery.isError ? null : (
+        <>
+          <div className="flex flex-col gap-3">
+            {usageQuery.isPending ? (
+              <UsageSummarySkeleton />
+            ) : (
+              <UsageSummary
+                comparisonCaption={comparisonCaption}
+                isFetching={usageQuery.isFetching || previousUsageQuery.isFetching}
+                previousTotals={previousTotals}
+                quotaPerUnit={quotaPerUnit}
+                totals={totals}
+              />
+            )}
+
+            {!usageQuery.isPending && previousUsageQuery.isSuccess && !hasBaseline ? (
+              <p className="text-xs leading-5 text-muted">
+                {t('No change is shown because nothing was recorded in the previous {{range}}.', {
+                  range: rangeCaptions[rangeId],
+                })}
+              </p>
+            ) : null}
+
+            {/* A failed baseline is not an empty baseline, so it gets its own wording. */}
+            {!usageQuery.isPending && previousUsageQuery.isError ? (
+              <p className="text-xs leading-5 text-muted">
+                {t('No change is shown because the previous {{range}} could not be loaded.', {
+                  range: rangeCaptions[rangeId],
+                })}
+              </p>
+            ) : null}
           </div>
-        </Panel>
 
-        <Panel className="p-6">
-          <h2 className="text-lg font-bold">{t('Token usage by model')}</h2>
-          <div className="mt-7 flex flex-col gap-5">{distributions.map((model) => <div key={model.name}><div className="mb-2 flex justify-between text-sm"><span className="mono">{model.name}</span><span className="text-muted">{model.value}%</span></div><div className="h-1.5 bg-surface-high"><div className={cn('h-full', model.color)} style={{ width: `${model.value}%` }} /></div></div>)}</div>
-          <div className="mt-8 flex gap-3 border-t border-border pt-5 text-sm leading-6 text-muted"><InfoIcon aria-hidden="true" className="mt-1 size-4 shrink-0 text-primary" /><p>{t('Route non-critical workloads to lower-cost models when latency targets allow.')}</p></div>
-        </Panel>
-      </div>
+          <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
+            <VolumePanel
+              buckets={buckets}
+              isEmpty={points.length === 0}
+              isFetching={usageQuery.isFetching}
+              isPending={usageQuery.isPending}
+              metric={metric}
+              onMetricChange={setMetric}
+              quotaPerUnit={quotaPerUnit}
+              window={analyticsWindow}
+            />
+
+            <ModelTokenPanel
+              isFetching={usageQuery.isFetching}
+              isPending={usageQuery.isPending}
+              shares={shares}
+            />
+          </div>
+        </>
+      )}
+
+      <PlatformHealthPanel
+        errorMessage={toErrorMessage(perfQuery.error)}
+        isError={perfQuery.isError}
+        isFetching={perfQuery.isFetching}
+        isPending={perfQuery.isPending}
+        models={perfQuery.data?.models ?? []}
+        onRetry={() => void perfQuery.refetch()}
+        rangeCaption={rangeCaptions[rangeId]}
+      />
     </div>
   )
 }
