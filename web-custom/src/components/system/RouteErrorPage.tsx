@@ -1,28 +1,34 @@
-import AlertTriangleIcon from 'lucide-react/dist/esm/icons/triangle-alert'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/Button'
+import { ErrorPage } from '@/features/errors/ErrorPage'
 import { AuthenticationUnavailableError } from '@/lib/auth-session'
 
 type RouteErrorPageProps = {
-  error: Error
+  error: unknown
   reset: () => void
 }
 
+/**
+ * The router's `errorComponent`. Unlike the addressable error routes it offers a retry
+ * rather than a history-back control, because the route that threw is still the current
+ * one and going back would leave the user on a page that never loaded.
+ */
 export function RouteErrorPage(props: RouteErrorPageProps) {
   const { t } = useTranslation()
-  const description = props.error instanceof AuthenticationUnavailableError
-    ? t('Authentication service is temporarily unavailable.')
-    : t('The console could not complete this request.')
+
+  // A failed auth bootstrap is not an HTTP failure and carries no status, so it gets its
+  // own copy rather than the generic "could not complete this request".
+  const description
+    = props.error instanceof AuthenticationUnavailableError
+      ? t('Authentication service is temporarily unavailable.')
+      : undefined
 
   return (
-    <main className="settings-canvas grid min-h-screen place-items-center px-6 py-12 text-center">
-      <div className="max-w-lg">
-        <AlertTriangleIcon aria-hidden="true" className="mx-auto size-8 text-warning" />
-        <h1 className="mt-5 text-2xl font-bold">{t('Unable to load this page.')}</h1>
-        <p className="mt-3 text-sm leading-6 text-muted">{description}</p>
-        <Button className="mt-6" onClick={props.reset}>{t('Try again')}</Button>
-      </div>
-    </main>
+    <ErrorPage
+      description={description}
+      error={props.error}
+      onRetry={props.reset}
+      variant="500"
+    />
   )
 }
