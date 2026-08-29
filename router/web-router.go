@@ -49,7 +49,11 @@ func webIndexForPath(path string, legacyIndexPage []byte, customIndexPage []byte
 		return legacyIndexPage
 	}
 
+	// Paths the custom console owns. A path matches when it equals an entry or sits
+	// under it, so "/pricing" also covers "/pricing/gpt-4o" while "/models2" stays
+	// on the legacy frontend. Everything not listed here is still served by web/.
 	customRoutes := [...]string{
+		// Console
 		"/dashboard",
 		"/settings",
 		"/models",
@@ -58,6 +62,28 @@ func webIndexForPath(path string, legacyIndexPage []byte, customIndexPage []byte
 		"/logs",
 		"/organization",
 		"/wallet",
+		// Authentication
+		"/sign-in",
+		"/sign-up",
+		"/register",
+		"/forgot-password",
+		"/reset",
+		"/user/reset",
+		"/otp",
+		"/oauth",
+		// Public
+		"/pricing",
+		"/about",
+		"/privacy-policy",
+		"/user-agreement",
+		"/setup",
+		// Errors
+		"/401",
+		"/403",
+		"/404",
+		"/500",
+		"/503",
+		"/errors",
 	}
 	if path == "/" {
 		return customIndexPage

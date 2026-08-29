@@ -88,17 +88,25 @@ describe('readLoginOutcome', () => {
     })).toEqual({
       kind: 'rejected',
       message: 'Username or password is incorrect, or user has been banned',
+      code: '',
     })
   })
 
+  it('carries the failure code, which is the only useful field on a session refusal', () => {
+    // The backend answers a session-limit refusal with code AUTH_SESSION_LIMIT and
+    // leaves message as the bare HTTP status text.
+    expect(readLoginOutcome({ success: false, message: 'Conflict', code: 'AUTH_SESSION_LIMIT' }))
+      .toEqual({ kind: 'rejected', message: 'Conflict', code: 'AUTH_SESSION_LIMIT' })
+  })
+
   it('reports a rejection with no message so the caller can supply one', () => {
-    expect(readLoginOutcome({ success: false })).toEqual({ kind: 'rejected', message: '' })
+    expect(readLoginOutcome({ success: false })).toEqual({ kind: 'rejected', message: '', code: '' })
   })
 
   it('never reads a payload that is not a bundle as a signed-in session', () => {
     expect(readLoginOutcome({ success: true, data: { username: 'root' } }))
       .toEqual({ kind: 'unreadable' })
-    expect(readLoginOutcome(null)).toEqual({ kind: 'rejected', message: '' })
+    expect(readLoginOutcome(null)).toEqual({ kind: 'rejected', message: '', code: '' })
   })
 })
 

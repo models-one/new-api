@@ -55,8 +55,11 @@ export type LoginOutcome =
   | { kind: 'authenticated'; bundle: AuthBundle }
   /** Credentials accepted, second factor required. */
   | { kind: 'two-factor'; flowToken: string; expiresAt: number | null }
-  /** The server refused, and said why. `message` may be empty. */
-  | { kind: 'rejected'; message: string }
+  /**
+   * The server refused. `message` may be empty, and for auth-session failures it is
+   * only the HTTP status text ("Conflict"), so `code` is the field worth branching on.
+   */
+  | { kind: 'rejected'; message: string; code: string }
   /** `require_2fa` without a usable flow token — the challenge cannot be continued. */
   | { kind: 'flow-expired' }
   /** `success: true` with a payload that is neither a bundle nor a challenge. */
@@ -75,7 +78,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export function readLoginOutcome(response: ApiResponse<unknown> | null | undefined): LoginOutcome {
   if (!response || response.success !== true) {
-    return { kind: 'rejected', message: response?.message?.trim() ?? '' }
+    return {
+      kind: 'rejected',
+      message: response?.message?.trim() ?? '',
+      code: response?.code?.trim() ?? '',
+    }
   }
 
   const data: unknown = response.data

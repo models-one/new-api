@@ -11,6 +11,13 @@ export type ApiResponse<T = unknown> = {
   success: boolean
   message?: string
   data?: T
+  /**
+   * Machine-readable failure code. The auth-session endpoints set it (see
+   * `service/auth_session.go#authSessionErrorCode`) and leave `message` as the bare
+   * HTTP status text, so anything user-facing has to be derived from this, not from
+   * `message`.
+   */
+  code?: string
 }
 
 type LogoutRuntime = {

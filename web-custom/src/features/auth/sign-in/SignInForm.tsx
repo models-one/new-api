@@ -23,6 +23,7 @@ import {
   type SignInFieldError,
   type SignInFieldErrors,
 } from '@/features/auth/sign-in/api'
+import { rejectionMessage } from '@/features/auth/sign-in/rejection-message'
 import { usePasskeyLogin } from '@/features/auth/sign-in/use-passkey-login'
 import { useSignInCompletion } from '@/features/auth/sign-in/use-sign-in-completion'
 
@@ -125,7 +126,7 @@ export function SignInForm(props: SignInFormProps) {
       }
 
       if (outcome.kind === 'rejected') {
-        setFormError(outcome.message === '' ? t('Sign-in failed. Please try again.') : outcome.message)
+        setFormError(rejectionMessage(outcome.code, outcome.message, t))
       } else if (outcome.kind === 'flow-expired') {
         setFormError(t('This sign-in attempt expired. Please try again.'))
       } else {
