@@ -68,7 +68,14 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+[tabindex]:focus-visible,
+[role='option']:focus-visible,
+[role='menuitem']:focus-visible,
+[role='tab']:focus-visible,
+[role='checkbox']:focus-visible,
+[role='radio']:focus-visible,
+[role='switch']:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
@@ -217,7 +224,8 @@ textarea:focus-visible {
     border-color: var(--color-border-strong);
   }
 
-  .field:focus {
+  .field:focus,
+  .field:focus-within {
     border-color: var(--color-primary);
     outline: none;
   }
@@ -287,5 +295,23 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+@layer components {
+  /* Indeterminate ProgressBar track fill. Clamped by the prefers-reduced-motion block above. */
+  .progress-indeterminate {
+    animation: progress-indeterminate 1.4s ease-in-out infinite;
+    will-change: transform;
+  }
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(300%);
   }
 }
