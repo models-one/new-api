@@ -420,6 +420,57 @@ const chat2LinkRoute = createRoute({
 })
 
 /**
+ * The legacy console called this page `/keys`; here it is `/settings`. Old bookmarks and
+ * the onboarding links that still point at `/keys` land on the real page rather than the
+ * previous frontend.
+ */
+const keysRedirectRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/keys',
+  beforeLoad: () => {
+    throw redirect({ replace: true, to: '/settings' })
+  },
+})
+
+const channelsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/channels',
+  component: lazyRouteComponent(() => import('@/features/channels/ChannelsPage'), 'ChannelsPage'),
+})
+
+/**
+ * One component serves all 41 settings sections: the shell reads `$group` and `$section`
+ * and looks the leaf up in its own registry, so a new section needs no router change.
+ * `router/web-router.go` whitelists `/system-settings`, whose prefix match covers them all.
+ */
+const systemSettingsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/system-settings',
+  component: lazyRouteComponent(
+    () => import('@/features/system-settings/SystemSettingsPage'),
+    'SystemSettingsPage',
+  ),
+})
+
+const systemSettingsGroupRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/system-settings/$group',
+  component: lazyRouteComponent(
+    () => import('@/features/system-settings/SystemSettingsPage'),
+    'SystemSettingsPage',
+  ),
+})
+
+const systemSettingsSectionRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/system-settings/$group/$section',
+  component: lazyRouteComponent(
+    () => import('@/features/system-settings/SystemSettingsPage'),
+    'SystemSettingsPage',
+  ),
+})
+
+/**
  * The public pricing surface. Deliberately outside `consoleRoute`: `/api/pricing` and
  * `/api/perf-metrics` are open to anonymous visitors whenever the `pricing` nav module is
  * public, and the page reads `/api/status` itself to find out whether it is.
@@ -537,6 +588,11 @@ const routeTree = rootRoute.addChildren([
     playgroundRoute,
     chatEmbedRoute,
     chat2LinkRoute,
+    keysRedirectRoute,
+    channelsRoute,
+    systemSettingsRoute,
+    systemSettingsGroupRoute,
+    systemSettingsSectionRoute,
   ]),
 ])
 

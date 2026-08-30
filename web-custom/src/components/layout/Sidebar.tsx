@@ -19,6 +19,8 @@ import MessagesSquareIcon from 'lucide-react/dist/esm/icons/messages-square'
 import ServerIcon from 'lucide-react/dist/esm/icons/server'
 import UsersRoundIcon from 'lucide-react/dist/esm/icons/users-round'
 import WaypointsIcon from 'lucide-react/dist/esm/icons/waypoints'
+import PlugZapIcon from 'lucide-react/dist/esm/icons/plug-zap'
+import SlidersHorizontalIcon from 'lucide-react/dist/esm/icons/sliders-horizontal'
 import XIcon from 'lucide-react/dist/esm/icons/x'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
@@ -68,10 +70,17 @@ const workspaceNavigation: NavigationItem[] = [
 
 const administrationNavigation: NavigationItem[] = [
   { labelKey: 'Users', to: '/users', icon: UsersRoundIcon, adminOnly: true },
+  { labelKey: 'Channels', to: '/channels', icon: PlugZapIcon, adminOnly: true },
   { labelKey: 'User analytics', to: '/dashboard/users', icon: ChartPieIcon, adminOnly: true },
   { labelKey: 'Redemption codes', to: '/redemption-codes', icon: TicketIcon, adminOnly: true },
   { labelKey: 'Subscription plans', to: '/subscriptions', icon: LayersIcon, adminOnly: true },
   { labelKey: 'Deployment health', to: '/system-info', icon: ServerIcon, adminOnly: true },
+  {
+    labelKey: 'System settings',
+    to: '/system-settings/site/system-info',
+    icon: SlidersHorizontalIcon,
+    adminOnly: true,
+  },
 ]
 
 type SidebarProps = {

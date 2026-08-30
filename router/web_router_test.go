@@ -38,6 +38,10 @@ func TestWebIndexForPathUsesCustomIndexForCustomRoutes(t *testing.T) {
 		"/chat2link",
 		"/users",
 		"/system-info",
+		"/channels",
+		"/system-settings",
+		"/system-settings/billing/payment",
+		"/keys",
 		"/profile",
 		"/profile/security",
 		"/profile/preferences",
@@ -69,12 +73,11 @@ func TestWebIndexForPathKeepsLegacyRoutesOnLegacyFrontend(t *testing.T) {
 	// The trailing entries guard the prefix match: a name that merely starts with a
 	// whitelisted path is not under it, and stays on the legacy frontend.
 	legacyPaths := []string{
-		"/keys",
-		"/system-settings",
-		"/channels",
 		"/dashboard-old",
 		"/models2",
 		"/usernames",
+		"/channels-old",
+		"/system-settings-old",
 		"/resets",
 		"/aboutus",
 		"/profiles",
