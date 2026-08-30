@@ -62,6 +62,13 @@ func webIndexForPath(path string, legacyIndexPage []byte, customIndexPage []byte
 		"/logs",
 		"/organization",
 		"/wallet",
+		"/playground",
+		// `/dashboard` above already covers /dashboard/flow and /dashboard/users.
+		// `/usage-logs` claims the whole section: the drawing and task pages live under it,
+		// and the legacy console has nothing else there.
+		"/usage-logs",
+		"/chat",
+		"/chat2link",
 		// Authentication
 		"/sign-in",
 		"/sign-up",
@@ -76,6 +83,8 @@ func webIndexForPath(path string, legacyIndexPage []byte, customIndexPage []byte
 		// Administration
 		"/subscriptions",
 		"/redemption-codes",
+		"/users",
+		"/system-info",
 		// Public
 		"/pricing",
 		"/rankings",

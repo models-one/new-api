@@ -29,6 +29,7 @@ import {
   Panel,
   type DescriptionListItem,
 } from '@/components/ui'
+import { LogStatsStrip } from '@/features/logs/components/LogStatsStrip'
 import {
   LOG_OTHER_COUNT_KEYS,
   LOG_TYPE_FILTER_VALUES,
@@ -429,6 +430,8 @@ export function LogsPage() {
         description={t('Every request, error, and account event new-api recorded for your account.')}
         title={t('API logs')}
       />
+
+      <LogStatsStrip filters={filters} />
 
       <Panel className="overflow-hidden">
         <DataTableToolbar

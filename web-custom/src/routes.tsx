@@ -346,6 +346,79 @@ const rankingsRoute = createRoute({
   component: lazyRouteComponent(() => import('@/features/rankings/RankingsPage'), 'RankingsPage'),
 })
 
+const usersRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/users',
+  component: lazyRouteComponent(() => import('@/features/users/UsersPage'), 'UsersPage'),
+})
+
+const systemInfoRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/system-info',
+  component: lazyRouteComponent(
+    () => import('@/features/system-info/SystemInfoPage'),
+    'SystemInfoPage',
+  ),
+})
+
+const drawingTasksRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/usage-logs/drawing',
+  component: lazyRouteComponent(
+    () => import('@/features/task-logs/DrawingTasksPage'),
+    'DrawingTasksPage',
+  ),
+})
+
+const asyncTasksRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/usage-logs/task',
+  component: lazyRouteComponent(
+    () => import('@/features/task-logs/AsyncTasksPage'),
+    'AsyncTasksPage',
+  ),
+})
+
+const flowAnalyticsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/dashboard/flow',
+  component: lazyRouteComponent(
+    () => import('@/features/dashboard-analytics/FlowAnalyticsPage'),
+    'FlowAnalyticsPage',
+  ),
+})
+
+const userAnalyticsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/dashboard/users',
+  component: lazyRouteComponent(
+    () => import('@/features/dashboard-analytics/UserAnalyticsPage'),
+    'UserAnalyticsPage',
+  ),
+})
+
+const playgroundRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/playground',
+  component: lazyRouteComponent(
+    () => import('@/features/playground/PlaygroundPage'),
+    'PlaygroundPage',
+  ),
+})
+
+/** `chatId` indexes the operator-configured preset list published on `/api/status`. */
+const chatEmbedRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/chat/$chatId',
+  component: lazyRouteComponent(() => import('@/features/chat/ChatEmbedPage'), 'ChatEmbedPage'),
+})
+
+const chat2LinkRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/chat2link',
+  component: lazyRouteComponent(() => import('@/features/chat/Chat2LinkPage'), 'Chat2LinkPage'),
+})
+
 /**
  * The public pricing surface. Deliberately outside `consoleRoute`: `/api/pricing` and
  * `/api/perf-metrics` are open to anonymous visitors whenever the `pricing` nav module is
@@ -455,6 +528,15 @@ const routeTree = rootRoute.addChildren([
     profilePreferencesRoute,
     subscriptionsRoute,
     redemptionCodesRoute,
+    usersRoute,
+    systemInfoRoute,
+    drawingTasksRoute,
+    asyncTasksRoute,
+    flowAnalyticsRoute,
+    userAnalyticsRoute,
+    playgroundRoute,
+    chatEmbedRoute,
+    chat2LinkRoute,
   ]),
 ])
 

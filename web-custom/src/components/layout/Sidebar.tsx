@@ -12,6 +12,13 @@ import NetworkIcon from 'lucide-react/dist/esm/icons/network'
 import TicketIcon from 'lucide-react/dist/esm/icons/ticket'
 import UserRoundIcon from 'lucide-react/dist/esm/icons/user-round'
 import UsersIcon from 'lucide-react/dist/esm/icons/users'
+import ChartPieIcon from 'lucide-react/dist/esm/icons/chart-pie'
+import ImageIcon from 'lucide-react/dist/esm/icons/image'
+import ListChecksIcon from 'lucide-react/dist/esm/icons/list-checks'
+import MessagesSquareIcon from 'lucide-react/dist/esm/icons/messages-square'
+import ServerIcon from 'lucide-react/dist/esm/icons/server'
+import UsersRoundIcon from 'lucide-react/dist/esm/icons/users-round'
+import WaypointsIcon from 'lucide-react/dist/esm/icons/waypoints'
 import XIcon from 'lucide-react/dist/esm/icons/x'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
@@ -44,6 +51,8 @@ const primaryNavigation: NavigationItem[] = [
   { labelKey: 'Models', to: '/models', icon: NetworkIcon },
   { labelKey: 'Usage', to: '/usage', icon: ActivityIcon },
   { labelKey: 'Analytics', to: '/analytics', icon: BarChart3Icon },
+  { labelKey: 'Traffic flow', to: '/dashboard/flow', icon: WaypointsIcon },
+  { labelKey: 'Playground', to: '/playground', icon: MessagesSquareIcon },
 ]
 
 const workspaceNavigation: NavigationItem[] = [
@@ -52,12 +61,17 @@ const workspaceNavigation: NavigationItem[] = [
   // path whitelist, and /referral is not on it yet.
   { labelKey: 'Referrals', to: '/organization', icon: UsersIcon },
   { labelKey: 'Wallet', to: '/wallet', icon: CreditCardIcon },
+  { labelKey: 'Drawing tasks', to: '/usage-logs/drawing', icon: ImageIcon },
+  { labelKey: 'Async tasks', to: '/usage-logs/task', icon: ListChecksIcon },
   { labelKey: 'Account', to: '/profile', icon: UserRoundIcon },
 ]
 
 const administrationNavigation: NavigationItem[] = [
+  { labelKey: 'Users', to: '/users', icon: UsersRoundIcon, adminOnly: true },
+  { labelKey: 'User analytics', to: '/dashboard/users', icon: ChartPieIcon, adminOnly: true },
   { labelKey: 'Redemption codes', to: '/redemption-codes', icon: TicketIcon, adminOnly: true },
   { labelKey: 'Subscription plans', to: '/subscriptions', icon: LayersIcon, adminOnly: true },
+  { labelKey: 'Deployment health', to: '/system-info', icon: ServerIcon, adminOnly: true },
 ]
 
 type SidebarProps = {
