@@ -71,8 +71,14 @@ func webIndexForPath(path string, legacyIndexPage []byte, customIndexPage []byte
 		"/user/reset",
 		"/otp",
 		"/oauth",
+		// Account
+		"/profile",
+		// Administration
+		"/subscriptions",
+		"/redemption-codes",
 		// Public
 		"/pricing",
+		"/rankings",
 		"/about",
 		"/privacy-policy",
 		"/user-agreement",

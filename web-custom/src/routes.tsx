@@ -282,6 +282,71 @@ const walletRoute = createRoute({
 })
 
 /**
+ * The account centre is three sibling routes rather than one stacked page: each section
+ * owns its own heading, so composing them into one document would emit three `<h1>`s.
+ * `router/web-router.go` whitelists `/profile`, whose prefix match covers all three.
+ */
+const profileRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/profile',
+  component: lazyRouteComponent(
+    () => import('@/features/profile/ProfileRoutes'),
+    'ProfileAccountRoute',
+  ),
+})
+
+const profileSecurityRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/profile/security',
+  component: lazyRouteComponent(
+    () => import('@/features/profile/ProfileRoutes'),
+    'ProfileSecurityRoute',
+  ),
+})
+
+const profilePreferencesRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/profile/preferences',
+  component: lazyRouteComponent(
+    () => import('@/features/profile/ProfileRoutes'),
+    'ProfilePreferencesRoute',
+  ),
+})
+
+/**
+ * Admin-only. The pages gate themselves on `role >= common.RoleAdminUser` and render a
+ * denial rather than a wall of failed requests; the server refuses regardless, so the
+ * client-side check is a courtesy, not the boundary.
+ */
+const subscriptionsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/subscriptions',
+  component: lazyRouteComponent(
+    () => import('@/features/subscriptions/SubscriptionsPage'),
+    'SubscriptionsPage',
+  ),
+})
+
+const redemptionCodesRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/redemption-codes',
+  component: lazyRouteComponent(
+    () => import('@/features/redemption/RedemptionCodesPage'),
+    'RedemptionCodesPage',
+  ),
+})
+
+/**
+ * Public, like `/pricing`: the rankings nav module can be open to anonymous visitors, and
+ * the page reads `/api/status` to find out whether it is.
+ */
+const rankingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/rankings',
+  component: lazyRouteComponent(() => import('@/features/rankings/RankingsPage'), 'RankingsPage'),
+})
+
+/**
  * The public pricing surface. Deliberately outside `consoleRoute`: `/api/pricing` and
  * `/api/perf-metrics` are open to anonymous visitors whenever the `pricing` nav module is
  * public, and the page reads `/api/status` itself to find out whether it is.
@@ -375,6 +440,7 @@ const routeTree = rootRoute.addChildren([
   serverErrorRoute,
   maintenanceRoute,
   errorSlugRoute,
+  rankingsRoute,
   consoleRoute.addChildren([
     dashboardRoute,
     settingsRoute,
@@ -384,6 +450,11 @@ const routeTree = rootRoute.addChildren([
     logsRoute,
     referralRoute,
     walletRoute,
+    profileRoute,
+    profileSecurityRoute,
+    profilePreferencesRoute,
+    subscriptionsRoute,
+    redemptionCodesRoute,
   ]),
 ])
 

@@ -29,6 +29,12 @@ func TestWebIndexForPathUsesCustomIndexForCustomRoutes(t *testing.T) {
 		"/otp",
 		"/oauth",
 		"/oauth/github",
+		"/profile",
+		"/profile/security",
+		"/profile/preferences",
+		"/subscriptions",
+		"/redemption-codes",
+		"/rankings",
 		"/pricing",
 		"/pricing/gpt-4o",
 		"/about",
@@ -51,19 +57,21 @@ func TestWebIndexForPathKeepsLegacyRoutesOnLegacyFrontend(t *testing.T) {
 	legacyIndex := []byte("legacy")
 	customIndex := []byte("custom")
 
-	// The last five guard the prefix match: an entry only claims its own path and
-	// what sits under it, so a longer name that merely starts with one stays legacy.
+	// The trailing entries guard the prefix match: a name that merely starts with a
+	// whitelisted path is not under it, and stays on the legacy frontend.
 	legacyPaths := []string{
 		"/keys",
 		"/system-settings",
 		"/channels",
 		"/playground",
-		"/profile",
+		"/usage-logs",
 		"/dashboard-old",
 		"/models2",
 		"/users",
 		"/resets",
 		"/aboutus",
+		"/profiles",
+		"/rankings-old",
 	}
 	for _, path := range legacyPaths {
 		assert.Equal(t, legacyIndex, webIndexForPath(path, legacyIndex, customIndex), path)

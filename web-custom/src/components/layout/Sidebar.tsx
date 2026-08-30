@@ -7,16 +7,21 @@ import FileClockIcon from 'lucide-react/dist/esm/icons/file-clock'
 import KeyRoundIcon from 'lucide-react/dist/esm/icons/key-round'
 import LayoutDashboardIcon from 'lucide-react/dist/esm/icons/layout-dashboard'
 import LogOutIcon from 'lucide-react/dist/esm/icons/log-out'
+import LayersIcon from 'lucide-react/dist/esm/icons/layers'
 import NetworkIcon from 'lucide-react/dist/esm/icons/network'
+import TicketIcon from 'lucide-react/dist/esm/icons/ticket'
+import UserRoundIcon from 'lucide-react/dist/esm/icons/user-round'
 import UsersIcon from 'lucide-react/dist/esm/icons/users'
 import XIcon from 'lucide-react/dist/esm/icons/x'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/Button'
 import { logout } from '@/features/auth/api'
+import { selfUserQuery } from '@/lib/api/user'
 import { getLegacySignInHref, isPreviewMode } from '@/lib/navigation'
+import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 
 type NavigationIcon = ComponentType<SVGProps<SVGSVGElement>>
@@ -25,7 +30,13 @@ type NavigationItem = {
   labelKey: string
   to: string
   icon: NavigationIcon
+  /** Hidden below `common.RoleAdminUser`. The server refuses regardless; this only keeps
+   *  a link out of sight that would land the user on a denial. */
+  adminOnly?: boolean
 }
+
+/** `common.RoleAdminUser` (common/constants.go) — the floor `middleware.AdminAuth()` allows. */
+const ADMIN_ROLE = 10
 
 const primaryNavigation: NavigationItem[] = [
   { labelKey: 'Dashboard', to: '/dashboard', icon: LayoutDashboardIcon },
@@ -41,6 +52,12 @@ const workspaceNavigation: NavigationItem[] = [
   // path whitelist, and /referral is not on it yet.
   { labelKey: 'Referrals', to: '/organization', icon: UsersIcon },
   { labelKey: 'Wallet', to: '/wallet', icon: CreditCardIcon },
+  { labelKey: 'Account', to: '/profile', icon: UserRoundIcon },
+]
+
+const administrationNavigation: NavigationItem[] = [
+  { labelKey: 'Redemption codes', to: '/redemption-codes', icon: TicketIcon, adminOnly: true },
+  { labelKey: 'Subscription plans', to: '/subscriptions', icon: LayersIcon, adminOnly: true },
 ]
 
 type SidebarProps = {
@@ -73,7 +90,18 @@ export function Sidebar(props: SidebarProps) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const logoutMutation = useMutation({ mutationFn: logout })
 
-  const isActive = (path: string) => pathname === path
+  // The role rides on the sign-in bundle whenever this SPA performed the login; a cold
+  // load (hard refresh, bookmark) has only the session cookie, so `/api/user/self` fills
+  // the gap. It is the query the console already caches.
+  const storedRole = useAuthStore((state) => state.auth.user?.role)
+  const selfQuery = useQuery({ ...selfUserQuery(), enabled: storedRole === undefined })
+  const role = storedRole ?? selfQuery.data?.role
+  const visibleAdministration = administrationNavigation.filter(
+    (item) => !item.adminOnly || (role !== undefined && role >= ADMIN_ROLE),
+  )
+
+  // `/profile` owns three sibling routes, so its entry stays lit on all of them.
+  const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
 
   const handleLogout = () => {
     if (isPreviewMode()) {
@@ -151,6 +179,22 @@ export function Sidebar(props: SidebarProps) {
               ))}
             </div>
           </div>
+
+          {visibleAdministration.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <p className="eyebrow px-3">{t('Administration')}</p>
+              <div className="flex flex-col gap-1">
+                {visibleAdministration.map((item) => (
+                  <NavigationLink
+                    active={isActive(item.to)}
+                    item={item}
+                    key={item.to}
+                    onClick={props.onClose}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </nav>
 
         <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4">
