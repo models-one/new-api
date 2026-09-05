@@ -202,6 +202,7 @@ describe('filters only the admin listing parses', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Username' }), {
       target: { value: 'probeuser' },
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
 
     await waitFor(() => expect(lastListCall().params).toMatchObject({ username: 'probeuser' }))
     expect(lastListCall().params).not.toHaveProperty('request_id')
@@ -229,6 +230,7 @@ describe('filters only the admin listing parses', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Username' }), {
       target: { value: 'probeuser' },
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
     await waitFor(() => expect(lastListCall().params).toMatchObject({ username: 'probeuser' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'My logs' }))
@@ -246,10 +248,12 @@ describe('filters only the admin listing parses', () => {
     const channelBox = screen.getByRole('searchbox', { name: 'Channel ID' })
 
     fireEvent.change(channelBox, { target: { value: 'abc' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
     await waitFor(() => expect(screen.queryByRole('searchbox', { name: 'Channel ID' })).toHaveValue('abc'))
     expect(lastListCall().params).not.toHaveProperty('channel')
 
     fireEvent.change(channelBox, { target: { value: '7' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
     await waitFor(() => expect(lastListCall().params).toMatchObject({ channel: 7 }))
   })
 

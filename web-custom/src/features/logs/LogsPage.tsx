@@ -256,6 +256,13 @@ export function LogsPage() {
   const [startTimestamp, setStartTimestamp] = useState(0)
   const [searchField, setSearchField] = useState<SearchField>('request_id')
   const [searchValue, setSearchValue] = useState('')
+  /**
+   * Text filters are committed on an explicit action, never on keystroke. These listings
+   * scan the log table, so firing one per character is expensive at real data volumes —
+   * the draft holds what is typed and only Search (or Enter) promotes it.
+   */
+  const [searchDraft, setSearchDraft] = useState('')
+  const [channelDraft, setChannelDraft] = useState('')
   const [channelId, setChannelId] = useState('')
 
   const isAdminView = effectiveScope === 'everyone'
@@ -270,6 +277,13 @@ export function LogsPage() {
     const parsed = Number.parseInt(channelId.trim(), 10)
     return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
   }, [channelId])
+
+  /** Promotes both text drafts into the state the query actually reads. */
+  const commitSearch = () => {
+    setSearchValue(searchDraft)
+    setChannelId(channelDraft)
+    setPage(1)
+  }
 
   const filters = useMemo<AdminLogFilters>(() => {
     const next: AdminLogFilters = {}
@@ -561,9 +575,11 @@ export function LogsPage() {
     setPage(1)
     if (next === 'everyone') return
     setChannelId('')
+    setChannelDraft('')
     if (searchField === ADMIN_ONLY_SEARCH_FIELD) {
       setSearchField('request_id')
       setSearchValue('')
+      setSearchDraft('')
     }
   }
 
@@ -581,7 +597,9 @@ export function LogsPage() {
     setGroup('')
     setSearchField('request_id')
     setSearchValue('')
+    setSearchDraft('')
     setChannelId('')
+    setChannelDraft('')
     handleTimeRangeChange('all')
   }
 
@@ -649,16 +667,18 @@ export function LogsPage() {
               {isAdminView ? (
                 <SearchInput
                   className="w-40"
-                  debounceMs={300}
                   hideLabel
                   label={t('Channel ID')}
-                  onValueChange={(next) => {
-                    setChannelId(next)
-                    setPage(1)
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      commitSearch()
+                    }
                   }}
+                  onValueChange={setChannelDraft}
                   placeholder={t('Channel ID')}
                   size="sm"
-                  value={channelId}
+                  value={channelDraft}
                 />
               ) : null}
             </>
@@ -674,6 +694,7 @@ export function LogsPage() {
                 label={t('Search field')}
                 onChange={(event) => {
                   setSearchField(event.target.value as SearchField)
+                  setSearchDraft('')
                   setSearchValue('')
                   setPage(1)
                 }}
@@ -683,18 +704,23 @@ export function LogsPage() {
               />
               <SearchInput
                 className="min-w-0 sm:flex-1"
-                debounceMs={300}
                 description={searchDescriptions[searchField]}
                 hideLabel
                 label={searchLabels[searchField]}
-                onValueChange={(next) => {
-                  setSearchValue(next)
-                  setPage(1)
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    commitSearch()
+                  }
                 }}
+                onValueChange={setSearchDraft}
                 placeholder={searchPlaceholders[searchField]}
                 size="sm"
-                value={searchValue}
+                value={searchDraft}
               />
+              <Button onClick={commitSearch} size="sm" variant="outline">
+                {t('Search')}
+              </Button>
             </div>
           }
           onReset={handleReset}

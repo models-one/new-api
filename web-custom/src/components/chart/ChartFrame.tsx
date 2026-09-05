@@ -68,6 +68,11 @@ export function ChartFrame(props: ChartFrameProps) {
 
   const hasHeader = props.title !== undefined || props.description !== undefined || legend.length > 0
   const isEmpty = props.table.rows.length === 0
+  // With no rows the scales collapse to a zero-width extent, so every tick sits on the
+  // domain's start. Rendering those is worse than rendering none: a time-formatted axis
+  // labels the empty chart with the unix epoch.
+  const visibleYTicks = isEmpty ? [] : yTicks
+  const visibleXTicks = isEmpty ? [] : xTicks
   const categoryHeader = props.table.categoryHeader ?? t('Category')
 
   return (
@@ -112,13 +117,13 @@ export function ChartFrame(props: ChartFrameProps) {
       ) : null}
 
       <div className="flex min-w-0 gap-3">
-        {yTicks.length > 0 ? (
+        {visibleYTicks.length > 0 ? (
           <div
             aria-hidden="true"
             className="relative shrink-0"
             style={{ height, width: axisWidth }}
           >
-            {yTicks.map((tick) => (
+            {visibleYTicks.map((tick) => (
               <span
                 className="mono absolute right-0 max-w-full truncate text-[11px] leading-none text-muted"
                 key={tick.key}
@@ -158,9 +163,9 @@ export function ChartFrame(props: ChartFrameProps) {
             )}
           </div>
 
-          {xTicks.length > 0 ? (
+          {visibleXTicks.length > 0 ? (
             <div aria-hidden="true" className="relative mt-2 h-4">
-              {xTicks.map((tick) => (
+              {visibleXTicks.map((tick) => (
                 <span
                   className="mono absolute max-w-full truncate text-[11px] leading-none text-muted"
                   key={tick.key}

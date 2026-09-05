@@ -225,6 +225,7 @@ describe('LogsPage', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Request ID' }), {
       target: { value: 'req-abc' },
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
 
     await waitFor(() => expect(lastLogParams()).toMatchObject({ request_id: 'req-abc' }))
     expect(lastLogParams()).not.toHaveProperty('model_name')

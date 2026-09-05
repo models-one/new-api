@@ -108,7 +108,17 @@ export function niceTicks(min: number, max: number, count = 5): number[] {
   let high = Math.max(min, max)
 
   if (low === high) {
-    const spread = Math.abs(low) > 0 ? Math.abs(low) / 2 : 0.5
+    // A flat series still needs a span, or every tick collapses onto one label. An
+    // all-zero one is the common case — a user with no traffic yet — and widening it
+    // symmetrically would put negative ticks on an axis of counts, so it grows upward
+    // only. A flat non-zero series keeps the symmetric spread.
+    if (low === 0) {
+      // Counts are whole numbers, and the axis formatter rounds. A 0..1 span asked for
+      // six ticks yields 0.2, 0.4, … which all render as "0" or "1" — the same label
+      // several times over. One step covering the whole span is the honest axis.
+      return [0, 1]
+    }
+    const spread = Math.abs(low) / 2
     low -= spread
     high += spread
   }
@@ -268,11 +278,28 @@ export function verticalTicks(
   format: (value: number, index: number) => string,
   height = CHART_VIEWBOX_HEIGHT,
 ): AxisTick[] {
-  return values.map((value, index) => ({
-    key: `${index}-${value}`,
-    position: verticalFraction(scale.scale(value), height),
-    label: format(value, index),
-  }))
+  return dropRepeatedLabels(
+    values.map((value, index) => ({
+      key: `${index}-${value}`,
+      position: verticalFraction(scale.scale(value), height),
+      label: format(value, index),
+    })),
+  )
+}
+
+/**
+ * Axis values are spaced on the underlying number, but the label is what a reader sees.
+ * A count axis spanning 0..1 formats 0.2 and 0.4 both as "0", so the same label lands
+ * several times down the axis; keeping the first of each run leaves the axis honest
+ * without moving any tick that survives.
+ */
+function dropRepeatedLabels(ticks: readonly AxisTick[]): AxisTick[] {
+  const kept: AxisTick[] = []
+  for (const tick of ticks) {
+    if (kept[kept.length - 1]?.label === tick.label) continue
+    kept.push(tick)
+  }
+  return kept
 }
 
 /** Axis labels for values on the x (horizontal) scale, positioned left-to-right. */
@@ -282,11 +309,13 @@ export function horizontalTicks(
   format: (value: number, index: number) => string,
   width = CHART_VIEWBOX_WIDTH,
 ): AxisTick[] {
-  return values.map((value, index) => ({
+  return dropRepeatedLabels(
+    values.map((value, index) => ({
     key: `${index}-${value}`,
     position: horizontalFraction(scale.scale(value), width),
     label: format(value, index),
-  }))
+    })),
+  )
 }
 
 /** `count` evenly spaced values spanning the domain, used when data is dense. */

@@ -7,5 +7,8 @@ import { configure } from '@testing-library/react'
  * failures that move between runs and point at whichever test happened to be unlucky.
  *
  * The tests themselves are not slow; the default is simply tight for a suite this size.
+ * 5000ms still lost the heaviest pages (the playground renders a streaming transcript and
+ * markdown) whenever the workers were busy, so the budget is generous rather than tuned —
+ * a passing test never waits this long, and only a genuinely hung one pays the cost.
  */
-configure({ asyncUtilTimeout: 5000 })
+configure({ asyncUtilTimeout: 15000 })
