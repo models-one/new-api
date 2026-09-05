@@ -21,6 +21,8 @@ import UsersRoundIcon from 'lucide-react/dist/esm/icons/users-round'
 import WaypointsIcon from 'lucide-react/dist/esm/icons/waypoints'
 import PlugZapIcon from 'lucide-react/dist/esm/icons/plug-zap'
 import SlidersHorizontalIcon from 'lucide-react/dist/esm/icons/sliders-horizontal'
+import BoxesIcon from 'lucide-react/dist/esm/icons/boxes'
+import CpuIcon from 'lucide-react/dist/esm/icons/cpu'
 import XIcon from 'lucide-react/dist/esm/icons/x'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
@@ -71,6 +73,8 @@ const workspaceNavigation: NavigationItem[] = [
 const administrationNavigation: NavigationItem[] = [
   { labelKey: 'Users', to: '/users', icon: UsersRoundIcon, adminOnly: true },
   { labelKey: 'Channels', to: '/channels', icon: PlugZapIcon, adminOnly: true },
+  { labelKey: 'Model registry', to: '/models/metadata', icon: BoxesIcon, adminOnly: true },
+  { labelKey: 'GPU deployments', to: '/models/deployments', icon: CpuIcon, adminOnly: true },
   { labelKey: 'User analytics', to: '/dashboard/users', icon: ChartPieIcon, adminOnly: true },
   { labelKey: 'Redemption codes', to: '/redemption-codes', icon: TicketIcon, adminOnly: true },
   { labelKey: 'Subscription plans', to: '/subscriptions', icon: LayersIcon, adminOnly: true },

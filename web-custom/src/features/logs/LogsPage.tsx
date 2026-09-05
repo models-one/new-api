@@ -29,11 +29,14 @@ import {
   Panel,
   type DescriptionListItem,
 } from '@/components/ui'
+import { scopedLogsQuery, type AdminLogFilters, type LogScope } from '@/features/logs/api'
+import { LogScopeControl } from '@/features/logs/components/LogScopeControl'
 import { LogStatsStrip } from '@/features/logs/components/LogStatsStrip'
 import {
   LOG_OTHER_COUNT_KEYS,
   LOG_TYPE_FILTER_VALUES,
   LOG_TYPE_LABEL_KEYS,
+  logAdminOtherEntries,
   logOtherEntries,
   logRequestId,
   logRowId,
@@ -41,8 +44,9 @@ import {
   useTimeIsSubSecond,
   type LogOtherEntry,
 } from '@/features/logs/log-presentation'
+import { useLogScope } from '@/features/logs/use-log-scope'
 import { useQuotaPerUnit } from '@/hooks/use-server-status'
-import { LOG_TYPE, userLogsQuery, type LogFilters, type UserLog } from '@/lib/api/logs'
+import { LOG_TYPE, type UserLog } from '@/lib/api/logs'
 import { userGroupsQuery } from '@/lib/api/user'
 import {
   formatDateTime,
@@ -55,15 +59,20 @@ import {
 } from '@/lib/format'
 
 /**
- * The only three text filters `GET /api/log/self` accepts, and how it matches them
- * (see `model.GetUserLogs` / `applyExplicitLogTextFilter`):
- *   request_id  — `=`, exact
- *   token_name  — `=`, exact
+ * The only text filters the two listings accept, and how each is matched (see
+ * `model.GetUserLogs` / `model.GetAllLogs` / `applyExplicitLogTextFilter`):
+ *   request_id  — `=`, exact                     both scopes
+ *   token_name  — `=`, exact                     both scopes
  *   model_name  — `=` unless the value contains a literal `%`, then `LIKE`
+ *   username    — same rule as model_name        `everyone` scope only; `/api/log/self`
+ *                                                does not parse it, verified live
  * There is no free-text search across columns, so the box is bound to one field at
  * a time and says so.
  */
-type SearchField = 'request_id' | 'token_name' | 'model_name'
+type SearchField = 'request_id' | 'token_name' | 'model_name' | 'username'
+
+/** The one search field `GET /api/log/self` ignores; dropped when the scope narrows. */
+const ADMIN_ONLY_SEARCH_FIELD: SearchField = 'username'
 
 type TimeRangeId = 'all' | '24h' | '7d' | '30d'
 
@@ -81,10 +90,10 @@ const TIME_RANGE_SECONDS: Readonly<Record<TimeRangeId, number>> = {
 
 const DEFAULT_PAGE_SIZE = 20
 
-function LogDetailPanel(props: { log: UserLog }) {
+function LogDetailPanel(props: { log: UserLog; isAdminView: boolean }) {
   const { i18n, t } = useTranslation()
   const locale = i18n.language
-  const { log } = props
+  const { isAdminView, log } = props
 
   const renderOtherValue = (entry: LogOtherEntry): string => {
     const { rawKey, value } = entry
@@ -102,6 +111,38 @@ function LogDetailPanel(props: { log: UserLog }) {
 
   if (log.content !== '') {
     requestItems.push({ id: 'content', term: t('Message'), description: log.content })
+  }
+
+  if (isAdminView) {
+    requestItems.push({
+      id: 'user',
+      term: t('Username'),
+      description: (
+        <span className="mono">
+          {log.username === '' ? t('User ID {{id}}', { id: log.user_id }) : log.username}
+        </span>
+      ),
+    })
+  }
+
+  /**
+   * `channel` is the raw `logs.channel_id`, and `model.formatUserLogs` does NOT strip
+   * it — a `/api/log/self` row carries the real id, verified live. Only the NAME is
+   * admin-only, so the id is shown to everyone and the name joins it when the payload
+   * carries one. 0 means the row was never routed to a channel (a sign-in or top-up).
+   */
+  if (log.channel !== 0) {
+    requestItems.push({
+      id: 'channel',
+      term: t('Channel'),
+      description: (
+        <span className="mono">
+          {log.channel_name === ''
+            ? `#${log.channel}`
+            : `${log.channel_name} · #${log.channel}`}
+        </span>
+      ),
+    })
   }
 
   const requestId = logRequestId(log)
@@ -156,14 +197,17 @@ function LogDetailPanel(props: { log: UserLog }) {
     })
   }
 
-  const otherEntries = logOtherEntries(log)
-  const metadataItems: DescriptionListItem[] = otherEntries.map((entry) => ({
+  const toMetadataItem = (entry: LogOtherEntry): DescriptionListItem => ({
     id: entry.rawKey,
     term: entry.labelKey === undefined ? entry.displayKey : t(entry.labelKey),
     description: (
       <span className="mono truncate" title={renderOtherValue(entry)}>{renderOtherValue(entry)}</span>
     ),
-  }))
+  })
+
+  const metadataItems = logOtherEntries(log).map(toMetadataItem)
+  // Empty outside the everyone scope: `/api/log/self` deletes all three roots.
+  const adminMetadataItems = logAdminOtherEntries(log).map(toMetadataItem)
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -181,6 +225,19 @@ function LogDetailPanel(props: { log: UserLog }) {
           </p>
         )}
       </div>
+      {adminMetadataItems.length > 0 ? (
+        <div className="min-w-0 lg:col-span-2">
+          <p className="eyebrow">{t('Admin-only metadata')}</p>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            {t('Only the all-users scope carries these keys — /api/log/self strips them. Shown under their raw backend paths.')}
+          </p>
+          <DescriptionList
+            className="mt-3"
+            items={adminMetadataItems}
+            label={t('Admin-only metadata')}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -189,6 +246,7 @@ export function LogsPage() {
   const { i18n, t } = useTranslation()
   const locale = i18n.language
   const quotaPerUnit = useQuotaPerUnit()
+  const { canViewEveryone, isResolving, scope, setScope, effectiveScope } = useLogScope()
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
@@ -198,28 +256,99 @@ export function LogsPage() {
   const [startTimestamp, setStartTimestamp] = useState(0)
   const [searchField, setSearchField] = useState<SearchField>('request_id')
   const [searchValue, setSearchValue] = useState('')
+  const [channelId, setChannelId] = useState('')
 
+  const isAdminView = effectiveScope === 'everyone'
   const groupsQuery = useQuery(userGroupsQuery())
 
-  const filters = useMemo<LogFilters>(() => {
-    const next: LogFilters = {}
+  /**
+   * `controller.GetAllLogs` reads `channel` through `strconv.Atoi`, and
+   * `model.GetAllLogs` skips the clause when the result is 0 — so a non-numeric or
+   * zero value is not a filter at all and must not be sent as one.
+   */
+  const channelFilter = useMemo(() => {
+    const parsed = Number.parseInt(channelId.trim(), 10)
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+  }, [channelId])
+
+  const filters = useMemo<AdminLogFilters>(() => {
+    const next: AdminLogFilters = {}
     if (logType !== LOG_TYPE.all) next.type = logType
     if (group !== '') next.group = group
     if (startTimestamp > 0) next.start_timestamp = startTimestamp
     const term = searchValue.trim()
-    if (term !== '') next[searchField] = term
+    // `username` is only parsed by the admin listing; sending it to /self would be a
+    // filter the user could see in the URL and that the server silently ignores.
+    if (term !== '' && (searchField !== ADMIN_ONLY_SEARCH_FIELD || isAdminView)) {
+      next[searchField] = term
+    }
+    if (isAdminView && channelFilter !== undefined) next.channel = channelFilter
     return next
-  }, [group, logType, searchField, searchValue, startTimestamp])
+  }, [channelFilter, group, isAdminView, logType, searchField, searchValue, startTimestamp])
 
-  const logsQuery = useQuery(userLogsQuery(filters, page, pageSize))
+  const logsQuery = useQuery(scopedLogsQuery(filters, page, pageSize, effectiveScope))
   const logs = logsQuery.data?.items
   const total = logsQuery.data?.total
 
   const hasActiveFilters =
-    logType !== LOG_TYPE.all || group !== '' || timeRange !== 'all' || searchValue !== ''
+    logType !== LOG_TYPE.all
+    || group !== ''
+    || timeRange !== 'all'
+    || searchValue !== ''
+    || (isAdminView && channelId !== '')
 
-  const columns = useMemo<DataTableColumns<UserLog>>(
-    () => [
+  const columns = useMemo<DataTableColumns<UserLog>>(() => {
+    /**
+     * Three columns that only carry information in the everyone scope.
+     *
+     * `username` and `channel` ARE present on a `/api/log/self` row — the server does
+     * not strip either — but there they are constants: the username is always the
+     * signed-in account, and the channel id has no name to go with it because
+     * `model.formatUserLogs` blanks `channel_name` unconditionally. The id is still
+     * offered to every user in the expanded row detail; only the columns are gated.
+     */
+    const adminColumns: DataTableColumns<UserLog> = isAdminView
+      ? [
+        {
+          id: 'username',
+          enableSorting: false,
+          header: ({ column }) => <DataTableColumnHeader column={column} title={t('Username')} />,
+          cell: ({ row }) => (
+            <MonoCell
+              title={t('User ID {{id}}', { id: row.original.user_id })}
+              value={row.original.username === '' ? null : row.original.username}
+            />
+          ),
+          meta: { label: t('Username'), mono: true },
+        },
+        {
+          id: 'channel',
+          enableSorting: false,
+          header: ({ column }) => <DataTableColumnHeader column={column} title={t('Channel')} />,
+          // 0 is "never routed to a channel" — a sign-in or top-up row, not channel zero.
+          cell: ({ row }) => <MonoCell value={row.original.channel === 0 ? null : row.original.channel} />,
+          meta: { label: t('Channel'), mono: true },
+        },
+        {
+          id: 'channel_name',
+          enableSorting: false,
+          header: ({ column }) => (
+            <DataTableColumnHeader column={column} title={t('Channel name')} />
+          ),
+          // Joined from the channels table by `model.GetAllLogs`; a blank name beside a
+          // non-zero id means that channel no longer exists.
+          cell: ({ row }) =>
+            row.original.channel_name === '' ? (
+              <MonoCell value={null} />
+            ) : (
+              <TruncatedCell maxWidthClassName="max-w-[10rem]" mono value={row.original.channel_name} />
+            ),
+          meta: { label: t('Channel name'), mono: true },
+        },
+      ]
+      : []
+
+    return [
       {
         id: 'created_at',
         enableSorting: false,
@@ -277,6 +406,7 @@ export function LogsPage() {
         cell: ({ row }) => <MonoCell value={row.original.token_name} />,
         meta: { label: t('API key'), mono: true },
       },
+      ...adminColumns,
       {
         id: 'tokens',
         enableSorting: false,
@@ -344,9 +474,8 @@ export function LogsPage() {
         ),
         meta: { align: 'right', label: t('Details') },
       },
-    ],
-    [locale, quotaPerUnit, t],
-  )
+    ]
+  }, [isAdminView, locale, quotaPerUnit, t])
 
   const { table, paginationControls } = useDataTable<UserLog>({
     columns,
@@ -389,24 +518,30 @@ export function LogsPage() {
     { value: 'request_id', label: t('Request ID') },
     { value: 'token_name', label: t('API key') },
     { value: 'model_name', label: t('Model') },
+    // Only `GetAllLogs` reads `username`; offering it in the mine scope would be a
+    // control the server answers by ignoring.
+    ...(isAdminView ? [{ value: ADMIN_ONLY_SEARCH_FIELD, label: t('Username') }] : []),
   ]
 
   const searchLabels: Record<SearchField, string> = {
     request_id: t('Request ID'),
     token_name: t('API key'),
     model_name: t('Model'),
+    username: t('Username'),
   }
 
   const searchPlaceholders: Record<SearchField, string> = {
     request_id: t('Exact request ID'),
     token_name: t('Exact API key name'),
     model_name: t('Exact model name'),
+    username: t('Exact username'),
   }
 
   const searchDescriptions: Record<SearchField, string> = {
     request_id: t('Exact match only.'),
     token_name: t('Exact match only.'),
     model_name: t('Exact match. Add % as a wildcard, for example gpt%.'),
+    username: t('Exact match. Add % as a wildcard, for example ro%.'),
   }
 
   const handleTimeRangeChange = (next: TimeRangeId) => {
@@ -416,25 +551,65 @@ export function LogsPage() {
     setPage(1)
   }
 
+  /**
+   * Leaving the everyone scope has to drop the two admin-only filters as well as the
+   * rows: `GET /api/log/self` parses neither, so keeping them would leave a filled-in
+   * control that changes nothing.
+   */
+  const handleScopeChange = (next: LogScope) => {
+    setScope(next)
+    setPage(1)
+    if (next === 'everyone') return
+    setChannelId('')
+    if (searchField === ADMIN_ONLY_SEARCH_FIELD) {
+      setSearchField('request_id')
+      setSearchValue('')
+    }
+  }
+
+  const emptyTitle = hasActiveFilters ? t('No matching request logs') : t('No request logs yet')
+
+  let emptyDescription = t('Requests you send through the API appear here.')
+  if (hasActiveFilters) {
+    emptyDescription = t('No request logs match these filters.')
+  } else if (isAdminView) {
+    emptyDescription = t('Nothing has been logged on this deployment yet. Requests from every account appear here.')
+  }
+
   const handleReset = () => {
     setLogType(LOG_TYPE.all)
     setGroup('')
     setSearchField('request_id')
     setSearchValue('')
+    setChannelId('')
     handleTimeRangeChange('all')
   }
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        description={t('Every request, error, and account event new-api recorded for your account.')}
+        description={
+          isAdminView
+            ? t('Every request, error, and account event new-api recorded, across every account on this deployment.')
+            : t('Every request, error, and account event new-api recorded for your account.')
+        }
         title={t('API logs')}
       />
 
-      <LogStatsStrip filters={filters} />
+      <LogStatsStrip filters={filters} scope={effectiveScope} />
 
       <Panel className="overflow-hidden">
         <DataTableToolbar
+          actions={
+            canViewEveryone ? (
+              <LogScopeControl
+                disabled={isResolving}
+                label={t('Log scope')}
+                onChange={handleScopeChange}
+                scope={scope}
+              />
+            ) : undefined
+          }
           filters={
             <>
               <NativeSelect
@@ -471,6 +646,21 @@ export function LogsPage() {
                 size="sm"
                 value={timeRange}
               />
+              {isAdminView ? (
+                <SearchInput
+                  className="w-40"
+                  debounceMs={300}
+                  hideLabel
+                  label={t('Channel ID')}
+                  onValueChange={(next) => {
+                    setChannelId(next)
+                    setPage(1)
+                  }}
+                  placeholder={t('Channel ID')}
+                  size="sm"
+                  value={channelId}
+                />
+              ) : null}
             </>
           }
           filtersLabel={t('Request log filters')}
@@ -534,36 +724,32 @@ export function LogsPage() {
           <>
             <DataTable
               className="hidden md:block"
-              emptyDescription={
-                hasActiveFilters
-                  ? t('No request logs match these filters.')
-                  : t('Requests you send through the API appear here.')
-              }
+              emptyDescription={emptyDescription}
               emptyIcon={<ScrollTextIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
-              emptyTitle={hasActiveFilters ? t('No matching request logs') : t('No request logs yet')}
+              emptyTitle={emptyTitle}
               isFetching={logsQuery.isFetching}
               isLoading={logsQuery.isLoading}
               label={t('Request logs')}
               loadingLabel={t('Loading request logs')}
-              minWidthClassName="min-w-[68rem]"
-              renderExpandedRow={(row) => <LogDetailPanel log={row.original} />}
+              minWidthClassName={isAdminView ? 'min-w-[86rem]' : 'min-w-[68rem]'}
+              renderExpandedRow={(row) => (
+                <LogDetailPanel isAdminView={isAdminView} log={row.original} />
+              )}
               table={table}
             />
 
             <div className="p-4 md:hidden">
               <MobileCardList
-                emptyDescription={
-                  hasActiveFilters
-                    ? t('No request logs match these filters.')
-                    : t('Requests you send through the API appear here.')
-                }
+                emptyDescription={emptyDescription}
                 emptyIcon={<ScrollTextIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
-                emptyTitle={hasActiveFilters ? t('No matching request logs') : t('No request logs yet')}
+                emptyTitle={emptyTitle}
                 isFetching={logsQuery.isFetching}
                 isLoading={logsQuery.isLoading}
                 label={t('Request log cards')}
                 loadingLabel={t('Loading request logs')}
-                renderExpandedRow={(row) => <LogDetailPanel log={row.original} />}
+                renderExpandedRow={(row) => (
+                  <LogDetailPanel isAdminView={isAdminView} log={row.original} />
+                )}
                 table={table}
               />
             </div>

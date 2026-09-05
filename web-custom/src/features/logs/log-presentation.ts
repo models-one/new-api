@@ -2,11 +2,18 @@ import type { Tone } from '@/components/ui'
 import { LOG_TYPE, parseLogOther, type UserLog } from '@/lib/api/logs'
 
 /**
- * Presentation helpers for `/api/log/self`.
+ * Presentation helpers for `/api/log/self` and its admin twin `/api/log/`.
  *
  * Everything here maps a field the backend actually returns. Nothing is derived
  * beyond unit conversion, and no value is synthesised when the backend is silent.
  */
+
+/**
+ * `common.RoleAdminUser` in common/constants.go — the floor `middleware.AdminAuth()`
+ * enforces on `GET /api/log/` and `GET /api/log/stat`. Root is 100, but 10 is the
+ * gate these two routes actually check.
+ */
+export const ADMIN_ROLE = 10
 
 /**
  * English source strings (which double as the i18n keys) for the log types the
@@ -126,6 +133,43 @@ export type LogOtherEntry = {
 }
 
 /**
+ * The three keys `model.formatUserLogs` deletes from `other` before a non-admin ever
+ * sees the row, and therefore the only extra payload the `everyone` scope carries:
+ *
+ *   admin_info    the operator behind a management or top-up row
+ *                 (`{admin_id, admin_username, admin_role, auth_method}` from
+ *                 controller/audit.go, a different set again for top-ups)
+ *   audit_info    `{method, route, path, status, success, params?}`, the middleware
+ *                 fallback written by middleware/audit.go
+ *   stream_status `{status, end_reason, end_error?, error_count?, errors?}` from
+ *                 `service.appendStreamStatus` — why a stream ended, which is often
+ *                 the answer to "why was this charged that"
+ *
+ * Diffing one row across both endpoints on the dev server confirms the strip: the
+ * `/api/log/` copy carried `admin_info` and `audit_info`, the `/api/log/self` copy
+ * of the same row did not.
+ */
+export const ADMIN_ONLY_OTHER_KEYS: readonly string[] = ['admin_info', 'audit_info', 'stream_status']
+
+/** Deep enough for `op.params.method` and `audit_info.params.id`; anything deeper stays a blob. */
+const MAX_OTHER_FLATTEN_DEPTH = 3
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/**
+ * Expands a nested map into `parent.child` rows. Arrays are left whole — an array is
+ * one value, and numbering its members would read as structure the backend never gave.
+ */
+function flattenOtherValue(path: string, value: unknown, depth: number): [string, unknown][] {
+  if (depth >= MAX_OTHER_FLATTEN_DEPTH || !isPlainObject(value)) return [[path, value]]
+  return Object.entries(value).flatMap(([name, child]) =>
+    flattenOtherValue(`${path}.${name}`, child, depth + 1),
+  )
+}
+
+/**
  * `other.op` is `{action, params?}`, written by `model.buildOpField` for login and
  * management rows. `model/log.go` documents it as the localisation-friendly operation
  * descriptor that survives the non-admin strip, so it is flattened into real rows
@@ -136,19 +180,8 @@ export type LogOtherEntry = {
  * unseen actions would mislabel them. Params keep their own names for the same reason.
  */
 function flattenOtherEntry(rawKey: string, value: unknown): [string, unknown][] {
-  if (rawKey !== 'op' || value === null || typeof value !== 'object' || Array.isArray(value)) {
-    return [[rawKey, value]]
-  }
-  const op = value as Record<string, unknown>
-  const flattened: [string, unknown][] = []
-  if (typeof op.action === 'string') flattened.push(['op.action', op.action])
-  const params = op.params
-  if (params !== null && typeof params === 'object' && !Array.isArray(params)) {
-    for (const [name, paramValue] of Object.entries(params as Record<string, unknown>)) {
-      flattened.push([`op.params.${name}`, paramValue])
-    }
-  }
-  return flattened
+  if (rawKey !== 'op') return [[rawKey, value]]
+  return flattenOtherValue(rawKey, value, 0)
 }
 
 function isRenderableOtherEntry(key: string, value: unknown): boolean {
@@ -175,6 +208,7 @@ function otherEntryRank(key: string): number {
  */
 export function logOtherEntries(log: Pick<UserLog, 'other'>): LogOtherEntry[] {
   return Object.entries(parseLogOther(log))
+    .filter(([rawKey]) => !ADMIN_ONLY_OTHER_KEYS.includes(rawKey))
     .flatMap(([rawKey, value]) => flattenOtherEntry(rawKey, value))
     .filter(([key, value]) => isRenderableOtherEntry(key, value))
     .map(([rawKey, value]) => ({
@@ -187,6 +221,31 @@ export function logOtherEntries(log: Pick<UserLog, 'other'>): LogOtherEntry[] {
       const rankDelta = otherEntryRank(left.rawKey) - otherEntryRank(right.rawKey)
       return rankDelta === 0 ? left.rawKey.localeCompare(right.rawKey) : rankDelta
     })
+}
+
+/**
+ * The admin-only half of `other`, split out of {@link logOtherEntries} so the row
+ * detail can say plainly which rows only exist because the caller is an admin.
+ *
+ * Every term keeps its FULL dotted path (`admin_info.admin_username`,
+ * `stream_status.end_reason`) rather than a translated label. `admin_info` alone is
+ * written by three different producers with three different key sets, so a fixed
+ * label table would mislabel the ones it has not seen — the same reasoning already
+ * applied to `op.action`. Returned in root order, then alphabetically within a root.
+ */
+export function logAdminOtherEntries(log: Pick<UserLog, 'other'>): LogOtherEntry[] {
+  const parsed = parseLogOther(log)
+  return ADMIN_ONLY_OTHER_KEYS.flatMap((rootKey) =>
+    (rootKey in parsed ? flattenOtherValue(rootKey, parsed[rootKey], 0) : [])
+      .filter(([key, value]) => isRenderableOtherEntry(key, value))
+      .map(([rawKey, value]) => ({
+        rawKey,
+        displayKey: rawKey,
+        labelKey: undefined,
+        value,
+      }))
+      .sort((left, right) => left.rawKey.localeCompare(right.rawKey)),
+  )
 }
 
 /**

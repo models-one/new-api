@@ -8,6 +8,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { LogStatsStrip } from '@/features/logs/components/LogStatsStrip'
+import type { LogScope } from '@/features/logs/api'
+import { getJson } from '@/lib/api/client'
 
 vi.mock('@/lib/api/client', () => ({
   getJson: vi.fn(async () => ({ quota: 1_000_000, rpm: 12, tpm: 3400 })),
@@ -17,13 +19,16 @@ vi.mock('@/hooks/use-server-status', () => ({
   useQuotaPerUnit: () => 500_000,
 }))
 
+const mockedGetJson = vi.mocked(getJson)
+
 afterEach(cleanup)
 
-async function renderStrip() {
+async function renderStrip(scope?: LogScope) {
+  mockedGetJson.mockClear()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
-      <LogStatsStrip filters={{}} />
+      <LogStatsStrip filters={{}} scope={scope} />
     </QueryClientProvider>,
   )
   await screen.findByText('$2.00')
@@ -58,5 +63,28 @@ describe('LogStatsStrip', () => {
     await renderStrip()
 
     expect(screen.getByRole('region', { name: 'Log totals' })).toBeInTheDocument()
+  })
+
+  it('also says the spend total ignores the type filter, because SumUsedQuota pins type=2', async () => {
+    await renderStrip()
+
+    expect(
+      screen.getByText(
+        'Usage rows only — the server pins type=2 for this total and ignores the type filter.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('reads the self stat route by default', async () => {
+    await renderStrip()
+
+    expect(mockedGetJson).toHaveBeenCalledWith('/api/log/self/stat', { params: {} })
+  })
+
+  it('reads the admin stat route in the everyone scope and says whose spend it is', async () => {
+    await renderStrip('everyone')
+
+    expect(mockedGetJson).toHaveBeenCalledWith('/api/log/stat', { params: {} })
+    expect(screen.getByText('Spend in this view (all users)')).toBeInTheDocument()
   })
 })

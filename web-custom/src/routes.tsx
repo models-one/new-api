@@ -424,6 +424,70 @@ const chat2LinkRoute = createRoute({
  * the onboarding links that still point at `/keys` land on the real page rather than the
  * previous frontend.
  */
+/**
+ * The admin model registry and the deployment manager. `router/web-router.go` whitelists
+ * `/models`, whose prefix match already hands these two paths to this console — before
+ * these routes existed they reached it and 404ed, so the legacy pages were unreachable
+ * from either frontend.
+ */
+const modelRegistryRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/models/metadata',
+  component: lazyRouteComponent(
+    () => import('@/features/model-registry/ModelRegistryPage'),
+    'ModelRegistryPage',
+  ),
+})
+
+const deploymentsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/models/deployments',
+  component: lazyRouteComponent(
+    () => import('@/features/deployments/DeploymentsPage'),
+    'DeploymentsPage',
+  ),
+})
+
+/**
+ * Paths the legacy console owned that this one reorganised. `router/web-router.go`
+ * whitelists their parents, so without these the old URLs reach this app and 404 rather
+ * than falling through to the previous frontend.
+ */
+const usageLogsIndexRedirectRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/usage-logs',
+  beforeLoad: () => {
+    throw redirect({ replace: true, to: '/logs' })
+  },
+})
+
+/** The legacy request/billing log; this console calls it `/logs`. */
+const usageLogsCommonRedirectRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/usage-logs/common',
+  beforeLoad: () => {
+    throw redirect({ replace: true, to: '/logs' })
+  },
+})
+
+/** The legacy dashboard's default section. */
+const dashboardOverviewRedirectRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/dashboard/overview',
+  beforeLoad: () => {
+    throw redirect({ replace: true, to: '/dashboard' })
+  },
+})
+
+/** The legacy dashboard's model-call analytics; this console keeps it on `/analytics`. */
+const dashboardModelsRedirectRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/dashboard/models',
+  beforeLoad: () => {
+    throw redirect({ replace: true, to: '/analytics' })
+  },
+})
+
 const keysRedirectRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: '/keys',
@@ -589,6 +653,12 @@ const routeTree = rootRoute.addChildren([
     chatEmbedRoute,
     chat2LinkRoute,
     keysRedirectRoute,
+    modelRegistryRoute,
+    deploymentsRoute,
+    usageLogsIndexRedirectRoute,
+    usageLogsCommonRedirectRoute,
+    dashboardOverviewRedirectRoute,
+    dashboardModelsRedirectRoute,
     channelsRoute,
     systemSettingsRoute,
     systemSettingsGroupRoute,
