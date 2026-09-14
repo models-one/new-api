@@ -1,0 +1,40 @@
+# Frontend Development - Backend built from local source
+#
+# Usage:
+#   1. docker compose -f docker-compose.dev.yml up -d
+#   2. make dev-web
+#   3. Open http://localhost:5173 (Rsbuild dev server, API auto-proxied to :3000)
+#
+# Rebuild backend after Go code changes:
+#   docker compose -f docker-compose.dev.yml up -d --build new-api
+#
+# Stop:
+#   docker compose -f docker-compose.dev.yml down
+#
+# Reset data:
+#   docker compose -f docker-compose.dev.yml down -v
+
+services:
+  new-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: new-api-dev:local
+    container_name: new-api-dev
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    volumes:
+      - dev_data:/data
+    environment:
+      - SQL_DSN=postgresql://postgres:PgQq123456@172.31.13.4:5432/new-api
+      - REDIS_CONN_STRING=redis://:redis123@172.31.13.4:6379/0
+      - TZ=Asia/Shanghai
+      - BATCH_UPDATE_ENABLED=true
+      # Local HTTP dev mode: keep Secure=false and leave TRUSTED_URL unset. This disables the refresh/logout OriginGuard so the :5173 -> :3000 dev proxy works.
+      - SESSION_COOKIE_SECURE=false
+      # For HTTPS only: set Secure=true and list every exact trusted HTTPS browser Origin. This does not configure relay CORS.
+      # - SESSION_COOKIE_SECURE=true
+      # - SESSION_COOKIE_TRUSTED_URL=https://example.com,https://admin.example.com
+
+
