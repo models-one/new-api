@@ -13,14 +13,15 @@ export type SettingsGroupIcon = ForwardRefExoticComponent<
  * — the same convention as the rest of this console. Both must exist in all seven locale
  * files.
  *
- * `Component` absent means "not rebuilt in this skin yet": the shell renders
- * `SectionPlaceholder` in its place. Filling a section in is a one-line edit here.
+ * `Component` is required: a section with no UI has nothing to show, and the compiler is
+ * the right place to catch that rather than a placeholder that tells the reader this
+ * console has not finished being built.
  */
 export type SettingsSectionDefinition = {
   id: string
   title: string
   description: string
-  Component?: ComponentType
+  Component: ComponentType
 }
 
 export type SettingsGroupDefinition = {

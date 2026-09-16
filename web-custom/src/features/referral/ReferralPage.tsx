@@ -213,7 +213,9 @@ export function ReferralPage() {
         ) : null}
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
+      {/* items-start: the invitation card is short and must keep its own height
+          instead of being stretched to match the transfer form beside it. */}
+      <div className="grid gap-6 xl:grid-cols-[1fr_420px] xl:items-start">
         <Panel aria-busy={affQuery.isFetching} className="min-w-0 overflow-hidden">
           <Panel.Header
             description={t('Anyone who signs up through this link is recorded as your referral.')}

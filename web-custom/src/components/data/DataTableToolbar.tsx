@@ -41,7 +41,13 @@ export function DataTableToolbar(props: DataTableToolbarProps) {
       <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start">
         {props.search ? <div className="min-w-0 sm:w-full sm:max-w-md">{props.search}</div> : null}
         {props.filters ? (
-          <div className="flex flex-wrap items-center gap-2" {...filterGroupProps}>
+          <div
+            // Below `sm` each control takes the full row. Letting them keep their
+            // intrinsic widths produced a ragged stack of four different widths on every
+            // admin page, which each page was then patching on its own.
+            className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:[&>*]:w-full"
+            {...filterGroupProps}
+          >
             {props.filters}
           </div>
         ) : null}

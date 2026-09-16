@@ -146,9 +146,7 @@ export function FlowPathTable(props: FlowPathTableProps) {
 
       <Panel.Footer align="start">
         <DerivationNote>
-          {t(
-            'Share is computed here as path spend ÷ ATTRIBUTED_QUOTA, where ATTRIBUTED_QUOTA is the sum of the quota on the rows shown, × 100. The endpoint reports no percentages.',
-          )}
+          {t('Share is worked out here: what each path spent, as a percentage of the spend on the paths shown.')}
         </DerivationNote>
       </Panel.Footer>
     </Panel>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { toErrorMessage } from '@/components/overlay'
 import { Alert, Button, PageHeader, Panel, Skeleton } from '@/components/ui'
+import { enabledPayMethods } from '@/features/wallet/pay-methods'
 import { BalanceStats } from '@/features/wallet/components/BalanceStats'
 import { RedemptionForm } from '@/features/wallet/components/RedemptionForm'
 import { HISTORY_WINDOW_DAYS, TopUpHistory } from '@/features/wallet/components/TopUpHistory'
@@ -15,6 +16,10 @@ export function WalletPage() {
   const infoQuery = useQuery(topUpInfoQuery())
   const info = infoQuery.data
 
+  // With no provider enabled the body is the "online payment is not configured" state,
+  // and a subtitle telling the reader to pick a payment method contradicts it.
+  const hasCheckout = info !== undefined && enabledPayMethods(info).length > 0
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -25,7 +30,10 @@ export function WalletPage() {
       <BalanceStats />
 
       <Panel>
-        <Panel.Header description={t('Select an amount and payment method.')} title={t('Add funds')} />
+        <Panel.Header
+          description={hasCheckout ? t('Select an amount and payment method.') : undefined}
+          title={t('Add funds')}
+        />
         <Panel.Body className="p-6 md:p-8">
           {infoQuery.isPending ? (
             <div aria-busy="true" className="flex flex-col gap-6" role="status">

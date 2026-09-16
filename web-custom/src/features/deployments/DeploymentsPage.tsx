@@ -178,7 +178,7 @@ export function DeploymentsPage() {
               </span>
               {left === null ? null : (
                 <span className="text-xs text-muted">
-                  {t('{{percent}} of the paid window left (derived: 100 − completed_percent)', {
+                  {t('{{percent}} of the paid compute window is left', {
                     percent: formatPercent(left, 0),
                   })}
                 </span>
@@ -517,12 +517,12 @@ export function DeploymentsPage() {
 
       <div className="flex flex-col gap-2 text-xs leading-5 text-muted">
         <p>
-          {t('Both list routes sort newest first at io.net and accept no sort parameters, so no column here is sortable.')}
+          {t('io.net returns these newest first and offers no other ordering, so no column here can be sorted.')}
         </p>
         <p>
           {searching
-            ? t('Search runs after pagination: the server fetches one page from io.net and then filters that page by name, so a match on another page is not found. Clear the search to page through everything.')
-            : t('The counts beside each status describe the deployments on THIS page only — the server tallies the page it just fetched. The total under the table is the collection total.')}
+            ? t('Search only looks at the page you are on, so a match further down the list is not found. Clear the search to page through everything.')
+            : t('The counts beside each status cover this page only. The total under the table covers every deployment.')}
         </p>
         <p>
           {t('Creating a deployment and extending one both rent paid GPU capacity from io.net. Terminating one is irreversible.')}

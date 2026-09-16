@@ -9,6 +9,7 @@ import {
   BadgeCell,
   DataTable,
   DataTablePagination,
+  MobileCardList,
   MonoCell,
   useDataTable,
   type DataTableColumns,
@@ -113,6 +114,10 @@ export function PlatformHealthPanel(props: PlatformHealthPanelProps) {
     total: props.models.length,
   })
 
+  const emptyDescription = t(
+    'This gateway recorded no model performance samples in the selected range.',
+  )
+
   return (
     <Panel aria-labelledby="platform-health-title">
       <Panel.Header
@@ -148,21 +153,37 @@ export function PlatformHealthPanel(props: PlatformHealthPanelProps) {
         </Panel.Body>
       ) : (
         <Panel.Body padded={false}>
-          <DataTable
-            columns={columns}
-            emptyDescription={t(
-              'This gateway recorded no model performance samples in the selected range.',
-            )}
-            emptyIcon={<GaugeIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
-            emptyTitle={t('No service metrics available')}
-            isFetching={props.isFetching}
-            isLoading={props.isPending}
-            label={t('Platform service health by model')}
-            loadingLabel={t('Loading service metrics')}
-            minWidthClassName="min-w-[720px]"
-            skeletonRows={5}
-            table={table}
-          />
+          {/* Five columns need 720px, which is twice a phone. The same rows and the
+              same column definitions render as cards below that width. */}
+          <div className="hidden md:block">
+            <DataTable
+              columns={columns}
+              emptyDescription={emptyDescription}
+              emptyIcon={<GaugeIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
+              emptyTitle={t('No service metrics available')}
+              isFetching={props.isFetching}
+              isLoading={props.isPending}
+              label={t('Platform service health by model')}
+              loadingLabel={t('Loading service metrics')}
+              minWidthClassName="min-w-[720px]"
+              skeletonRows={5}
+              table={table}
+            />
+          </div>
+
+          <div className="px-5 py-4 md:hidden">
+            <MobileCardList
+              emptyDescription={emptyDescription}
+              emptyIcon={<GaugeIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
+              emptyTitle={t('No service metrics available')}
+              isFetching={props.isFetching}
+              isLoading={props.isPending}
+              label={t('Platform service health cards')}
+              loadingLabel={t('Loading service metrics')}
+              skeletonRows={4}
+              table={table}
+            />
+          </div>
 
           {props.models.length > PLATFORM_PAGE_SIZE ? (
             <div className="border-t border-border px-5 py-3">
@@ -180,7 +201,7 @@ export function PlatformHealthPanel(props: PlatformHealthPanelProps) {
       <Panel.Footer align="start">
         <p className="text-xs leading-5 text-muted">
           {t(
-            'Health is a label this console derives from the success rate: {{healthy}}% or above is Healthy, {{degraded}}% or above is Degraded, below that is Unhealthy.',
+            'Healthy from {{healthy}}% success, Degraded from {{degraded}}%, Unhealthy below that.',
             { degraded: DEGRADED_SUCCESS_RATE_PERCENT, healthy: HEALTHY_SUCCESS_RATE_PERCENT },
           )}
         </p>

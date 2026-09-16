@@ -2,7 +2,7 @@ import TrophyIcon from 'lucide-react/dist/esm/icons/trophy'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { DataTable, useDataTable, type DataTableColumns } from '@/components/data'
+import { DataTable, MobileCardList, useDataTable, type DataTableColumns } from '@/components/data'
 import { Panel } from '@/components/ui'
 import { MovementBadge } from '@/features/rankings/components/MovementBadge'
 import { RANKED_MODEL_LIMIT, type RankedModel } from '@/features/rankings/api'
@@ -92,11 +92,14 @@ export function ModelLeaderboard(props: {
     total: props.models.length,
   })
 
+  const emptyTitle = t('No models ranked yet')
+  const emptyDescription = t('This gateway relayed no traffic in this window, so there is nothing to rank.')
+
   return (
     <Panel>
       <Panel.Header
         description={t(
-          'Ranked by tokens relayed through this gateway over {{period}}. The server publishes the top {{limit}} models.',
+          'Ranked by tokens relayed through this gateway over {{period}}. Only the {{limit}} busiest models are listed.',
           { limit: RANKED_MODEL_LIMIT, period: props.periodLabel },
         )}
         headingLevel={2}
@@ -104,10 +107,16 @@ export function ModelLeaderboard(props: {
         title={t('Model leaderboard')}
       />
       <Panel.Body padded={false}>
+        {/*
+          Six columns need 720px, which a phone does not have: the table alone would hand a
+          visitor a rank, half a model name and nothing else. Below `md` the same rows and
+          the same column definitions are rendered as cards instead.
+        */}
         <DataTable
+          className="hidden md:block"
           columns={columns}
-          emptyDescription={t('This gateway relayed no traffic in this window, so there is nothing to rank.')}
-          emptyTitle={t('No models ranked yet')}
+          emptyDescription={emptyDescription}
+          emptyTitle={emptyTitle}
           isFetching={props.isFetching}
           isLoading={props.isLoading}
           label={t('Model leaderboard')}
@@ -115,6 +124,18 @@ export function ModelLeaderboard(props: {
           minWidthClassName="min-w-[720px]"
           table={table}
         />
+
+        <div className="p-4 md:hidden">
+          <MobileCardList
+            emptyDescription={emptyDescription}
+            emptyTitle={emptyTitle}
+            isFetching={props.isFetching}
+            isLoading={props.isLoading}
+            label={t('Model leaderboard cards')}
+            loadingLabel={t('Loading the model leaderboard')}
+            table={table}
+          />
+        </div>
       </Panel.Body>
     </Panel>
   )

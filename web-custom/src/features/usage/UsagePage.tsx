@@ -149,7 +149,7 @@ export function UsagePage() {
         )}
 
         {flowQuery.isError ? (
-          <Panel className="p-6">
+          <Panel className="self-start p-6">
             <h2 className="text-lg font-bold">{t('Top API keys')}</h2>
             <UsageErrorAlert
               className="mt-4"

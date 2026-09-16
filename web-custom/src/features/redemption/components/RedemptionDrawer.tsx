@@ -299,7 +299,7 @@ export function RedemptionDrawer(props: RedemptionDrawerProps) {
         />
 
         <NumberInput
-          description={t('Stored as quota units: amount × QUOTA_PER_UNIT ({{perUnit}}) = {{quota}}. Currently {{money}}.', {
+          description={t('Each code is worth {{money}} — {{quota}} quota units, at this deployment’s rate of {{perUnit}} to the dollar.', {
             money: formatQuota(derivedQuota, quotaPerUnit),
             perUnit: formatNumber(quotaPerUnit),
             quota: formatNumber(derivedQuota),

@@ -86,6 +86,23 @@ function openOverlay() {
   return screen.findByRole('dialog')
 }
 
+/**
+ * The panel renders the wide table and the phone card list side by side and hides one
+ * with a Tailwind breakpoint, so both are in the DOM under happy-dom. Row assertions are
+ * scoped to the table to keep the two copies of every cell and every row button apart.
+ */
+async function planTable() {
+  return within(await screen.findByRole('table', { name: 'Subscription plans' }))
+}
+
+/**
+ * The row button by name, taken from the table rather than the card list. The table
+ * renders its skeleton before the plans land, so the button itself is awaited too.
+ */
+async function rowButton(name: string) {
+  return (await planTable()).findByRole('button', { name })
+}
+
 function type(field: HTMLElement, value: string) {
   fireEvent.change(field, { target: { value } })
 }
@@ -146,8 +163,10 @@ describe('plan list', () => {
   it('renders a real empty state for an instance with no plans', async () => {
     renderPage()
 
-    expect(await screen.findByText('No subscription plans yet')).toBeInTheDocument()
-    expect(screen.getByText(/A plan describes what a subscriber pays/)).toBeInTheDocument()
+    // The empty state is rendered once by the table and once by the card list, so this
+    // asserts presence rather than uniqueness.
+    expect(await screen.findAllByText('No subscription plans yet')).not.toHaveLength(0)
+    expect(screen.getAllByText(/A plan describes what a subscriber pays/)).not.toHaveLength(0)
     expect(screen.getByText('0 plans configured')).toBeInTheDocument()
   })
 
@@ -155,7 +174,7 @@ describe('plan list', () => {
     server.plans = [{ plan: starterPlan }, { plan: retiredPlan }]
     renderPage()
 
-    const starterRow = (await screen.findByText('Starter')).closest('tr')
+    const starterRow = (await (await planTable()).findByText('Starter')).closest('tr')
     expect(starterRow).not.toBeNull()
     const starter = within(starterRow as HTMLElement)
     expect(starter.getByText('$12.50')).toBeInTheDocument()
@@ -167,12 +186,25 @@ describe('plan list', () => {
     expect(starter.getByText('vip')).toBeInTheDocument()
     expect(starter.getByText('Enabled')).toBeInTheDocument()
 
-    const legacyRow = (await screen.findByText('Legacy')).closest('tr')
+    const legacyRow = (await (await planTable()).findByText('Legacy')).closest('tr')
     const legacy = within(legacyRow as HTMLElement)
     expect(legacy.getByText('Disabled')).toBeInTheDocument()
     expect(legacy.getByText('Unlimited')).toBeInTheDocument()
     expect(legacy.getByText('Balance only')).toBeInTheDocument()
     expect(legacy.getByText('No group change')).toBeInTheDocument()
+  })
+
+  // The table alone needs ~1180px, so on a phone it was a header row over a blank box
+  // with everything readable only by scrolling three viewports sideways. The card list is
+  // the narrow-viewport rendering of the same rows.
+  it('also renders the plans as cards for a narrow viewport', async () => {
+    server.plans = [{ plan: starterPlan }]
+    renderPage()
+
+    const cards = within(await screen.findByRole('region', { name: 'Subscription plan cards' }))
+    expect(await cards.findByText('Starter')).toBeInTheDocument()
+    expect(cards.getByText('$12.50')).toBeInTheDocument()
+    expect(cards.getByRole('button', { name: 'Edit plan' })).toBeInTheDocument()
   })
 
   it('offers a retry when the list request fails', async () => {
@@ -192,17 +224,17 @@ describe('payment compliance lock', () => {
 
     expect(await screen.findByText('Plan changes are locked')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'New plan' })).toBeDisabled()
-    expect(await screen.findByRole('button', { name: 'Edit plan' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Disable plan' })).toBeDisabled()
+    expect(await rowButton('Edit plan')).toBeDisabled()
+    expect(await rowButton('Disable plan')).toBeDisabled()
     // AdminResetPlanSubscriptions has no compliance check, verified against the server.
-    expect(screen.getByRole('button', { name: 'Reset quota' })).toBeEnabled()
+    expect(await rowButton('Reset quota')).toBeEnabled()
   })
 
   it('unlocks the writes once compliance is confirmed', async () => {
     server.plans = [{ plan: starterPlan }]
     renderPage()
 
-    expect(await screen.findByRole('button', { name: 'Edit plan' })).toBeEnabled()
+    expect(await rowButton('Edit plan')).toBeEnabled()
     expect(screen.getByRole('button', { name: 'New plan' })).toBeEnabled()
     expect(screen.queryByText('Plan changes are locked')).not.toBeInTheDocument()
   })
@@ -249,7 +281,7 @@ describe('the create drawer', () => {
     server.plans = [{ plan: starterPlan }]
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit plan' }))
+    fireEvent.click(await rowButton('Edit plan'))
     const drawer = within(await openOverlay())
 
     expect(drawer.getByLabelText(/Plan title/)).toHaveValue('Starter')
@@ -290,7 +322,7 @@ describe('the bulk quota reset', () => {
     })
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Reset quota' }))
+    fireEvent.click(await rowButton('Reset quota'))
     const dialog = within(await openOverlay())
 
     const confirm = dialog.getByRole('button', { name: 'Reset quota' })
@@ -329,7 +361,7 @@ describe('the bulk quota reset', () => {
     })
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Reset quota' }))
+    fireEvent.click(await rowButton('Reset quota'))
     const dialog = within(await openOverlay())
 
     fireEvent.click(dialog.getByRole('switch', { name: 'Advance the next reset date' }))
@@ -349,7 +381,7 @@ describe('the bulk quota reset', () => {
     server.plans = [{ plan: starterPlan }]
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Reset quota' }))
+    fireEvent.click(await rowButton('Reset quota'))
     const dialog = within(await openOverlay())
 
     type(dialog.getByLabelText(/Type the plan title/), 'Start')
@@ -364,7 +396,7 @@ describe('the bulk quota reset', () => {
     post.mockRejectedValue(new Error('plan not found'))
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Reset quota' }))
+    fireEvent.click(await rowButton('Reset quota'))
     const dialog = within(await openOverlay())
 
     type(dialog.getByLabelText(/Type the plan title/), 'Starter')
@@ -381,7 +413,7 @@ describe('enable and disable', () => {
     put.mockResolvedValue({ data: { success: true, data: null } })
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Disable plan' }))
+    fireEvent.click(await rowButton('Disable plan'))
     const dialog = within(await openOverlay())
     fireEvent.click(dialog.getByRole('button', { name: 'Disable plan' }))
 

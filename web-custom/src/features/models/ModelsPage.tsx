@@ -106,13 +106,15 @@ export function ModelsPage() {
     [compared, models],
   )
 
-  // `usable_group` maps a group name to the label the server publishes for it, which is
-  // operator-written text in the server's own language and is shown verbatim.
+  // The group key plus its multiplier, which is the one fact that lets a reader compare
+  // two groups. `usable_group` carries an operator-written description instead, in
+  // whatever language they typed — rendering it put "default · 默认分组" in an English
+  // console, and it says nothing the key does not already say.
   const groupOptions: NativeSelectOption[] = groupNames.map((name) => {
-    const description = payload?.usable_group[name] ?? ''
+    const ratio = payload?.group_ratio[name]
     return {
       value: name,
-      label: description === '' || description === name ? name : `${name} · ${description}`,
+      label: ratio === undefined ? name : `${name} · ${ratio}×`,
     }
   })
 
@@ -185,17 +187,22 @@ export function ModelsPage() {
       {isLoading ? (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }, (_unused, index) => (
-            <Skeleton className="h-36" key={index} variant="block" />
+            <Skeleton className="h-44" key={index} variant="block" />
           ))}
         </div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Every card in the row carries a caption: StatCard pins its footer to the
+              bottom, so one captioned card used to stretch its captionless neighbours and
+              leave them looking half-rendered. */}
           <StatCard
+            footer={t('The full catalogue, before any filters.')}
             icon={<BoxesIcon />}
             label={t('Models published')}
             value={formatNumber(models.length)}
           />
           <StatCard
+            footer={t('Distinct providers across those models.')}
             icon={<ServerIcon />}
             iconTone="info"
             label={t('Providers listed')}
@@ -223,8 +230,12 @@ export function ModelsPage() {
         </Alert>
       ) : null}
 
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+      {/* Every filter in this row is a label-over-control stack aligned on its top edge.
+          Bottom alignment put the four controls on three different lines, because the
+          toggle opted out of it and the search field's description hangs below its
+          input. */}
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <NativeSelect
             className="sm:w-56"
             disabled={groupOptions.length === 0}
@@ -248,17 +259,22 @@ export function ModelsPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <SegmentedControl
-            className="self-start"
-            label={t('Model filters')}
-            onChange={(next) => {
-              setAvailability(next)
-              setPage(1)
-            }}
-            options={availabilityOptions}
-            value={availability}
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="flex min-w-0 flex-col items-start gap-2">
+            {/* Matches the Field label the selects render, so the toggle sits on the same
+                line as the rest of the row. The control repeats the text as its
+                accessible name because a toggle group is not a labelable element. */}
+            <span className="text-sm font-semibold text-foreground">{t('Availability')}</span>
+            <SegmentedControl
+              label={t('Availability')}
+              onChange={(next) => {
+                setAvailability(next)
+                setPage(1)
+              }}
+              options={availabilityOptions}
+              value={availability}
+            />
+          </div>
           <SearchInput
             className="sm:w-72"
             debounceMs={200}

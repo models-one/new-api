@@ -127,9 +127,7 @@ export function UserBreakdownTable(props: UserBreakdownTableProps) {
 
       <Panel.Footer align="start">
         <DerivationNote>
-          {t(
-            'Share is computed here as user spend ÷ RANGE_QUOTA, where RANGE_QUOTA is the sum of quota across every row the endpoint returned, × 100.',
-          )}
+          {t('Share is worked out here: what each user spent, as a percentage of all spend in this range.')}
         </DerivationNote>
       </Panel.Footer>
     </Panel>

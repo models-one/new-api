@@ -9,9 +9,14 @@ export const alignClasses: Record<DataTableAlign, string> = {
   right: 'text-right',
 }
 
-/** Chrome for a column pinned to the right edge of a horizontally scrolling table. */
+/**
+ * Chrome for a column pinned to the right edge of a horizontally scrolling table. The
+ * short gradient on its left edge is what stops a column sliding under it from appearing
+ * to collide with it; `from-*` is set by the caller so the header and body cells each
+ * fade out of their own background.
+ */
 export const stickyRightClasses =
-  'sticky right-0 z-10 before:pointer-events-none before:absolute before:inset-y-0 before:-left-6 before:w-6 before:bg-gradient-to-l before:from-surface before:to-transparent'
+  'sticky right-0 z-10 before:pointer-events-none before:absolute before:inset-y-0 before:-left-6 before:w-6 before:bg-gradient-to-l before:to-transparent'
 
 /**
  * Per-column presentation declared once on the column definition, so the table

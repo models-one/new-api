@@ -10,13 +10,19 @@ import { useQuotaPerUnit } from '@/hooks/use-server-status'
 import { selfUserQuery } from '@/lib/api/user'
 import { formatNumber, quotaToCurrency, splitCurrency } from '@/lib/format'
 
-/** Renders "$501" large with ".89" reduced, the way the console shows money. */
+/**
+ * Renders "$501" large with ".89" reduced, the way the console shows money.
+ *
+ * The cents are 18px, regular weight and muted wherever money appears in a headline —
+ * the same figure used to be bold 24px here and regular 18px on the dashboard, which
+ * read as two different numbers. Keep the two in step until a shared component lands.
+ */
 function CurrencyValue(props: { amount: number }) {
   const { whole, fraction } = splitCurrency(props.amount)
   return (
     <>
       {whole}
-      <span className="text-2xl font-bold text-muted">{fraction}</span>
+      <span className="text-lg font-normal text-muted">{fraction}</span>
     </>
   )
 }

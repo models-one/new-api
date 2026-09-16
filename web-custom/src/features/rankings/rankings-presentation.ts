@@ -31,14 +31,12 @@ export function modelMovement(model: Pick<RankedModel, 'previous_rank' | 'growth
     : { kind: 'down', growthPct: model.growth_pct }
 }
 
-/**
- * The same split for a vendor row, which carries no `previous_rank`. A vendor's growth is
- * therefore always reported as a measurement — the server cannot tell us it is new.
+/*
+ * There is no `vendorMovement`. A vendor row carries `growth_pct` but no `previous_rank`, so
+ * the 100 the server emits for an empty preceding window is indistinguishable from a genuine
+ * doubling — every provider on a gateway with no prior period would be badged "+100%". The
+ * provider leaderboard therefore shows no Change column at all; see `VendorLeaderboard`.
  */
-export function vendorMovement(growthPct: number): Movement {
-  if (!Number.isFinite(growthPct) || growthPct === 0) return { kind: 'flat' }
-  return growthPct > 0 ? { kind: 'up', growthPct } : { kind: 'down', growthPct }
-}
 
 /** `↑24.6%` / `↓3.1%`, matching the precision the server rounds to (4 decimals). */
 export function formatGrowth(growthPct: number): string {

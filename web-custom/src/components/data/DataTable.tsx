@@ -111,7 +111,7 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
           {/* Tracked uppercase, the way the design reference sets every column header.
               Button labels stay sentence case: the reference is inconsistent about those
               and this console's are full phrases, which uppercase makes harder to read. */}
-          <thead className="bg-surface-high/40 text-[0.7rem] tracking-[0.08em] text-muted uppercase">
+          <thead className="bg-surface-raised text-[0.7rem] tracking-[0.08em] text-muted uppercase">
             {props.table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -127,7 +127,7 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
                       className={cn(
                         'px-5 py-3 font-semibold',
                         alignClasses[meta?.align ?? 'left'],
-                        meta?.sticky === 'right' && cn(stickyRightClasses, 'bg-surface-high'),
+                        meta?.sticky === 'right' && cn(stickyRightClasses, 'bg-surface-raised before:from-surface-raised'),
                         meta?.headerClassName,
                       )}
                       colSpan={header.colSpan}
@@ -180,7 +180,7 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
                             'px-5 py-4',
                             alignClasses[meta?.align ?? 'left'],
                             meta?.mono ? 'mono' : '',
-                            meta?.sticky === 'right' && cn(stickyRightClasses, 'bg-surface'),
+                            meta?.sticky === 'right' && cn(stickyRightClasses, 'bg-surface before:from-surface'),
                             meta?.cellClassName,
                           )}
                           key={cell.id}

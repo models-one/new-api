@@ -127,7 +127,7 @@ export function PriceEstimateSummary(props: PriceEstimateSummaryProps) {
         </div>
       </dl>
       <p className="mt-3 text-xs leading-5 text-muted">
-        {t('Total and hourly rate come from io.net. Fees is derived here as total_cost − compute_cost; compute_cost is what io.net reports after its own platform and conversion fees are taken off the total. Amounts are settled in the provider’s currency, not in gateway quota.')}
+        {t('Total and hourly rate come from io.net. Fees is whatever is left of the total once io.net’s own compute cost is taken off. Amounts settle in the provider’s currency, not in gateway quota.')}
       </p>
     </div>
   )

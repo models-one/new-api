@@ -186,7 +186,7 @@ export function CheckInPanel() {
         <DescriptionList items={stats} label={t('Check-in totals')} />
 
         <p className="text-xs leading-5 text-muted">
-          {t('"Earned this month" is added up in this page: the sum of quota_awarded across the {{count}} records the server returned for {{month}}. Every other figure comes straight from the server.', {
+          {t('"Earned this month" is added up on this page from the {{count}} check-ins recorded for {{month}}. Every other figure comes straight from the server.', {
             count: records.length,
             month,
           })}

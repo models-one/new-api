@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { logAdminOtherEntries, logOtherEntries } from '@/features/logs/log-presentation'
+import {
+  formatLogDayTime,
+  logAdminOtherEntries,
+  logOtherEntries,
+  logsSpanMultipleDays,
+} from '@/features/logs/log-presentation'
 
 /**
  * `other` verbatim from a `GET /api/log/` management row on the dev server, plus the
@@ -90,5 +95,47 @@ describe('logAdminOtherEntries', () => {
     expect(logAdminOtherEntries({ other: SELF_OTHER })).toEqual([])
     expect(logAdminOtherEntries({ other: 'not json' })).toEqual([])
     expect(logAdminOtherEntries({ other: '' })).toEqual([])
+  })
+})
+
+/**
+ * Rows on the seeded instance land on several days under the default "all time"
+ * range, which is what made a column of bare clock times read as unsorted.
+ */
+describe('logsSpanMultipleDays', () => {
+  const noon = Math.floor(new Date(2026, 8, 16, 12, 0, 0).getTime() / 1000)
+  const oneHour = 60 * 60
+
+  it('is false while every row lands on the same local day', () => {
+    expect(logsSpanMultipleDays([noon, noon - oneHour, noon - 6 * oneHour])).toBe(false)
+  })
+
+  it('is true as soon as one row crosses midnight, even inside a 24-hour window', () => {
+    expect(logsSpanMultipleDays([noon, noon - 20 * oneHour])).toBe(true)
+  })
+
+  it('ignores rows with no usable timestamp instead of treating them as a second day', () => {
+    expect(logsSpanMultipleDays([0, noon, Number.NaN, noon + 60])).toBe(false)
+  })
+
+  it('is false for an empty or single-row page', () => {
+    expect(logsSpanMultipleDays([])).toBe(false)
+    expect(logsSpanMultipleDays([noon])).toBe(false)
+  })
+})
+
+describe('formatLogDayTime', () => {
+  it('carries the day and the clock, and leaves the year to the row detail', () => {
+    const seconds = Math.floor(Date.UTC(2026, 8, 16, 12, 0, 0) / 1000)
+    const formatted = formatLogDayTime(seconds, 'en-US')
+
+    expect(formatted).toMatch(/Sep/)
+    expect(formatted).toMatch(/\d{2}:\d{2}:\d{2}/)
+    expect(formatted).not.toMatch(/2026/)
+  })
+
+  it('renders a missing timestamp as a dash rather than the epoch', () => {
+    expect(formatLogDayTime(0, 'en-US')).toBe('—')
+    expect(formatLogDayTime(-1, 'en-US')).toBe('—')
   })
 })

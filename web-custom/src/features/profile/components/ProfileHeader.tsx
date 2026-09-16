@@ -29,6 +29,8 @@ import { quotaToCurrency, splitCurrency } from '@/lib/format'
  * from `GET /api/status`.
  *
  * This component emits the page's `<h1>`. A page composing it must not add another.
+ * It carries the same "Account" eyebrow and heading rhythm as the Security and
+ * Preferences tabs, so the title does not jump as you move between the three.
  */
 
 /** Renders "$501" large with ".89" reduced, the way the console shows money. */
@@ -63,8 +65,12 @@ export function ProfileHeader() {
 
   if (selfQuery.isError) {
     return (
-      <div className="flex flex-col gap-6">
-        <PageHeader description={t('Your identity, sign-in methods and account controls.')} title={t('Account')} />
+      <div className="flex flex-col gap-8">
+        <PageHeader
+          description={t('Your identity, sign-in methods and account controls.')}
+          eyebrow={t('Account')}
+          title={t('Account')}
+        />
         <Alert
           action={
             <Button
@@ -90,9 +96,13 @@ export function ProfileHeader() {
 
   if (user === undefined) {
     return (
-      <div aria-busy="true" className="flex flex-col gap-6" role="status">
+      <div aria-busy="true" className="flex flex-col gap-8" role="status">
         <span className="sr-only">{t('Loading your account')}</span>
-        <PageHeader description={t('Your identity, sign-in methods and account controls.')} title={t('Account')} />
+        <PageHeader
+          description={t('Your identity, sign-in methods and account controls.')}
+          eyebrow={t('Account')}
+          title={t('Account')}
+        />
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
           <Panel as="div" className="p-6">
             <Skeleton height={20} variant="block" width={180} />
@@ -145,9 +155,10 @@ export function ProfileHeader() {
   ]
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <PageHeader
         description={t('Your identity, sign-in methods and account controls.')}
+        eyebrow={t('Account')}
         status={
           <Badge tone={roleTone(role)}>
             {roleLabels[role]}

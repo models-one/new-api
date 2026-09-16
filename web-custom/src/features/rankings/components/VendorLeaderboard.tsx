@@ -2,11 +2,10 @@ import BuildingIcon from 'lucide-react/dist/esm/icons/building-2'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { DataTable, useDataTable, type DataTableColumns } from '@/components/data'
+import { DataTable, MobileCardList, useDataTable, type DataTableColumns } from '@/components/data'
 import { Panel } from '@/components/ui'
-import { MovementBadge } from '@/features/rankings/components/MovementBadge'
 import type { RankedVendor } from '@/features/rankings/api'
-import { formatShare, vendorMovement } from '@/features/rankings/rankings-presentation'
+import { formatShare } from '@/features/rankings/rankings-presentation'
 import { formatNumber, formatTokens } from '@/lib/format'
 
 const ALL_ROWS = 50
@@ -16,18 +15,21 @@ type Cell = { row: { original: RankedVendor } }
 /**
  * The provider leaderboard, straight from `rankings.vendors`.
  *
- * Vendor rows carry no `previous_rank`, so a provider's change is always read as a measured
- * percentage — the payload gives no way to tell a new provider from a growing one.
+ * There is deliberately no Change column here. `service/rankings.go` reports `growth_pct: 100`
+ * both for a genuine doubling and for a provider that had NO traffic in the preceding window,
+ * and only `previous_rank` tells the two apart — which vendor rows, unlike model rows, do not
+ * carry. On a gateway with no prior period every provider would therefore be badged "+100%",
+ * a measured doubling that never happened, right under a model leaderboard correctly badging
+ * the same fact as "New". Until the payload carries a vendor baseline, the honest thing is to
+ * say nothing rather than to say something wrong.
  */
 export function VendorLeaderboard(props: {
   vendors: RankedVendor[]
   isLoading: boolean
   isFetching: boolean
-  baseline: string
   periodLabel: string
 }) {
   const { t } = useTranslation()
-  const { baseline } = props
 
   const columns = useMemo<DataTableColumns<RankedVendor>>(
     () => [
@@ -75,16 +77,8 @@ export function VendorLeaderboard(props: {
         cell: ({ row }: Cell) => formatShare(row.original.share),
         meta: { label: t('Share'), align: 'right' as const, mono: true },
       },
-      {
-        id: 'movement',
-        header: t('Change'),
-        cell: ({ row }: Cell) => (
-          <MovementBadge comparedTo={baseline} movement={vendorMovement(row.original.growth_pct)} />
-        ),
-        meta: { label: t('Change'), align: 'right' as const },
-      },
     ],
-    [baseline, t],
+    [t],
   )
 
   const { table } = useDataTable<RankedVendor>({
@@ -94,6 +88,9 @@ export function VendorLeaderboard(props: {
     getRowId: (row) => row.vendor,
     total: props.vendors.length,
   })
+
+  const emptyTitle = t('No providers ranked yet')
+  const emptyDescription = t('No provider had traffic in this window.')
 
   return (
     <Panel>
@@ -107,17 +104,34 @@ export function VendorLeaderboard(props: {
         title={t('Provider leaderboard')}
       />
       <Panel.Body padded={false}>
+        {/*
+          The table needs more width than a phone has, so below `md` the same rows and the
+          same column definitions are rendered as cards instead of being cut off mid-word.
+        */}
         <DataTable
+          className="hidden md:block"
           columns={columns}
-          emptyDescription={t('No provider had traffic in this window.')}
-          emptyTitle={t('No providers ranked yet')}
+          emptyDescription={emptyDescription}
+          emptyTitle={emptyTitle}
           isFetching={props.isFetching}
           isLoading={props.isLoading}
           label={t('Provider leaderboard')}
           loadingLabel={t('Loading the provider leaderboard')}
-          minWidthClassName="min-w-[760px]"
+          minWidthClassName="min-w-[640px]"
           table={table}
         />
+
+        <div className="p-4 md:hidden">
+          <MobileCardList
+            emptyDescription={emptyDescription}
+            emptyTitle={emptyTitle}
+            isFetching={props.isFetching}
+            isLoading={props.isLoading}
+            label={t('Provider leaderboard cards')}
+            loadingLabel={t('Loading the provider leaderboard')}
+            table={table}
+          />
+        </div>
       </Panel.Body>
     </Panel>
   )

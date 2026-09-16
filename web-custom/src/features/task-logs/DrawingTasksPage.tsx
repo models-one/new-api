@@ -275,7 +275,7 @@ export function DrawingTasksPage() {
           row.original.mj_id === '' ? (
             <MonoCell value={null} />
           ) : (
-            <TruncatedCell maxWidthClassName="max-w-[11rem]" mono value={row.original.mj_id} />
+            <TruncatedCell maxWidthClassName="max-w-[10rem]" mono value={row.original.mj_id} />
           ),
         meta: { label: t('Task ID'), mobilePrimary: true, mono: true },
       },
@@ -345,23 +345,13 @@ export function DrawingTasksPage() {
       )
     }
 
+    /**
+     * There is deliberately no image column. It could only say whether a URL exists,
+     * which Status already implies, and it cost the width that pushed the last real
+     * column past the panel edge. The address itself — copyable, openable — is in the
+     * expanded row, which is where it is any use.
+     */
     base.push(
-      {
-        id: 'image_url',
-        enableSorting: false,
-        header: ({ column }) => <DataTableColumnHeader column={column} title={t('Image')} />,
-        cell: ({ row }) =>
-          row.original.image_url === '' ? (
-            <MonoCell value={null} />
-          ) : (
-            <BadgeCell
-              icon={<ImageIcon aria-hidden="true" className="size-3" />}
-              label={t('URL')}
-              tone="info"
-            />
-          ),
-        meta: { label: t('Image') },
-      },
       {
         id: 'prompt',
         enableSorting: false,
@@ -370,7 +360,7 @@ export function DrawingTasksPage() {
           row.original.prompt === '' ? (
             <MonoCell value={null} />
           ) : (
-            <TruncatedCell maxWidthClassName="max-w-[16rem]" value={row.original.prompt} />
+            <TruncatedCell maxWidthClassName="max-w-[12rem]" value={row.original.prompt} />
           ),
         meta: { label: t('Prompt') },
       },
@@ -384,7 +374,7 @@ export function DrawingTasksPage() {
           ) : (
             <TruncatedCell
               className="text-destructive"
-              maxWidthClassName="max-w-[14rem]"
+              maxWidthClassName="max-w-[11rem]"
               value={row.original.fail_reason}
             />
           ),
@@ -580,7 +570,12 @@ export function DrawingTasksPage() {
               isLoading={tasksQuery.isLoading || isResolving}
               label={t('Drawing tasks')}
               loadingLabel={t('Loading drawing tasks')}
-              minWidthClassName={isAdminView ? 'min-w-[92rem]' : 'min-w-[78rem]'}
+              /**
+               * Only as wide as the header row needs. At 78rem the table was wider
+               * than the panel even with no rows in it, so the last header was sliced
+               * mid-word against the panel edge on a laptop for no reason at all.
+               */
+              minWidthClassName={isAdminView ? 'min-w-[68rem]' : 'min-w-[60rem]'}
               renderExpandedRow={(row) => <DrawingDetailPanel task={row.original} />}
               table={table}
             />

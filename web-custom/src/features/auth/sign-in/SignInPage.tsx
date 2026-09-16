@@ -1,9 +1,10 @@
-import { Link, useSearch } from '@tanstack/react-router'
+import { useSearch } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AuthLayout } from '@/features/auth/AuthLayout'
 import { AuthConfigGate } from '@/features/auth/components/AuthConfigGate'
+import { AuthSwitchLink } from '@/features/auth/components/AuthSwitchLink'
 import { AuthTermsFooter } from '@/features/auth/components/LegalConsent'
 import { captureReferralCode } from '@/features/auth/referral'
 import { requiresLegalConsent, useAuthServerConfig } from '@/features/auth/server-config'
@@ -34,6 +35,7 @@ export function SignInPage() {
 
   return (
     <AuthLayout
+      description={t('Sign in to continue to your account.')}
       footer={showsTerms ? <AuthTermsFooter config={config} variant="sign-in" /> : undefined}
       title={t('Sign in')}
     >
@@ -43,16 +45,11 @@ export function SignInPage() {
             <SignInForm config={resolvedConfig} redirectTo={search.redirect} />
 
             {resolvedConfig.registerEnabled && !resolvedConfig.selfUseModeEnabled ? (
-              <p className="text-center text-xs leading-5 text-muted">
-                {t("Don't have an account?")}
-                {' '}
-                <Link
-                  className="font-semibold text-primary underline underline-offset-2 hover:text-primary-strong"
-                  to="/sign-up"
-                >
-                  {t('Create an account')}
-                </Link>
-              </p>
+              <AuthSwitchLink
+                action={t('Create an account')}
+                prompt={t("Don't have an account?")}
+                to="/sign-up"
+              />
             ) : null}
           </>
         )}

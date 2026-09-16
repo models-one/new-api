@@ -73,7 +73,7 @@ export function UserTrendPanel(props: UserTrendPanelProps) {
             />
             <DerivationNote>
               {t(
-                'Bucketed in this console: the hourly rows are summed into {{bucket}} buckets and zero-filled across the whole range, so an idle bucket is drawn at zero instead of being skipped. At most TREND_SERIES_LIMIT = {{limit}} users are plotted.',
+                'Totalled into {{bucket}} points across the whole range, so a quiet stretch is drawn at zero rather than skipped. The {{limit}} busiest users are plotted.',
                 {
                   bucket: props.window.bucket === 'hour' ? t('hourly') : t('daily'),
                   limit: TREND_SERIES_LIMIT,

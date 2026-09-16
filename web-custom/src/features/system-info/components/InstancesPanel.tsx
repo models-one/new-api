@@ -152,9 +152,15 @@ export function InstancesPanel() {
               ) : null}
               {isAutoNamedInstance(instance) ? (
                 <Tooltip
-                  content={t('NODE_NAME is not set on this node, so its name falls back to the hostname. A host whose name changes between restarts leaves an orphaned row behind each time.')}
+                  content={t('This node was never given a name, so it goes by its hostname. If that hostname changes between restarts, each one leaves an abandoned entry behind.')}
                 >
-                  <Badge size="sm" tone="warning">
+                  {/*
+                    `self-start` keeps the pill the width of its own text. The cell is a
+                    column flex container, so without it the badge stretches to the full
+                    cell width and reads as a banner across the card rather than a tag on
+                    the node name.
+                  */}
+                  <Badge className="self-start" size="sm" tone="warning">
                     {t('Auto-named')}
                   </Badge>
                 </Tooltip>
@@ -360,7 +366,7 @@ export function InstancesPanel() {
         </Badge>
         <Badge tone="info">{t('{{count}} master', { count: counts.master })}</Badge>
         <span className="text-xs text-muted">
-          {t('Counted from this list; the server reports no totals of its own.')}
+          {t('Counted from the nodes listed here.')}
         </span>
       </Panel.Body>
 
@@ -376,8 +382,8 @@ export function InstancesPanel() {
             tone="warning"
           >
             {counts.master === 0
-              ? t('The master role comes from NODE_TYPE, not from an election. With no master, master-only background work — session cleanup, subscription resets and scheduled system tasks — runs nowhere.')
-              : t('The master role comes from NODE_TYPE, not from an election, so master-only background work — session cleanup, subscription resets and scheduled system tasks — runs on every one of these nodes at once.')}
+              ? t('The master role is configured per node, not elected. With no master, master-only background work — session cleanup, subscription resets and scheduled system tasks — runs nowhere.')
+              : t('The master role is configured per node, not elected, so master-only background work — session cleanup, subscription resets and scheduled system tasks — runs on every one of these nodes at once.')}
           </Alert>
         </div>
       ) : null}
@@ -434,11 +440,11 @@ export function InstancesPanel() {
 
       <Panel.Footer align="start">
         <p className="text-xs leading-5 text-muted">
-          {t('Uptime is now − started_at and heartbeat age is now − last_seen_at, both measured against this browser clock. The server owns the online/stale verdict: a node is stale once its heartbeat is older than stale_after_seconds ({{seconds}}s).', {
+          {t('Uptime and heartbeat age are counted against this browser’s clock. The server decides whether a node is online: it turns stale once it has gone {{seconds}}s without a heartbeat.', {
             seconds: staleAfterSeconds ?? 90,
           })}
           {' '}
-          {t('Meter colour is a console convention, not a server signal: warning at RESOURCE_WARNING_PERCENT ({{warning}}%), critical at RESOURCE_CRITICAL_PERCENT ({{critical}}%).', {
+          {t('Amber from {{warning}}% used, red from {{critical}}%.', {
             critical: RESOURCE_CRITICAL_PERCENT,
             warning: RESOURCE_WARNING_PERCENT,
           })}
@@ -470,7 +476,7 @@ export function InstancesPanel() {
       <ConfirmDialog
         cancelLabel={t('Cancel')}
         confirmLabel={t('Prune stale instances')}
-        description={t('Every heartbeat row older than stale_after_seconds is deleted across the whole deployment. Online nodes are untouched, and any node still running re-registers on its next heartbeat.')}
+        description={t('Every stale node is removed from this list, across the whole deployment. Online nodes are untouched, and any node still running reappears on its next heartbeat.')}
         destructive
         isLoading={pruneMutation.isPending}
         onConfirm={() => pruneMutation.mutate()}

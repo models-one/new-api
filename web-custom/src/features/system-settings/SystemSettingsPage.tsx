@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/system/EmptyState'
 import { toErrorMessage } from '@/components/overlay'
 import { Alert, Button, PageHeader, Panel, Skeleton } from '@/components/ui'
 import { useSystemSettingsAccess } from '@/features/system-settings/access'
-import { SectionPlaceholder } from '@/features/system-settings/components/SectionPlaceholder'
+import { NavScroller } from '@/features/system-settings/components/NavScroller'
 import { SettingsNavLink } from '@/features/system-settings/components/SettingsNavLink'
 import {
   SETTINGS_GROUPS,
@@ -148,15 +148,6 @@ export function SystemSettingsPage() {
       )
     }
 
-    if (SectionComponent === undefined) {
-      return (
-        <SectionPlaceholder
-          legacyPath={settingsSectionPath(group.id, section.id)}
-          title={t(section.title)}
-        />
-      )
-    }
-
     return <SectionComponent />
   })()
 
@@ -165,42 +156,46 @@ export function SystemSettingsPage() {
       <PageHeader description={pageDescription} eyebrow={t('Root only')} title={pageTitle} />
 
       <nav aria-label={t('Settings groups')}>
-        <ul className="-mb-px flex gap-6 overflow-x-auto border-b border-border">
-          {SETTINGS_GROUPS.map((candidate) => {
-            const Icon = candidate.Icon
-            return (
-              <li key={candidate.id}>
-                <SettingsNavLink
-                  active={candidate.id === group.id}
-                  href={settingsSectionPath(candidate.id, candidate.sections[0].id)}
-                  variant="group"
-                >
-                  <Icon aria-hidden="true" className="size-4" />
-                  {t(candidate.title)}
-                </SettingsNavLink>
-              </li>
-            )
-          })}
-        </ul>
+        <NavScroller>
+          <ul className="-mb-px flex w-max min-w-full gap-6 border-b border-border pr-4">
+            {SETTINGS_GROUPS.map((candidate) => {
+              const Icon = candidate.Icon
+              return (
+                <li key={candidate.id}>
+                  <SettingsNavLink
+                    active={candidate.id === group.id}
+                    href={settingsSectionPath(candidate.id, candidate.sections[0].id)}
+                    variant="group"
+                  >
+                    <Icon aria-hidden="true" className="size-4" />
+                    {t(candidate.title)}
+                  </SettingsNavLink>
+                </li>
+              )
+            })}
+          </ul>
+        </NavScroller>
       </nav>
 
       <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
         <nav aria-label={t('Settings sections')} className="min-w-0">
           <p className="eyebrow mb-2 px-3">{t(group.title)}</p>
           <p className="mb-3 px-3 text-xs leading-5 text-muted">{t(group.description)}</p>
-          <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
-            {group.sections.map((candidate) => (
-              <li key={candidate.id}>
-                <SettingsNavLink
-                  active={candidate.id === section.id}
-                  href={settingsSectionPath(group.id, candidate.id)}
-                  variant="section"
-                >
-                  {t(candidate.title)}
-                </SettingsNavLink>
-              </li>
-            ))}
-          </ul>
+          <NavScroller className="lg:overflow-x-visible">
+            <ul className="flex w-max min-w-full gap-1 pr-4 lg:w-full lg:flex-col lg:pr-0">
+              {group.sections.map((candidate) => (
+                <li key={candidate.id}>
+                  <SettingsNavLink
+                    active={candidate.id === section.id}
+                    href={settingsSectionPath(group.id, candidate.id)}
+                    variant="section"
+                  >
+                    {t(candidate.title)}
+                  </SettingsNavLink>
+                </li>
+              ))}
+            </ul>
+          </NavScroller>
         </nav>
 
         <div className="min-w-0">{content}</div>

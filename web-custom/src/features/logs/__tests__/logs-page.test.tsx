@@ -249,6 +249,35 @@ describe('LogsPage', () => {
     expect(await screen.findAllByText('No matching request logs')).not.toHaveLength(0)
   })
 
+  /** The Time column read 10:41, 08:39, 11:39 down the page and looked unsorted. */
+  it('keeps the Time column to a clock while a page holds a single day', async () => {
+    respondWith([buildLog(), buildLog({ id: 2, created_at: 1787985573 - 3600, request_id: 'r2' })])
+    renderPage()
+
+    await screen.findAllByText('gpt-4o-mini')
+    const rows = within(screen.getByRole('table', { name: 'Request logs' })).getAllByRole('row')
+    const firstCell = within(rows[1]).getAllByRole('cell')[0]
+
+    expect(firstCell.textContent).toMatch(/^\d{2}:\d{2}:\d{2}$/)
+  })
+
+  it('adds the day to the Time column once the page spans more than one day', async () => {
+    const aDayEarlier = 1787985573 - 24 * 60 * 60
+    respondWith([buildLog(), buildLog({ id: 2, created_at: aDayEarlier, request_id: 'r2' })])
+    renderPage()
+
+    await screen.findAllByText('gpt-4o-mini')
+    const rows = within(screen.getByRole('table', { name: 'Request logs' })).getAllByRole('row')
+    const cells = rows.slice(1).map((row) => within(row).getAllByRole('cell')[0].textContent ?? '')
+
+    expect(cells).toHaveLength(2)
+    for (const cell of cells) {
+      expect(cell).toMatch(/\d{2}:\d{2}:\d{2}$/)
+      expect(cell).not.toMatch(/^\d{2}:\d{2}:\d{2}$/)
+    }
+    expect(cells[0]).not.toEqual(cells[1])
+  })
+
   it('surfaces a retryable error instead of an empty table', async () => {
     mockedGetJson.mockImplementation(async (url) => {
       if (url === '/api/status') return { quota_per_unit: 500_000 }

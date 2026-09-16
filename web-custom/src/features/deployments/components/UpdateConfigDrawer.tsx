@@ -223,7 +223,7 @@ export function UpdateConfigDrawer(props: UpdateConfigDrawerProps) {
         ) : null}
 
         <Drawer.Section
-          description={t('Prefilled from container_config on the deployment detail.')}
+          description={t('Prefilled from this deployment’s current container settings.')}
           title={t('Image and port')}
         >
           <div className="flex flex-col gap-4">

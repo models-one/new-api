@@ -4,11 +4,12 @@ import { Badge } from '@/components/ui'
 import { formatGrowth, type Movement } from '@/features/rankings/rankings-presentation'
 
 /**
- * A model's or vendor's period-over-period change.
+ * A model's period-over-period change.
  *
  * A new entrant is labelled as such rather than as "+100%": the server reports 100 for anything
  * with no traffic in the preceding window, so the percentage would be a measurement it never
- * made. See `modelMovement` for the split.
+ * made. See `modelMovement` for the split. Only model rows carry the `previous_rank` that makes
+ * the split possible, which is why provider rows get no badge at all.
  */
 export function MovementBadge(props: { movement: Movement; comparedTo: string }) {
   const { t } = useTranslation()

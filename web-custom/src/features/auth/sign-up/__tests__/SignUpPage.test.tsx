@@ -117,4 +117,21 @@ describe('SignUpPage', () => {
       '/sign-in',
     )
   })
+
+  it('hints every field and closes the card with the same footnote sign-in uses', async () => {
+    stubStatus({ password_register_enabled: true, register_enabled: true })
+    await renderPage()
+
+    // Empty boxes next to sign-in's hinted ones read as a half-styled form.
+    expect(await screen.findByPlaceholderText('Choose a username')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Create a password')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Repeat your password')).toBeInTheDocument()
+    // The first field takes focus here, as it already did on sign-in.
+    expect(screen.getByPlaceholderText('Choose a username')).toHaveFocus()
+
+    // The switch link had drifted to flush-left 14px here while sign-in centred it at 12px.
+    // Classes are the only handle jsdom gives on that, and they are exactly what regressed.
+    const footnote = screen.getByRole('link', { name: 'Sign in' }).closest('p')
+    expect(footnote).toHaveClass('text-center', 'text-xs')
+  })
 })

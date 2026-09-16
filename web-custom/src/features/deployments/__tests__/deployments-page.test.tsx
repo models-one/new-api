@@ -371,15 +371,17 @@ describe('the deployment list', () => {
     expect(table.getByText('2h 15m')).toBeInTheDocument()
   })
 
-  it('labels the remaining share as derived from completed_percent', async () => {
+  // This used to assert the cell spelled out `100 − completed_percent` at the reader.
+  // That was the defect; the label still has to state the share, in plain words.
+  it('states how much of the paid window is left, without naming the raw field', async () => {
     server.items = [runningRow]
     server.total = 1
     renderPage()
 
     const table = await deploymentTable()
-    expect(
-      await table.findByText('75% of the paid window left (derived: 100 − completed_percent)'),
-    ).toBeInTheDocument()
+    const label = await table.findByText(/of the paid compute window is left/)
+    expect(label).toHaveTextContent('75%')
+    expect(label.textContent).not.toMatch(/completed_percent/)
   })
 
   it('switches to /search only once a keyword is typed', async () => {
@@ -413,7 +415,9 @@ describe('the deployment list', () => {
       target: { value: 'probe' },
     })
 
-    expect(await screen.findByText(/Search runs after pagination/)).toBeInTheDocument()
+    // Was /Search runs after pagination/, which explained the server's mechanism
+    // rather than the consequence the operator has to act on.
+    expect(await screen.findByText(/Search only looks at the page you are on/)).toBeInTheDocument()
   })
 
   it('says the status tally counts this page only, not the collection', async () => {
@@ -422,7 +426,8 @@ describe('the deployment list', () => {
     renderPage()
     await deploymentTable()
 
-    expect(screen.getByText(/describe the deployments on THIS page only/)).toBeInTheDocument()
+    // Was /describe the deployments on THIS page only — the server tallies…/.
+    expect(screen.getByText(/counts beside each status cover this page only/)).toBeInTheDocument()
   })
 
   it('sends the chosen status to the list route', async () => {

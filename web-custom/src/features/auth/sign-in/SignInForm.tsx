@@ -1,6 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import KeyRoundIcon from 'lucide-react/dist/esm/icons/key-round'
-import LogInIcon from 'lucide-react/dist/esm/icons/log-in'
 import { useCallback, useId, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -244,6 +243,11 @@ export function SignInForm(props: SignInFormProps) {
 
           {legalConsent}
 
+          {/*
+            No icon: "Create account" and "Send reset link" are label-only, and the submit
+            button is the one control every auth page shares. Icons stay on the buttons that
+            pick a MECHANISM — passkey, GitHub, WeChat — where they carry the distinction.
+          */}
           <Button
             aria-busy={submitting}
             aria-describedby={consentSatisfied ? undefined : consentHintId}
@@ -251,7 +255,7 @@ export function SignInForm(props: SignInFormProps) {
             disabled={blocked}
             type="submit"
           >
-            {submitting ? <Spinner decorative size="sm" /> : <LogInIcon aria-hidden="true" />}
+            {submitting ? <Spinner decorative size="sm" /> : null}
             {t('Sign in')}
           </Button>
         </form>

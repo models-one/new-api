@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import '@/i18n/config'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -200,6 +200,23 @@ describe('ModelsPage', () => {
       screen.queryByRole('heading', { level: 3, name: 'gpt-4o-mini' }),
     ).not.toBeInTheDocument()
     expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(2)
+  })
+
+  // The availability toggle used to be the one filter in the row without a label, which is
+  // what let it drift off the row's baseline; it now carries the same label as its
+  // neighbours and announces itself with it.
+  it('labels the availability toggle and narrows the grid to the selected group', async () => {
+    respondWith([tokenModel, { ...tokenModel, model_name: 'vip-only', enable_groups: ['vip'] }])
+    renderPage()
+
+    expect(await screen.findByText('gpt-4o-mini')).toBeInTheDocument()
+    expect(screen.getByText('vip-only')).toBeInTheDocument()
+
+    const availability = screen.getByRole('group', { name: 'Availability' })
+    fireEvent.click(within(availability).getByRole('button', { name: /Available in this group/ }))
+
+    await waitFor(() => expect(screen.queryByText('vip-only')).not.toBeInTheDocument())
+    expect(screen.getByText('gpt-4o-mini')).toBeInTheDocument()
   })
 
   it('filters the catalogue in the browser and never invents mock attributes', async () => {

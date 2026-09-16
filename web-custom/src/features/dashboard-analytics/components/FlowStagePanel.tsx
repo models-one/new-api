@@ -16,6 +16,7 @@ import type { FlowQuotaRow } from '@/features/dashboard-analytics/api'
 import {
   flowNodeLabel,
   flowStageLabel,
+  flowStagePlural,
   metricProjection,
   type AnalyticsMetric,
 } from '@/features/dashboard-analytics/presentation'
@@ -78,11 +79,17 @@ function StageCard(props: {
   const stageName = flowStageLabel(props.kind, t)
   const projection = metricProjection(props.metric, props.quotaPerUnit, t)
   const bars = stageBars(breakdown.nodes, props.metric, props.quotaPerUnit, t)
+  const selected = props.filters[props.kind] ?? ''
+
+  // Nothing to choose between with a single node: the dropdown would offer "all"
+  // and the one value it already shows. It stays while a filter is set, so a
+  // selection that narrowed the data down to one node can still be cleared.
+  const canFilter = breakdown.nodes.length > 1 || selected !== ''
 
   // The "all" entry has to be a real, selectable option: NativeSelect renders
   // its `placeholder` disabled, which would make a chosen filter unclearable.
   const options: NativeSelectOption[] = [
-    { value: '', label: t('All {{stage}}', { stage: stageName }) },
+    { value: '', label: t('All {{stage}}', { stage: flowStagePlural(props.kind, t) }) },
     ...breakdown.nodes.map((node) => ({ value: node.id, label: flowNodeLabel(node, t) })),
   ]
 
@@ -95,22 +102,38 @@ function StageCard(props: {
             {t('{{count}} distinct', { count: breakdown.nodes.length })}
           </p>
         </div>
-        <NativeSelect
-          className="w-44 shrink-0"
-          label={t('Filter by {{stage}}', { stage: stageName })}
-          hideLabel
-          onChange={(event) => props.onFilterChange(props.kind, event.target.value)}
-          options={options}
-          size="sm"
-          value={props.filters[props.kind] ?? ''}
-        />
+        {canFilter ? (
+          <NativeSelect
+            className="w-44 shrink-0"
+            label={t('Filter by {{stage}}', { stage: stageName })}
+            hideLabel
+            onChange={(event) => props.onFilterChange(props.kind, event.target.value)}
+            options={options}
+            size="sm"
+            value={selected}
+          />
+        ) : null}
       </div>
 
       {bars.length === 0 ? (
         <p className="py-8 text-center text-xs text-muted">
           {t('No {{measure}} recorded at this stage.', { measure: projection.label.toLowerCase() })}
         </p>
-      ) : (
+      ) : null}
+
+      {/* One bar is not a chart: an axis, gridlines and a 128px label column around a
+          single value read as a rendering fault. The value itself is the whole answer. */}
+      {bars.length === 1 && bars[0] ? (
+        <div className="flex flex-col gap-1 py-2">
+          <p className="mono truncate text-sm text-foreground" title={bars[0].label}>
+            {bars[0].label}
+          </p>
+          <p className="text-2xl font-bold text-foreground">{projection.format(bars[0].value)}</p>
+          <p className="eyebrow">{projection.label}</p>
+        </div>
+      ) : null}
+
+      {bars.length > 1 ? (
         <BarChart
           axisWidth={128}
           categories={bars.map((bar) => bar.label)}
@@ -127,7 +150,7 @@ function StageCard(props: {
           ]}
           showLegend={false}
         />
-      )}
+      ) : null}
     </div>
   )
 }
@@ -184,7 +207,7 @@ export function FlowStagePanel(props: FlowStagePanelProps) {
             </div>
             <DerivationNote>
               {t(
-                'Ranked in this console by summing the returned rows per dimension. At most STAGE_BAR_LIMIT = {{limit}} bars are drawn; the rest are summed into a single "more" bar. The server sends no ranking or totals of its own.',
+                'Traffic is totalled in each dimension. The {{limit}} largest are charted; everything smaller is added into one "more" bar.',
                 { limit: STAGE_BAR_LIMIT },
               )}
             </DerivationNote>

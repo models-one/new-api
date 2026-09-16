@@ -224,31 +224,37 @@ export function ChartFrame(props: ChartFrameProps) {
 
       {props.footer}
 
-      <table className="sr-only">
-        <caption>{props.table.caption ?? props.label}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{categoryHeader}</th>
-            {props.table.headers.map((header, index) => (
-              <th key={`${index}-${header}`} scope="col">
-                {header.trim() === '' ? t('Value') : header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {props.table.rows.map((row) => (
-            <tr key={row.key}>
-              <th scope="row">{row.header}</th>
-              {row.cells.map((cell, index) => (
-                <td className="mono" key={`${row.key}-${index}`}>
-                  {cell}
-                </td>
+      {/* The wrapper, not the table, carries `sr-only`. A `<table>` lays itself out to fit
+          its content whatever width it is given, so `sr-only`'s `width: 1px` does not
+          contain it: on /rankings this screen-reader table alone pushed a 390px page out
+          to 587px. A block element clips properly and the table stays announced. */}
+      <div className="sr-only">
+        <table>
+          <caption>{props.table.caption ?? props.label}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{categoryHeader}</th>
+              {props.table.headers.map((header, index) => (
+                <th key={`${index}-${header}`} scope="col">
+                  {header.trim() === '' ? t('Value') : header}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {props.table.rows.map((row) => (
+              <tr key={row.key}>
+                <th scope="row">{row.header}</th>
+                {row.cells.map((cell, index) => (
+                  <td className="mono" key={`${row.key}-${index}`}>
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

@@ -144,6 +144,16 @@ describe('ModelDetailPage', () => {
     expect(screen.queryByText('Tags')).not.toBeInTheDocument()
   })
 
+  // Regression: the version hash has no break opportunity, so it used to run out of the
+  // attributes card and push the whole detail page into a sideways scroll on a phone.
+  it('lets the pricing version hash wrap instead of overflowing its card', async () => {
+    respondWith({ models: [tokenModel] })
+    renderPage()
+
+    const hash = await screen.findByText('5a90f2b86c08bd983a9a2e6d66c255f4eaef9c4b')
+    expect(hash).toHaveClass('break-all')
+  })
+
   it('quotes each price at the selected group ratio', async () => {
     respondWith({ models: [tokenModel] })
     renderPage()

@@ -57,8 +57,11 @@ export function Composer(props: ComposerProps) {
           disabled={props.isGenerating}
           label={t('Billing group')}
           onChange={(event) => props.onGroupChange(event.target.value)}
+          // `desc` is free text an administrator typed on the server, so it arrives in
+          // whatever language they used and cannot be translated here. The rate is the
+          // part worth comparing between groups, and it reads the same in every language.
           options={props.groups.map((group) => ({
-            label: group.desc === '' ? group.value : `${group.value} — ${group.desc}`,
+            label: `${group.value} · ${group.ratio}×`,
             value: group.value,
           }))}
           size="sm"

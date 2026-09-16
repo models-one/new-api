@@ -41,7 +41,9 @@ export function KeySpendPanel(props: KeySpendPanelProps) {
   }
 
   return (
-    <Panel className="flex flex-col p-6">
+    // `self-start`: this column holds one row per key, so stretching it to the height of
+    // the model panel beside it left several hundred pixels of empty panel under the bars.
+    <Panel className="flex flex-col self-start p-6">
       <h2 className="text-lg font-bold">{t('Top API keys')}</h2>
       <p className="mt-1 text-sm text-muted">{t('Your spend per key for the charted window.')}</p>
 
@@ -113,8 +115,10 @@ export function KeySpendPanel(props: KeySpendPanelProps) {
         </p>
       ) : null}
 
-      <div className="mt-auto pt-6">
-        <Button className="w-full" render={<Link to="/settings" />} variant="quiet">
+      {/* `outline`, not `quiet`: in muted grey at the foot of the panel this read as a
+          disabled caption rather than a way to reach the keys page. */}
+      <div className="mt-6">
+        <Button className="w-full" render={<Link to="/settings" />} size="sm" variant="outline">
           {t('View all keys')}
         </Button>
       </div>

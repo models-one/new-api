@@ -86,6 +86,29 @@ describe('WalletPage', () => {
     // The mock's invented rate and hardcoded providers must be gone.
     expect(screen.queryByText('Alipay')).not.toBeInTheDocument()
     expect(screen.queryByText('340.00')).not.toBeInTheDocument()
+    // And the panel must not tell the reader to pick a method it then says is absent.
+    expect(screen.queryByText('Select an amount and payment method.')).not.toBeInTheDocument()
+  })
+
+  it('leaves the order pager out while there is nothing to page through', async () => {
+    get.mockImplementation((url: string) => {
+      if (url === '/api/status') return Promise.resolve({ data: { success: true, data: statusFixture } })
+      if (url === '/api/user/self') return Promise.resolve({ data: { success: true, data: selfFixture } })
+      if (url === '/api/user/topup/info') {
+        return Promise.resolve({ data: { success: true, data: topUpInfoFixture } })
+      }
+      if (url === '/api/user/topup/self') {
+        return Promise.resolve({ data: { success: true, data: { page: 1, page_size: 10, total: 0, items: [] } } })
+      }
+      throw new Error(`unmocked GET ${url}`)
+    })
+
+    renderWallet()
+
+    // Twice: the desktop table and the phone card list each show the empty state.
+    await waitFor(() => expect(screen.getAllByText('No top-up orders yet')).toHaveLength(2))
+    expect(screen.queryByRole('navigation', { name: 'Top-up order pages' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Showing 0-0 of 0')).not.toBeInTheDocument()
   })
 
   it('hides the redemption form while enable_redemption is false', async () => {
@@ -103,6 +126,16 @@ describe('WalletPage', () => {
     expect(within(table).getByText('365.00')).toBeInTheDocument()
     expect(within(table).getByText('success')).toBeInTheDocument()
     expect(screen.getByText('The server only returns orders from the last 30 days.')).toBeInTheDocument()
+  })
+
+  it('repeats the orders as cards for a phone, where the seven columns do not fit', async () => {
+    renderWallet()
+
+    const cards = await screen.findByRole('region', { name: 'Top-up order cards' })
+    await waitFor(() => expect(within(cards).getByText('TN17878128530')).toBeInTheDocument())
+    // Trailing columns that scroll off the table on a phone are labelled in the card.
+    expect(within(cards).getByText('Charged')).toBeInTheDocument()
+    expect(within(cards).getByText('Completed')).toBeInTheDocument()
   })
 })
 
@@ -145,6 +178,12 @@ describe('WalletPage with a provider enabled', () => {
     renderWallet()
 
     expect(await screen.findByText('Minimum 5 with Alipay')).toBeInTheDocument()
+  })
+
+  it('keeps the Add funds subtitle when there really is a method to select', async () => {
+    renderWallet()
+
+    expect(await screen.findByText('Select an amount and payment method.')).toBeInTheDocument()
   })
 
   it('shows the redemption form once enable_redemption is true', async () => {

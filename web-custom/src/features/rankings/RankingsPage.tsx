@@ -257,27 +257,27 @@ export function RankingsPage() {
 
         {rankings.isSuccess && !isEmpty ? (
           <>
+            {/*
+              These three footers are read by anonymous visitors, so they say what the
+              number means rather than how it was computed. The derivations themselves are
+              documented on the helpers in `rankings-presentation.ts`.
+            */}
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <StatCard
-                footer={t(
-                  'Derived: sum of total_tokens over the ranked rows, which the server caps at rankingLeaderboardLimit = {{limit}}.',
-                  { limit: RANKED_MODEL_LIMIT },
-                )}
+                footer={t('Added up across the {{limit}} busiest models.', { limit: RANKED_MODEL_LIMIT })}
                 icon={<ActivityIcon />}
                 label={t('Tokens ranked')}
                 value={formatTokens(tokenTotal)}
               />
               <StatCard
-                footer={t('Derived: sum of share over the ranked rows. Below 100% means the tail was cut.')}
+                footer={t('How much of this gateway’s traffic the ranked models account for.')}
                 icon={<TrophyIcon />}
                 iconTone="info"
                 label={t('Traffic covered')}
                 value={formatShare(shareCovered)}
               />
               <StatCard
-                footer={t('Derived: ranked rows carrying no previous_rank, so they had no rank in {{baseline}}.', {
-                  baseline,
-                })}
+                footer={t('Models that had no traffic in {{baseline}}.', { baseline })}
                 icon={<SparklesIcon />}
                 iconTone="secondary"
                 label={t('New entrants')}
@@ -296,7 +296,6 @@ export function RankingsPage() {
             <ModelVolumeChart history={snapshot?.models_history} periodLabel={periodLabel} />
 
             <VendorLeaderboard
-              baseline={baseline}
               isFetching={rankings.isFetching}
               isLoading={false}
               periodLabel={periodLabel}

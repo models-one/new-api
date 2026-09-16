@@ -36,9 +36,7 @@ export function LogStatsStrip(props: { filters: AdminLogFilters; scope?: LogScop
         footer={
           <>
             <span>{t('Matches the filters above.')}</span>{' '}
-            <span>
-              {t('Usage rows only — the server pins type=2 for this total and ignores the type filter.')}
-            </span>
+            <span>{t('Usage only — the type filter does not change this total.')}</span>
           </>
         }
         icon={<CoinsIcon aria-hidden="true" />}

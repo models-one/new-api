@@ -117,7 +117,7 @@ export function ModelUsagePanel(props: ModelUsagePanelProps) {
         <InfoIcon aria-hidden="true" className="mt-1 size-4 shrink-0 self-start text-primary" />
         <p className="min-w-0 flex-1">
           {t(
-            'Percentages are calculated in this console: the spend of each model divided by your total spend for the window.',
+            'Each percentage is that model’s share of your spend for the window.',
           )}
         </p>
       </Panel.Footer>

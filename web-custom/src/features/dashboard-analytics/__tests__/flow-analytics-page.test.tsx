@@ -183,6 +183,27 @@ describe('the flow breakdown', () => {
     expect(table.getByText('$1.00')).toBeInTheDocument()
   })
 
+  it('states a one-value dimension as a figure, with no filter offered for it', async () => {
+    renderPage()
+    await settled()
+
+    // Both rows use the 'default' group: nothing to rank, and nothing to pick between.
+    expect(screen.queryByLabelText('Filter by Group')).not.toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Spend by Group' })).not.toBeInTheDocument()
+
+    // The two API keys still get both.
+    expect(screen.getByLabelText('Filter by API key')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Spend by API key' })).toBeInTheDocument()
+  })
+
+  it('names the unfiltered option in the plural', async () => {
+    renderPage()
+    await settled()
+
+    const keyFilter = within(screen.getByLabelText('Filter by API key'))
+    expect(keyFilter.getByRole('option', { name: 'All API keys' })).toBeInTheDocument()
+  })
+
   it('filters every other dimension when a node is selected, and can be cleared', async () => {
     renderPage()
     await settled()

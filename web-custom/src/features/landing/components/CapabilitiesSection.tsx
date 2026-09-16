@@ -38,22 +38,28 @@ export function CapabilitiesSection() {
           </ul>
         </article>
 
-        <article className="landing-bento flex min-h-[240px] flex-col justify-between p-6 md:min-h-0 lg:p-8">
+        {/*
+          These two cards are a heading and its paragraph, nothing else. `justify-between`
+          would push the paragraph onto the bottom edge of the fixed 280px row and leave a
+          hole under the heading; only the first card, which has a real second block (the
+          chip row), earns that spacing.
+        */}
+        <article className="landing-bento flex min-h-[240px] flex-col justify-start p-6 md:min-h-0 lg:p-8">
           <div>
             <WaypointsIcon aria-hidden="true" className="mb-5 size-8 text-[#a855f7]" />
             <h3 className="text-2xl font-bold text-[#dfe2f2] sm:text-3xl">{t('50+ Upstream Services')}</h3>
           </div>
-          <p className="mt-6 text-sm leading-6 text-[#b9cacb]">
+          <p className="mt-3 text-sm leading-6 text-[#b9cacb]">
             {t('Automated load balancing and failover across multiple providers ensures your application never goes down.')}
           </p>
         </article>
 
-        <article className="landing-bento relative flex min-h-[240px] flex-col justify-between overflow-hidden p-6 md:min-h-0 lg:p-8">
+        <article className="landing-bento relative flex min-h-[240px] flex-col justify-start overflow-hidden p-6 md:min-h-0 lg:p-8">
           <div className="relative z-10">
             <CodeXmlIcon aria-hidden="true" className="mb-5 size-8 text-[#00f0ff]" />
             <h3 className="text-2xl font-bold text-[#dfe2f2] sm:text-3xl">{t('Drop-in Replacement')}</h3>
           </div>
-          <p className="relative z-10 mt-6 text-sm leading-6 text-[#b9cacb]">
+          <p className="relative z-10 mt-3 text-sm leading-6 text-[#b9cacb]">
             {t("Fully compatible with standard OpenAI SDKs. Change your base URL and API key, and you're ready.")}
           </p>
           <CodeXmlIcon aria-hidden="true" className="absolute -bottom-2 right-3 size-24 text-white/[0.035]" />

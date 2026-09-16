@@ -448,7 +448,7 @@ describe('daily check-in', () => {
     expect(await screen.findByText('Claimed today')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Come back tomorrow' })).toBeDisabled()
     expect(screen.getByText('$0.0020 – $0.0200')).toBeInTheDocument()
-    expect(screen.getByText(/is added up in this page/)).toBeInTheDocument()
+    expect(screen.getByText(/is added up on this page/)).toBeInTheDocument()
     expect(screen.getByText('2026-08-29')).toBeInTheDocument()
   })
 

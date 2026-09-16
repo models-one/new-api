@@ -15,7 +15,6 @@ import {
   deploymentLogsQuery,
 } from '@/features/deployments/api'
 import {
-  COMPLETED_PERCENT_MAX,
   deploymentStatusText,
   deploymentStatusTone,
   formatIoNetAmount,
@@ -236,9 +235,8 @@ export function DeploymentDetailDrawer(props: DeploymentDetailDrawerProps) {
                       valueText={formatPercent(left, 0)}
                     />
                     <p className="mt-2 text-xs leading-5 text-muted">
-                      {t('Derived here: remaining % = {{max}} − completed_percent ({{consumed}} reported by io.net). {{remaining}} of compute time is left.', {
+                      {t('io.net reports {{consumed}} of the paid window used, so {{remaining}} of compute time is left. The share above is worked out here.', {
                         consumed: formatPercent(consumed ?? 0, 0),
-                        max: COMPLETED_PERCENT_MAX,
                         remaining: formatRemainingMinutes(detail.compute_minutes_remaining) ?? '—',
                       })}
                     </p>
@@ -246,7 +244,7 @@ export function DeploymentDetailDrawer(props: DeploymentDetailDrawerProps) {
                 )}
 
                 <p className="text-xs leading-5 text-muted">
-                  {t('io.net sends amount_paid as a bare number with no currency beside it, so none is shown here. The currency only appears on a price estimate, which reports its own.')}
+                  {t('io.net reports this amount with no currency beside it, so none is shown. A price estimate names its own.')}
                 </p>
 
                 <div>
@@ -297,7 +295,7 @@ export function DeploymentDetailDrawer(props: DeploymentDetailDrawerProps) {
                     </div>
                   </dl>
                   <p className="mt-2 text-xs leading-5 text-muted">
-                    {t('Environment values are shown as a count, not printed: io.net returns plain env_variables here and a deployment often carries a token in one of them. Secret environment variables and registry credentials are never returned at all.')}
+                    {t('Environment values are counted, not shown: a deployment often carries a token in one of them. Secret variables and registry credentials are never returned at all.')}
                   </p>
                 </div>
               </div>
@@ -434,7 +432,7 @@ export function DeploymentDetailDrawer(props: DeploymentDetailDrawerProps) {
               </div>
 
               <p className="text-xs leading-5 text-muted">
-                {t('A container must be named: the server refuses the log route without container_id. It returns io.net’s response body as one block of text — at most {{limit}} lines are requested and the server caps any request at {{max}}.', {
+                {t('Logs are fetched one container at a time, and io.net’s reply is shown as a single block of text. {{limit}} lines are requested; {{max}} is the most that can ever be returned.', {
                   limit: DEFAULT_LOG_LINES,
                   max: MAX_LOG_LINES,
                 })}

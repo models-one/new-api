@@ -6,6 +6,7 @@ import {
   BadgeCell,
   DataTable,
   DataTablePagination,
+  MobileCardList,
   MonoCell,
   useDataTable,
   type DataTableColumns,
@@ -101,6 +102,9 @@ export function OrderHistoryPanel() {
     total: historyQuery.data?.total,
   })
 
+  // "Showing 0-0 of 0 / Page 1 of 1" under an empty state is chrome describing nothing.
+  const hasOrders = !historyQuery.isPending && paginationControls.total > 0
+
   return (
     <Panel className="overflow-hidden">
       <Panel.Header
@@ -122,7 +126,10 @@ export function OrderHistoryPanel() {
         </Panel.Body>
       ) : (
         <>
+          {/* The table needs about twice a phone's width, so the trailing columns were
+              unreachable there; the cards below carry the same rows and columns. */}
           <DataTable
+            className="hidden md:block"
             columns={columns}
             emptyDescription={t('Top-up orders from the last {{days}} days appear here.', {
               days: ORDER_WINDOW_DAYS,
@@ -135,11 +142,28 @@ export function OrderHistoryPanel() {
             minWidthClassName="min-w-[680px]"
             table={table}
           />
-          <DataTablePagination
-            {...paginationControls}
-            isFetching={historyQuery.isFetching}
-            label={t('Top-up order pages')}
-          />
+
+          <div className="p-4 md:hidden">
+            <MobileCardList
+              emptyDescription={t('Top-up orders from the last {{days}} days appear here.', {
+                days: ORDER_WINDOW_DAYS,
+              })}
+              emptyTitle={t('No top-up orders yet')}
+              isFetching={historyQuery.isFetching}
+              isLoading={historyQuery.isPending}
+              label={t('Top-up order cards')}
+              loadingLabel={t('Loading top-up orders')}
+              table={table}
+            />
+          </div>
+
+          {hasOrders ? (
+            <DataTablePagination
+              {...paginationControls}
+              isFetching={historyQuery.isFetching}
+              label={t('Top-up order pages')}
+            />
+          ) : null}
         </>
       )}
     </Panel>

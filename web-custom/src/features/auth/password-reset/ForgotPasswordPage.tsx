@@ -1,5 +1,4 @@
 import { useMutation } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -10,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { AuthLayout } from '@/features/auth/AuthLayout'
 import { AuthConfigGate } from '@/features/auth/components/AuthConfigGate'
+import { AuthSwitchLink } from '@/features/auth/components/AuthSwitchLink'
 import {
   RESET_COUNTDOWN_SECONDS,
   requestPasswordResetEmail,
@@ -90,6 +90,7 @@ function ForgotPasswordForm(props: { config: AuthServerConfig }) {
     <form className="flex flex-col gap-4" noValidate onSubmit={handleSubmit}>
       <Input
         autoComplete="email"
+        autoFocus
         error={emailIssue === undefined ? undefined : emailIssueMessage(emailIssue, t)}
         inputMode="email"
         label={t('Email')}
@@ -97,6 +98,7 @@ function ForgotPasswordForm(props: { config: AuthServerConfig }) {
           setEmail(event.target.value)
           setEmailIssue(undefined)
         }}
+        placeholder={t('Enter your email address')}
         required
         type="email"
         value={email}
@@ -136,16 +138,7 @@ export function ForgotPasswordPage() {
     >
       <AuthConfigGate>{(config) => <ForgotPasswordForm config={config} />}</AuthConfigGate>
 
-      <p className="text-sm leading-6 text-muted">
-        {t('Remembered it?')}
-        {' '}
-        <Link
-          className="font-semibold text-primary underline underline-offset-2 hover:text-primary-strong"
-          to="/sign-in"
-        >
-          {t('Sign in')}
-        </Link>
-      </p>
+      <AuthSwitchLink action={t('Sign in')} prompt={t('Remembered it?')} to="/sign-in" />
     </AuthLayout>
   )
 }

@@ -158,6 +158,30 @@ describe('PlaygroundPage — loading, empty and error states', () => {
   })
 })
 
+describe('PlaygroundPage — request settings', () => {
+  it('labels a billing group by its key and rate, not the server-language description', async () => {
+    renderPage()
+    await screen.findByText('No messages yet')
+
+    const select = screen.getByLabelText('Billing group')
+    expect(within(select).getByRole('option', { name: 'default · 1×' })).toBeInTheDocument()
+    // `desc` is whatever language the administrator typed on the server.
+    expect(screen.queryByText(/默认分组/)).not.toBeInTheDocument()
+  })
+
+  it('draws its own slider track and thumb instead of an empty field box', async () => {
+    renderPage()
+    await screen.findByText('No messages yet')
+
+    const slider = screen.getByRole('slider', { name: 'Temperature' })
+    // `.field` is a 40px bordered input shell: on a range input it drew an empty box
+    // around an unstyled browser thumb, which is why the track is styled here instead.
+    expect(slider).not.toHaveClass('field')
+    expect(slider.className).toContain('[&::-webkit-slider-thumb]:bg-primary')
+    expect(slider.getAttribute('style')).toContain('--range-fill')
+  })
+})
+
 describe('PlaygroundPage — sending', () => {
   it('streams a reply and renders it as sanitized markdown', async () => {
     fetchMock.mockResolvedValue(

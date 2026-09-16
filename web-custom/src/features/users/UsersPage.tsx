@@ -66,6 +66,21 @@ import { formatDateTime, formatNumber, formatPercent, formatQuota } from '@/lib/
 
 const DEFAULT_PAGE_SIZE = 20
 
+/**
+ * Column chrome for the tail of the row — the two columns an administrator scans last.
+ * Eleven columns at their natural width do not fit the content area of a 1440px window,
+ * and every pixel they overflow by pushes the row actions past the right edge, where the
+ * only thing announcing them is a scrollbar macOS does not draw. Folding these two away
+ * until the window is genuinely wide keeps the whole row, actions included, on screen.
+ *
+ * Only the wide table hides them: `MobileCardList` reads `meta.hideOnMobile`, not these
+ * classes, so the phone cards still carry every field.
+ */
+const TAIL_COLUMN = {
+  cellClassName: 'hidden 2xl:table-cell',
+  headerClassName: 'hidden 2xl:table-cell',
+} as const
+
 /** A row-level action that needs a named confirmation before it is sent. */
 type PendingAction = {
   kind: 'delete' | 'demote' | 'disable'
@@ -287,7 +302,7 @@ export function UsersPage() {
               </span>
             )
           },
-          meta: { hideOnMobile: true, label: t('Invites') },
+          meta: { ...TAIL_COLUMN, hideOnMobile: true, label: t('Invites') },
         },
         {
           accessorKey: 'created_at',
@@ -305,7 +320,7 @@ export function UsersPage() {
             if (at === 0) return <MonoCell fallback={t('Never')} value={null} />
             return <MonoCell value={formatDateTime(at, locale)} />
           },
-          meta: { hideOnMobile: true, label: t('Last sign-in'), mono: true },
+          meta: { ...TAIL_COLUMN, hideOnMobile: true, label: t('Last sign-in'), mono: true },
         },
         {
           id: 'actions',
@@ -645,7 +660,7 @@ export function UsersPage() {
               isLoading={listQuery.isLoading}
               label={t('Accounts')}
               loadingLabel={t('Loading accounts')}
-              minWidthClassName="min-w-[96rem]"
+              minWidthClassName="min-w-[60rem] 2xl:min-w-[88rem]"
               table={table}
             />
 
@@ -672,9 +687,7 @@ export function UsersPage() {
       </Panel>
 
       <p className="text-xs leading-5 text-muted">
-        {t('Two figures are worked out in this page rather than sent by the server. The balance meter is quota ÷ (quota + used_quota). Money is quota ÷ QUOTA_PER_UNIT ({{perUnit}}), the quota_per_unit value from /api/status. Everything else is shown exactly as the account endpoints return it.', {
-          perUnit: formatNumber(quotaPerUnit),
-        })}
+        {t('The balance bar shows the share of an account’s lifetime quota still unspent, and money amounts use this deployment’s own quota rate.')}
       </p>
 
       <UserDrawer

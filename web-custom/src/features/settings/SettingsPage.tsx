@@ -156,7 +156,7 @@ export function SettingsPage() {
 
         {statusFilter === 'all' ? null : (
           <p className="text-xs leading-5 text-muted">
-            {t('The status filter applies to the keys on this page only — the server returns every status.')}
+            {t('The status filter narrows the keys on this page only, not the whole list.')}
           </p>
         )}
       </section>
@@ -238,14 +238,18 @@ export function SettingsPage() {
               </div>
             ) : null}
 
-            <Pagination
-              className="pt-2"
-              label={t('API key pages')}
-              onPageChange={setPage}
-              page={page}
-              pageSize={PAGE_SIZE}
-              total={tokensQuery.data.total}
-            />
+            {/* Only when there is somewhere to page to. The card lists elsewhere in the
+                console guard the same way; without it three keys still drew a pager. */}
+            {tokensQuery.data.total > PAGE_SIZE ? (
+              <Pagination
+                className="pt-2"
+                label={t('API key pages')}
+                onPageChange={setPage}
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={tokensQuery.data.total}
+              />
+            ) : null}
           </>
         ) : null}
       </section>

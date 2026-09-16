@@ -335,7 +335,7 @@ export function ApiKeyEditorDialog(props: ApiKeyEditorDialogProps) {
 
         {unlimitedQuota ? null : (
           <NumberInput
-            description={t('Stored as {{units}} quota units, using the divisor from /api/status.', {
+            description={t('Charged against this key until it runs out. Stored as {{units}} quota units.', {
               units: formatNumber(quotaUnits),
             })}
             label={t('Remaining quota')}

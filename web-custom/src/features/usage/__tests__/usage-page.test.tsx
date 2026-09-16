@@ -11,7 +11,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { UsagePage } from '@/features/usage/UsagePage'
@@ -200,7 +200,7 @@ describe('UsagePage', () => {
 
     const projection = panelFor('Projected spend (estimate)')
     expect(projection).toHaveTextContent('charted days')
-    expect(projection).toHaveTextContent('Estimated in this console')
+    expect(projection).toHaveTextContent('An estimate')
   })
 
   it('names deleted and unattributed keys instead of inventing one', async () => {
@@ -227,6 +227,26 @@ describe('UsagePage', () => {
     expect(orders).toHaveTextContent('TN17872080531')
     expect(orders).toHaveTextContent('98.50')
     expect(orders).toHaveTextContent('pending')
+  })
+
+  it('repeats the orders as cards for a phone, where the five columns do not fit', async () => {
+    await renderUsage(seedEverything)
+
+    const cards = screen.getByRole('region', { name: 'Top-up order cards' })
+    expect(within(cards).getByText('TN17872080531')).toBeInTheDocument()
+    // The trailing columns that scroll off a phone are labelled inside the card.
+    expect(within(cards).getAllByText('Charged').length).toBeGreaterThan(0)
+  })
+
+  it('leaves the order pager out while there is nothing to page through', async () => {
+    await renderUsage((client) => {
+      seedEverything(client)
+      client.setQueryData(['topup', 'history', 1, 10, ''], { page: 1, page_size: 10, total: 0, items: [] })
+    })
+
+    // Twice: the desktop table and the phone card list each show the empty state.
+    expect(screen.getAllByText('No top-up orders yet')).toHaveLength(2)
+    expect(screen.queryByRole('navigation', { name: 'Top-up order pages' })).not.toBeInTheDocument()
   })
 
   it('shows loading placeholders rather than zeros before anything resolves', async () => {

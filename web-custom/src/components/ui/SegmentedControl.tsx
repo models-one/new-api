@@ -21,9 +21,12 @@ type SegmentedControlProps<TValue extends string = string> = {
   className?: string
 }
 
+// Heights are picked so the whole control (border + p-1 on both sides) matches the
+// `.field` chrome of the same size: 34 / 42 / 48px. A segmented control and a select on
+// one filter row have to share a baseline.
 const sizeClasses: Record<SegmentedControlSize, string> = {
-  sm: 'min-h-8 px-3 text-xs',
-  md: 'min-h-9 px-4 text-sm',
+  sm: 'min-h-7 px-3 text-xs',
+  md: 'min-h-8 px-4 text-sm',
   lg: 'min-h-10 px-4 text-sm',
 }
 

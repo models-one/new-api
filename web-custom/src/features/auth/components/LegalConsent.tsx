@@ -34,7 +34,10 @@ function LegalLinks(props: { config: AuthServerConfig }) {
   return (
     <>
       {agreement}
-      {agreement && privacy ? ` ${t('and')} ` : null}
+      {/* The separator carries its own spacing rather than hard-coded ASCII spaces around
+          the word: Chinese and Japanese set "和"/"と" tight against the words they join, so
+          padding them here printed "用户协议 和 隐私政策" with two stray gaps. */}
+      {agreement && privacy ? <span className="mx-1">{t('and')}</span> : null}
       {privacy}
     </>
   )

@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import '@/i18n/config'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -154,14 +154,42 @@ describe('the ranking', () => {
   })
 
   it('honours the Top-N selector', async () => {
+    // Six users, because the selector is only offered when a cut can change what is
+    // charted — the fixture used to hold two, where every option showed the same rows.
+    server.users = Array.from({ length: 6 }, (_, index) =>
+      userRow(`user-${index}`, 600_000 - index * 1000, 900_000, 400),
+    )
     renderPage()
     await userTable()
 
-    expect(await screen.findByText('Showing 2 of 2 users that recorded traffic in this range.')).toBeInTheDocument()
+    expect(await screen.findByText('Showing 6 of 6 users that recorded traffic in this range.')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Users shown'), { target: { value: '5' } })
-    // Two users and a Top 5 cut still shows both; the caption reports the real count.
-    expect(await screen.findByText('Showing 2 of 2 users that recorded traffic in this range.')).toBeInTheDocument()
+
+    expect(await screen.findByText('Showing 5 of 6 users that recorded traffic in this range.')).toBeInTheDocument()
+    const rankChart = await screen.findByRole('img', { name: 'Spend by user' })
+    expect(within(rankChart).queryByText('user-5')).not.toBeInTheDocument()
+  })
+
+  it('drops the Top-N selector when no cut could change what is charted', async () => {
+    // Two users: "Top 5", "Top 10" and "Top 50" all draw the same two bars.
+    renderPage()
+    await userTable()
+
+    expect(await screen.findByRole('img', { name: 'Spend by user' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Users shown')).not.toBeInTheDocument()
+  })
+
+  it('states a single user as a figure instead of drawing a one-bar chart', async () => {
+    server.users = [userRow('root', 2_500_000, 900_000, 400)]
+    renderPage()
+    await userTable()
+
+    // The same $5.00 is in the table, the phone cards and the figure, so this only
+    // waits for the panels to settle; the point of the test is the two absences.
+    await waitFor(() => expect(screen.getAllByText('$5.00').length).toBeGreaterThan(0))
+    expect(screen.queryByRole('img', { name: 'Spend by user' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Users shown')).not.toBeInTheDocument()
   })
 
   it('reorders when the measure changes rather than relabelling a spend ranking', async () => {
@@ -209,12 +237,14 @@ describe('empty and error states', () => {
 })
 
 describe('what the endpoints do not report', () => {
-  it('never claims a per-user model split, because /api/data/ carries no username', async () => {
+  it('never claims a per-user model split, because the platform totals carry no username', async () => {
     renderPage()
 
+    // The wording changed with the copy pass: the caption says what the reader can and
+    // cannot conclude, without naming the endpoint it came from.
     expect(
       await screen.findByText(
-        'Every user together, from /api/data/. This endpoint reports no username, so it cannot be split per user.',
+        'Every user together. These platform totals carry no usernames, so they cannot be split per user.',
       ),
     ).toBeInTheDocument()
   })

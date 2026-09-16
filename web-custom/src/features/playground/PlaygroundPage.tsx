@@ -228,8 +228,11 @@ export function PlaygroundPage() {
       </Alert>
     )
   } else if (messages.length === 0) {
+    // `m-auto` centres it in the now full-height body instead of stranding it at the top.
     transcript = (
-      <EmptyState description={emptyDescription} headingLevel={3} title={emptyTitle} />
+      <div className="m-auto w-full">
+        <EmptyState description={emptyDescription} headingLevel={3} title={emptyTitle} />
+      </div>
     )
   } else {
     transcript = (
@@ -254,7 +257,6 @@ export function PlaygroundPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         description={t('Send a prompt to any model your billing group can reach, and read the reply as it streams.')}
-        eyebrow={t('Playground')}
         status={
           groupRatio === undefined ? null : (
             <Badge tone="muted">
@@ -285,7 +287,10 @@ export function PlaygroundPage() {
 
       <div className="grid min-h-0 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section aria-label={t('Conversation')} className="flex min-w-0 flex-col gap-4">
-          <Panel className="flex min-h-[24rem] flex-col">
+          {/* `flex-1`: the parameters rail is much taller than an empty conversation, and a
+              grid row is as tall as its tallest item. Without it the conversation card
+              stopped at its own content and left the rest of the row empty. */}
+          <Panel className="flex min-h-[24rem] flex-1 flex-col">
             <Panel.Header
               headingLevel={2}
               icon={<MessagesSquareIcon aria-hidden="true" className="text-muted" />}
@@ -297,7 +302,7 @@ export function PlaygroundPage() {
               }
             />
 
-            <Panel.Body className="flex-1" scroll>
+            <Panel.Body className="flex flex-1 flex-col" scroll>
               {transcript}
             </Panel.Body>
           </Panel>

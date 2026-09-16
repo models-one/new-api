@@ -187,7 +187,7 @@ export function CurrencySection() {
         />
 
         <NativeSelect
-          description={t('Served on /api/status and applied by the previous console and the public pricing page. This console always formats in US dollars and does not read this key yet.')}
+          description={t('Applied by the previous console and the public pricing page. This console always shows US dollars and ignores this setting for now.')}
           disabled={disabled}
           label={t('Balance display')}
           onChange={(event) =>
@@ -230,7 +230,7 @@ export function CurrencySection() {
 
       <SwitchRow
         checked={form.values.DisplayInCurrencyEnabled}
-        description={t('Off shows raw quota units instead of an amount. Read from /api/status by the previous console; this console always shows an amount.')}
+        description={t('Off shows raw quota units instead of a money amount. Only the previous console honours it; this console always shows an amount.')}
         disabled={disabled}
         label={t('Show balances as money')}
         onCheckedChange={(checked) => form.setField('DisplayInCurrencyEnabled', checked)}

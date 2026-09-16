@@ -45,7 +45,7 @@ export function UpstreamProvidersSection() {
         {t('Upstream providers')}
       </h2>
       <p className="mt-1 max-w-3xl text-sm text-muted">
-        {t('Service-wide averages for the last 24 hours across every account, not your own traffic. Health is derived in this console from the success rate.')}
+        {t('Service-wide averages for the last 24 hours across every account, not your own traffic. Health reflects the success rate.')}
       </p>
 
       {perf.isError || pricing.isError ? (

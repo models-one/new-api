@@ -218,9 +218,25 @@ describe('AnalyticsPage', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Health is a label this console derives from the success rate: 99% or above is Healthy, 90% or above is Degraded, below that is Unhealthy.',
+        'Healthy from 99% success, Degraded from 90%, Unhealthy below that.',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('renders the platform health rows as cards too, for a viewport the table cannot fit', async () => {
+    respondWith({
+      current: [buildPoint()],
+      models: [buildPerfModel()],
+      previous: [],
+    })
+
+    renderPage()
+
+    const cards = within(
+      await screen.findByRole('region', { name: 'Platform service health cards' }),
+    )
+    expect(await cards.findByText('842ms')).toBeInTheDocument()
+    expect(cards.getByText('Healthy')).toBeInTheDocument()
   })
 
   it('offers a real empty state instead of zeros when the range has no usage', async () => {
@@ -230,7 +246,9 @@ describe('AnalyticsPage', () => {
 
     expect(await screen.findByText('No usage in this range')).toBeInTheDocument()
     expect(screen.getByText('No model usage yet')).toBeInTheDocument()
-    expect(screen.getByText('No service metrics available')).toBeInTheDocument()
+    // The health panel now renders a table on desktop and cards on a phone, and happy-dom
+    // keeps both branches in the DOM, so the empty state is asserted as "at least one".
+    expect(screen.getAllByText('No service metrics available').length).toBeGreaterThan(0)
   })
 
   it('derives the token share for each model from the user own rows', async () => {

@@ -245,11 +245,9 @@ export function ModelPerformancePanel() {
 
       <Panel.Footer align="start">
         <p className="text-xs leading-5 text-muted">
-          {t('The three figures above are UNWEIGHTED means across the {{count}} models in this window: sum ÷ model count, with latency and throughput ignoring zeros. The endpoint sorts models by request volume but does not publish the volume itself, so a traffic-weighted average is not computable here.', {
-            count: rollup.modelCount,
-          })}
+          {t('The three figures above average the models in this window equally: a model that took one request counts as much as one that took a million, because request volume is not reported here.')}
           {' '}
-          {t('Grade thresholds are the console\'s, not the server\'s: healthy at SUCCESS_RATE_GOOD_MIN ({{good}}%), degraded at SUCCESS_RATE_WARNING_MIN ({{warning}}%), failing below that.', {
+          {t('Healthy from {{good}}% success, degraded from {{warning}}%, failing below that.', {
             good: SUCCESS_RATE_GOOD_MIN,
             warning: SUCCESS_RATE_WARNING_MIN,
           })}

@@ -219,12 +219,14 @@ export function SignUpForm(props: SignUpFormProps) {
         <form className="flex flex-col gap-4" noValidate onSubmit={handleSubmit}>
           <Input
             autoComplete="username"
+            autoFocus
             description={t('Up to {{max}} characters. This is the name you sign in with.', {
               max: USERNAME_MAX_LENGTH,
             })}
             error={errors.username === undefined ? undefined : issueMessage(errors.username, t)}
             label={t('Username')}
             onChange={(event) => updateValue('username', event.target.value)}
+            placeholder={t('Choose a username')}
             required
             value={values.username}
           />
@@ -238,6 +240,7 @@ export function SignUpForm(props: SignUpFormProps) {
             error={errors.password === undefined ? undefined : issueMessage(errors.password, t)}
             label={t('Password')}
             onChange={(event) => updateValue('password', event.target.value)}
+            placeholder={t('Create a password')}
             required
             value={values.password}
           />
@@ -251,6 +254,7 @@ export function SignUpForm(props: SignUpFormProps) {
             }
             label={t('Confirm password')}
             onChange={(event) => updateValue('confirmPassword', event.target.value)}
+            placeholder={t('Repeat your password')}
             required
             value={values.confirmPassword}
           />
@@ -263,6 +267,7 @@ export function SignUpForm(props: SignUpFormProps) {
                 inputMode="email"
                 label={t('Email')}
                 onChange={(event) => updateValue('email', event.target.value)}
+                placeholder={t('Enter your email address')}
                 required
                 type="email"
                 value={values.email}
@@ -281,6 +286,7 @@ export function SignUpForm(props: SignUpFormProps) {
                 inputClassName="mono"
                 label={t('Verification code')}
                 onChange={(event) => updateValue('verificationCode', event.target.value)}
+                placeholder={t('Enter the code we emailed')}
                 required
                 suffix={
                   <Button

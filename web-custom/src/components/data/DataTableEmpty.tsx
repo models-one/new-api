@@ -9,16 +9,16 @@ type DataTableEmptyProps = {
   /** Pass an icon element that already carries `aria-hidden="true"`. */
   icon?: ReactNode
   action?: ReactNode
-  /**
-   * Renders inside a table row spanning this many columns. Omit to render the
-   * bare block, which is what MobileCardList uses.
-   */
-  colSpan?: number
   className?: string
 }
 
+/**
+ * The block a list shows instead of rows. It is rendered beside the table, never as a
+ * spanning cell: inside the table it inherited the table's min-width, so on a phone a
+ * 1180px-wide "nothing here" centred its own text off-screen.
+ */
 export function DataTableEmpty(props: DataTableEmptyProps) {
-  const block = (
+  return (
     <div className={cn('grid min-h-52 place-items-center px-6 py-10 text-center', props.className)}>
       <div className="max-w-md">
         {props.icon ?? <InboxIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
@@ -29,15 +29,5 @@ export function DataTableEmpty(props: DataTableEmptyProps) {
         {props.action ? <div className="mt-5">{props.action}</div> : null}
       </div>
     </div>
-  )
-
-  if (props.colSpan === undefined) return block
-
-  return (
-    <tr className="border-t border-border">
-      <td className="px-5 py-4" colSpan={props.colSpan}>
-        {block}
-      </td>
-    </tr>
   )
 }

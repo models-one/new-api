@@ -156,6 +156,19 @@ describe('ForgotPasswordPage', () => {
       expect(screen.getByText('solve turnstile')).toHaveAttribute('data-refresh-key', '1'))
   })
 
+  it('hints and focuses its one field, and centres the footnote like its sibling pages', async () => {
+    stubBackend({}, { success: true })
+    await renderPage()
+
+    const field = await screen.findByPlaceholderText('Enter your email address')
+    expect(field).toHaveFocus()
+
+    // Flush-left 14px here versus centred 12px on sign-in was the drift; classes are the only
+    // handle jsdom gives on it, and they are exactly what regressed.
+    const footnote = screen.getByRole('link', { name: 'Sign in' }).closest('p')
+    expect(footnote).toHaveClass('text-center', 'text-xs')
+  })
+
   it('stays on the form when the server rejects the address', async () => {
     stubBackend({}, { message: 'Invalid parameters', success: false })
     await renderPage()

@@ -32,7 +32,7 @@ export function DataTableColumnHeader<TData, TValue>(props: DataTableColumnHeade
 
   if (!props.column.getCanSort()) {
     return (
-      <span className={cn('block font-semibold', alignClasses[align], props.className)}>{props.title}</span>
+      <span className={cn('block font-semibold uppercase tracking-[0.08em]', alignClasses[align], props.className)}>{props.title}</span>
     )
   }
 
@@ -43,7 +43,7 @@ export function DataTableColumnHeader<TData, TValue>(props: DataTableColumnHeade
   return (
     <button
       className={cn(
-        'group inline-flex min-h-7 items-center gap-1.5 rounded-[4px] font-semibold transition-colors hover:text-foreground',
+        'group inline-flex min-h-7 items-center gap-1.5 rounded-[4px] font-semibold uppercase tracking-[0.08em] transition-colors hover:text-foreground',
         state === 'none' ? 'text-muted' : 'text-foreground',
         align === 'right' ? 'flex-row-reverse' : '',
         props.className,

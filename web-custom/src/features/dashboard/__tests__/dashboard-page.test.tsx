@@ -11,7 +11,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
@@ -145,10 +145,23 @@ describe('DashboardPage', () => {
   it('prefixes the masked key and keeps the removed environment column out', async () => {
     await renderDashboard(seedBalanceAndKeys)
 
-    expect(screen.getByText('sk-VGjC**********8k3k')).toBeInTheDocument()
+    // Scoped to the table: the panel now also renders the phone card list, which repeats
+    // every cell, so the masked key legitimately appears twice in the document.
+    const table = screen.getByRole('table', { name: 'API keys' })
+    expect(within(table).getByText('sk-VGjC**********8k3k')).toBeInTheDocument()
     expect(screen.getByText('Newest 2 of 3 keys')).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: 'Environment' })).toBeNull()
     expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument()
+  })
+
+  it('repeats the key rows as cards for a phone, where the table does not fit', async () => {
+    await renderDashboard(seedBalanceAndKeys)
+
+    const cards = screen.getByRole('region', { name: 'API key cards' })
+    expect(within(cards).getByText('sk-VGjC**********8k3k')).toBeInTheDocument()
+    // The row actions are reachable there too; in the table they scroll off a phone.
+    expect(within(cards).getAllByRole('group', { name: 'Key actions' })).toHaveLength(2)
+    expect(within(cards).getAllByRole('button', { name: 'Delete key' })).toHaveLength(2)
   })
 
   it('asks for confirmation before deleting a key', async () => {

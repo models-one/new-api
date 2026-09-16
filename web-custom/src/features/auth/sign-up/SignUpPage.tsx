@@ -1,10 +1,10 @@
-import { Link } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert } from '@/components/ui/Alert'
 import { AuthLayout } from '@/features/auth/AuthLayout'
 import { AuthConfigGate } from '@/features/auth/components/AuthConfigGate'
+import { AuthSwitchLink } from '@/features/auth/components/AuthSwitchLink'
 import { AuthTermsFooter } from '@/features/auth/components/LegalConsent'
 import { captureReferralCode } from '@/features/auth/referral'
 import { useAuthServerConfig } from '@/features/auth/server-config'
@@ -47,16 +47,7 @@ export function SignUpPage() {
         }
       </AuthConfigGate>
 
-      <p className="text-sm leading-6 text-muted">
-        {t('Already have an account?')}
-        {' '}
-        <Link
-          className="font-semibold text-primary underline underline-offset-2 hover:text-primary-strong"
-          to="/sign-in"
-        >
-          {t('Sign in')}
-        </Link>
-      </p>
+      <AuthSwitchLink action={t('Sign in')} prompt={t('Already have an account?')} to="/sign-in" />
     </AuthLayout>
   )
 }

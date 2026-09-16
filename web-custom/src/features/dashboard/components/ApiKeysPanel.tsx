@@ -5,7 +5,7 @@ import Trash2Icon from 'lucide-react/dist/esm/icons/trash-2'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ActionsCell, DataTable, MonoCell, useDataTable } from '@/components/data'
+import { ActionsCell, DataTable, MobileCardList, MonoCell, useDataTable } from '@/components/data'
 import type { DataTableColumns, DataTableRowAction } from '@/components/data'
 import { ConfirmDialog, toast } from '@/components/overlay'
 import { Button, CopyButton, Panel, StatusBadge, statusToTone } from '@/components/ui'
@@ -176,18 +176,37 @@ export function ApiKeysPanel() {
           />
         </Panel.Body>
       ) : (
-        <DataTable
-          columns={columns}
-          emptyAction={manageKeysLink}
-          emptyDescription={t('Create a key to start routing requests.')}
-          emptyTitle={t('No API keys yet')}
-          isFetching={keys.isFetching}
-          isLoading={keys.isPending}
-          label={t('API keys')}
-          minWidthClassName="min-w-[720px]"
-          skeletonRows={KEY_PREVIEW_SIZE}
-          table={table}
-        />
+        <>
+          {/* Four columns need 720px. This is the signed-in landing page, so on a phone
+              the key preview was cut mid-string and the row actions were off-screen
+              entirely; the cards below carry the same rows and the same actions. */}
+          <DataTable
+            className="hidden md:block"
+            columns={columns}
+            emptyAction={manageKeysLink}
+            emptyDescription={t('Create a key to start routing requests.')}
+            emptyTitle={t('No API keys yet')}
+            isFetching={keys.isFetching}
+            isLoading={keys.isPending}
+            label={t('API keys')}
+            minWidthClassName="min-w-[720px]"
+            skeletonRows={KEY_PREVIEW_SIZE}
+            table={table}
+          />
+
+          <div className="p-4 md:hidden">
+            <MobileCardList
+              emptyAction={manageKeysLink}
+              emptyDescription={t('Create a key to start routing requests.')}
+              emptyTitle={t('No API keys yet')}
+              isFetching={keys.isFetching}
+              isLoading={keys.isPending}
+              label={t('API key cards')}
+              skeletonRows={KEY_PREVIEW_SIZE}
+              table={table}
+            />
+          </div>
+        </>
       )}
     </Panel>
   )

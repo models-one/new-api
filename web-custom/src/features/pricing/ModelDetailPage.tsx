@@ -316,7 +316,9 @@ export function ModelDetailPage() {
     attributes.push({
       id: 'version',
       term: t('Pricing version'),
-      description: <span className="mono text-xs">{model.pricing_version}</span>,
+      // A hash offers no break opportunity, so without `break-all` it runs straight out
+      // of the card and drags the whole page into a sideways scroll on a phone.
+      description: <span className="mono text-xs break-all">{model.pricing_version}</span>,
     })
   }
 

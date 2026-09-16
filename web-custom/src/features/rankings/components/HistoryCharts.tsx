@@ -47,7 +47,7 @@ export function ModelVolumeChart(props: { history: ModelHistorySeries | undefine
         description={
           chart.omitted > 0
             ? t(
-                'Tokens per model over {{period}}. Showing the {{shown}} busiest of {{total}} series the server returned.',
+                'Tokens per model over {{period}}. Showing the {{shown}} busiest of {{total}} models.',
                 { period: props.periodLabel, shown: HISTORY_SERIES_LIMIT, total: HISTORY_SERIES_LIMIT + chart.omitted },
               )
             : t('Tokens per model over {{period}}.', { period: props.periodLabel })
@@ -74,10 +74,9 @@ export function ModelVolumeChart(props: { history: ModelHistorySeries | undefine
               series={series}
               xTickCount={Math.min(6, Math.max(2, labels.length))}
             />
+            {/* Says what the flat stretches mean, without describing how the data arrives. */}
             <p className="mt-3 text-xs text-muted">
-              {t(
-                'Buckets with no traffic for a model are drawn at zero: the payload omits those points rather than sending a zero.',
-              )}
+              {t('A model is drawn at zero for any period it relayed no traffic.')}
             </p>
           </>
         )}

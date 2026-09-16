@@ -78,7 +78,7 @@ export function SpendSummary(props: SpendSummaryProps) {
       {projectedQuota === null ? null : (
         <StatCard
           footer={t(
-            'Estimated in this console: the {{spend}} above spread over {{days}} charted days, then extended to all {{total}} days of the month.',
+            'An estimate: the {{spend}} above spread over {{days}} charted days, then extended to all {{total}} days of the month.',
             {
               days: chartedDays,
               spend: formatCurrency(spend),

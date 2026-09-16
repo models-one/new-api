@@ -71,6 +71,21 @@ const DEFAULT_PAGE_SIZE = 20
 /** How many chips a cell shows before it collapses the rest into a "+N". */
 const CHIP_LIMIT = 3
 
+/**
+ * Column chrome for the two columns that are scanned last. Eleven columns at their natural
+ * width do not fit the content area of a 1440px window, and everything they overflow by
+ * pushes the row actions past the right edge, where the only thing announcing them is a
+ * scrollbar macOS does not draw. Folding these away until the window is genuinely wide
+ * keeps the whole row, actions included, on screen.
+ *
+ * Only the wide table hides them: `MobileCardList` reads `meta.hideOnMobile`, not these
+ * classes, so the phone cards still carry every field.
+ */
+const TAIL_COLUMN = {
+  cellClassName: 'hidden 2xl:table-cell',
+  headerClassName: 'hidden 2xl:table-cell',
+} as const
+
 type PendingDelete = { id: number; name: string }
 
 export function ModelRegistryPage() {
@@ -258,7 +273,7 @@ export function ModelRegistryPage() {
         enableSorting: false,
         header: ({ column }) => <DataTableColumnHeader column={column} title={t('Endpoints')} />,
         cell: ({ row }) => <ChipList items={parseEndpoints(row.original.endpoints)} />,
-        meta: { hideOnMobile: true, label: t('Endpoints') },
+        meta: { ...TAIL_COLUMN, hideOnMobile: true, label: t('Endpoints') },
       },
       {
         id: 'bound_channels',
@@ -284,7 +299,7 @@ export function ModelRegistryPage() {
         cell: ({ row }) => (
           <MonoCell value={formatDateTime(row.original.updated_time, locale)} />
         ),
-        meta: { hideOnMobile: true, label: t('Updated') },
+        meta: { ...TAIL_COLUMN, hideOnMobile: true, label: t('Updated') },
       },
       {
         id: 'actions',
@@ -580,7 +595,7 @@ export function ModelRegistryPage() {
               isLoading={listQuery.isLoading}
               label={t('Model definitions')}
               loadingLabel={t('Loading model definitions')}
-              minWidthClassName="min-w-[86rem]"
+              minWidthClassName="min-w-[56rem] 2xl:min-w-[82rem]"
               table={table}
             />
 
@@ -607,7 +622,7 @@ export function ModelRegistryPage() {
       </Panel>
 
       <p className="text-xs leading-5 text-muted">
-        {t('Channels, groups, billing shape and the names a rule matched are recomputed by the server on every read and cannot be edited here. The endpoint list is filled in the same way whenever nothing is stored, so what you see may be derived rather than saved.')}
+        {t('Channels, groups, billing shape and the names a rule matched are worked out by the gateway itself, so they cannot be edited here. Endpoints are filled in the same way when none are saved.')}
       </p>
 
       <ModelDrawer

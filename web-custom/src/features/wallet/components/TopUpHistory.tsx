@@ -6,6 +6,7 @@ import {
   BadgeCell,
   DataTable,
   DataTablePagination,
+  MobileCardList,
   MonoCell,
   useDataTable,
   type DataTableColumns,
@@ -122,6 +123,9 @@ export function TopUpHistory() {
     getRowId: (row) => String(row.id),
   })
 
+  // "Showing 0-0 of 0 / Page 1 of 1" under an empty state is chrome describing nothing.
+  const hasOrders = !historyQuery.isPending && paginationControls.total > 0
+
   if (historyQuery.isError) {
     return (
       <div className="p-6">
@@ -146,13 +150,18 @@ export function TopUpHistory() {
     )
   }
 
+  const emptyDescription = t('Top-up orders from the last {{days}} days appear here.', {
+    days: HISTORY_WINDOW_DAYS,
+  })
+
   return (
     <>
+      {/* Seven columns need about 880px, so on a phone everything from "Credited" on was
+          unreachable; the cards below carry the same rows and column labels. */}
       <DataTable
+        className="hidden md:block"
         columns={columns}
-        emptyDescription={t('Top-up orders from the last {{days}} days appear here.', {
-          days: HISTORY_WINDOW_DAYS,
-        })}
+        emptyDescription={emptyDescription}
         emptyTitle={t('No top-up orders yet')}
         isFetching={historyQuery.isFetching}
         isLoading={historyQuery.isPending}
@@ -161,11 +170,26 @@ export function TopUpHistory() {
         minWidthClassName="min-w-[880px]"
         table={table}
       />
-      <DataTablePagination
-        {...paginationControls}
-        isFetching={historyQuery.isFetching}
-        label={t('Top-up order pages')}
-      />
+
+      <div className="p-4 md:hidden">
+        <MobileCardList
+          emptyDescription={emptyDescription}
+          emptyTitle={t('No top-up orders yet')}
+          isFetching={historyQuery.isFetching}
+          isLoading={historyQuery.isPending}
+          label={t('Top-up order cards')}
+          loadingLabel={t('Loading top-up orders')}
+          table={table}
+        />
+      </div>
+
+      {hasOrders ? (
+        <DataTablePagination
+          {...paginationControls}
+          isFetching={historyQuery.isFetching}
+          label={t('Top-up order pages')}
+        />
+      ) : null}
     </>
   )
 }

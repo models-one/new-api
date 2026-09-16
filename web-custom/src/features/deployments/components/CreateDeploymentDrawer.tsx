@@ -455,7 +455,7 @@ export function CreateDeploymentDrawer(props: CreateDeploymentDrawerProps) {
 
               {overCapacity ? (
                 <Alert icon={<TriangleAlertIcon aria-hidden="true" />} tone="warning">
-                  {t('Checked here, not by the server: {{replicas}} replicas is more than the {{capacity}} io.net currently reports free across the selected locations (the sum of available_count). io.net decides whether this fits.', {
+                  {t('Checked here, not by io.net: {{replicas}} replicas is more than the {{capacity}} currently reported free across the selected locations. io.net decides whether this fits.', {
                     capacity: formatNumber(selectedCapacity),
                     replicas: formatNumber(form.replica_count),
                   })}

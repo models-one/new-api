@@ -1,5 +1,6 @@
 import type { Tone } from '@/components/ui'
 import { LOG_TYPE, parseLogOther, type UserLog } from '@/lib/api/logs'
+import { fromUnixSeconds } from '@/lib/format'
 
 /**
  * Presentation helpers for `/api/log/self` and its admin twin `/api/log/`.
@@ -52,6 +53,50 @@ export const LOG_TYPE_FILTER_VALUES: readonly number[] = [
   LOG_TYPE.system,
   LOG_TYPE.login,
 ]
+
+/**
+ * Whether a page of rows crosses a local calendar day.
+ *
+ * The listing is ordered newest first and paged by the server, so a page can hold
+ * rows from several days — the default range is all time. Rendered as bare clock
+ * times those rows read as unsorted: 08:39:20 above 11:39:20 looks like the order
+ * broke rather than like yesterday above today. Days are compared in the browser's
+ * own zone, the same zone the timestamps are rendered in.
+ */
+export function logsSpanMultipleDays(timestamps: readonly number[]): boolean {
+  let firstDay: number | undefined
+  for (const seconds of timestamps) {
+    if (!Number.isFinite(seconds) || seconds <= 0) continue
+    const date = fromUnixSeconds(seconds)
+    const day = date.getFullYear() * 10_000 + date.getMonth() * 100 + date.getDate()
+    if (firstDay === undefined) {
+      firstDay = day
+      continue
+    }
+    if (day !== firstDay) return true
+  }
+  return false
+}
+
+/**
+ * Day and clock for the Time column, used in place of the clock alone once
+ * {@link logsSpanMultipleDays} is true.
+ *
+ * The year is left off deliberately: it is the same for every row of a page in
+ * practice, and the column would otherwise become the widest in the table. The full
+ * timestamp stays on the cell's title and in the expanded row detail.
+ */
+export function formatLogDayTime(seconds: number, locale: string): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—'
+  return fromUnixSeconds(seconds).toLocaleString(locale === '' ? undefined : locale, {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
 
 /**
  * `Log.UseTime` is `now.Unix() - start.Unix()` — a count of WHOLE SECONDS, never

@@ -273,7 +273,7 @@ export function AsyncTasksPage() {
           row.original.task_id === '' ? (
             <MonoCell value={null} />
           ) : (
-            <TruncatedCell maxWidthClassName="max-w-[13rem]" mono value={row.original.task_id} />
+            <TruncatedCell maxWidthClassName="max-w-[11rem]" mono value={row.original.task_id} />
           ),
         meta: { label: t('Task ID'), mobilePrimary: true, mono: true },
       },
@@ -359,7 +359,7 @@ export function AsyncTasksPage() {
           ) : (
             <TruncatedCell
               className="text-destructive"
-              maxWidthClassName="max-w-[16rem]"
+              maxWidthClassName="max-w-[12rem]"
               value={row.original.fail_reason}
             />
           ),
@@ -611,7 +611,12 @@ export function AsyncTasksPage() {
               isLoading={tasksQuery.isLoading || isResolving}
               label={t('Async tasks')}
               loadingLabel={t('Loading tasks')}
-              minWidthClassName={isAdminView ? 'min-w-[88rem]' : 'min-w-[72rem]'}
+              /**
+               * Only as wide as the header row needs. The old floor was wider than the
+               * panel on a laptop even with no rows in it, which cut the trailing
+               * header mid-word for no reason.
+               */
+              minWidthClassName={isAdminView ? 'min-w-[66rem]' : 'min-w-[60rem]'}
               renderExpandedRow={(row) => (
                 <AsyncDetailPanel isAdminView={isAdminView} task={row.original} />
               )}

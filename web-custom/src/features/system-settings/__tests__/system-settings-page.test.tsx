@@ -26,9 +26,6 @@ vi.mock('@tanstack/react-router', () => ({
 const { SystemSettingsPage } = await import('@/features/system-settings/SystemSettingsPage')
 const { SYSTEM_SETTINGS_ROLE } = await import('@/features/system-settings/access')
 const { SETTINGS_GROUPS } = await import('@/features/system-settings/groups/registry')
-const { SectionPlaceholder } = await import(
-  '@/features/system-settings/components/SectionPlaceholder'
-)
 
 /**
  * The three keys `/system-settings/operations/behavior` reads, with the values the seeded
@@ -204,11 +201,11 @@ describe('the group and section navigation', () => {
     expect(await screen.findByLabelText(/System name/)).toBeInTheDocument()
   })
 
-  it('has a real component behind every registered section, so no placeholder is reachable', () => {
-    // This used to point at security/ssrf as an example of an unbuilt section. Every group
-    // has since been rebuilt, so naming any one section here would break again the moment
-    // it landed. The invariant worth holding is the one the rebuild set out to reach: the
-    // registry no longer routes anything to the placeholder.
+  it('has a real component behind every registered section', () => {
+    // `Component` is a required field now, so this is belt-and-braces against a section
+    // being added with a placeholder-ish stub. The old sibling case asserted the contract
+    // of a "not rebuilt yet" placeholder; that component is gone, because the copy it
+    // showed told the reader the console was half-built and nothing could reach it.
     const unbuilt = SETTINGS_GROUPS.flatMap((group) =>
       group.sections
         .filter((section) => section.Component === undefined)
@@ -216,17 +213,6 @@ describe('the group and section navigation', () => {
     )
 
     expect(unbuilt).toEqual([])
-  })
-
-  it('still renders the placeholder’s own contract for a section without a component', () => {
-    // The fallback stays in the shell for a section added to the registry ahead of its
-    // form, so its contract is asserted directly rather than through the registry: a
-    // heading that matches the nav entry, and no claim about the settings behind it.
-    render(<SectionPlaceholder legacyPath="/console/setting?tab=example" title="Example section" />)
-
-    expect(screen.getByRole('heading', { name: 'Example section' })).toBeInTheDocument()
-    expect(screen.getByText('Not available here yet')).toBeInTheDocument()
-    expect(screen.getByText(/\/console\/setting\?tab=example/)).toBeInTheDocument()
   })
 })
 

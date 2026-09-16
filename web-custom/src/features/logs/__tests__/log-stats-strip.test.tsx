@@ -65,14 +65,15 @@ describe('LogStatsStrip', () => {
     expect(screen.getByRole('region', { name: 'Log totals' })).toBeInTheDocument()
   })
 
+  // The caveat itself is unchanged — SumUsedQuota still pins type=2 — but the caption
+  // now states the consequence rather than the mechanism, so this pins the new wording
+  // and that it names no internal constant.
   it('also says the spend total ignores the type filter, because SumUsedQuota pins type=2', async () => {
     await renderStrip()
 
-    expect(
-      screen.getByText(
-        'Usage rows only — the server pins type=2 for this total and ignores the type filter.',
-      ),
-    ).toBeInTheDocument()
+    const caption = screen.getByText('Usage only — the type filter does not change this total.')
+    expect(caption).toBeInTheDocument()
+    expect(caption.textContent).not.toMatch(/type=2|server/)
   })
 
   it('reads the self stat route by default', async () => {

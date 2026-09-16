@@ -112,7 +112,10 @@ export function CatalogueFilters(props: CatalogueFiltersProps) {
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <SegmentedControl
-          className="self-start"
+          // `self-start` keeps the pill at its own width while the row is stacked; once the
+          // row goes horizontal it has to follow the row's end alignment, or it floats a
+          // control-height above the sort select it shares the line with.
+          className="self-start xl:self-end"
           label={t('Billing type')}
           onChange={(next) => onChange({ quotaType: next })}
           options={quotaOptions}

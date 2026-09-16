@@ -13,7 +13,6 @@ import {
   newEntrantCount,
   rankedShareCovered,
   rankedTokenTotal,
-  vendorMovement,
   vendorShareChart,
 } from '@/features/rankings/rankings-presentation'
 
@@ -79,13 +78,10 @@ describe('modelMovement', () => {
   })
 })
 
-describe('vendorMovement', () => {
-  it('never reports "new", because vendor rows carry no previous rank to prove it', () => {
-    expect(vendorMovement(100)).toEqual({ kind: 'up', growthPct: 100 })
-    expect(vendorMovement(0)).toEqual({ kind: 'flat' })
-    expect(vendorMovement(-19.3)).toEqual({ kind: 'down', growthPct: -19.3 })
-  })
-})
+// The `vendorMovement` case this block used to pin is gone with the helper: a vendor row has
+// no previous rank, so its growth could never be told apart from "had no traffic before", and
+// the provider leaderboard no longer claims a change at all. `VendorLeaderboard` is what holds
+// that behaviour now, and rankings-page.test.tsx asserts it.
 
 describe('formatting', () => {
   it('signs growth and drops the decimal only past 100%', () => {

@@ -5,7 +5,7 @@ import RotateCcwIcon from 'lucide-react/dist/esm/icons/rotate-ccw'
 import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ActionsCell, BadgeCell, DataTable, MonoCell, TruncatedCell, useDataTable } from '@/components/data'
+import { ActionsCell, BadgeCell, DataTable, MobileCardList, MonoCell, TruncatedCell, useDataTable } from '@/components/data'
 import type { DataTableColumns, DataTableRowAction } from '@/components/data'
 import { StatusBadge } from '@/components/ui'
 import type { AdminPlanRecord, SubscriptionPlan } from '@/features/subscriptions/api'
@@ -188,19 +188,42 @@ export function PlansTable(props: PlansTableProps) {
     total: rows.length,
   })
 
+  const emptyDescription = t('A plan describes what a subscriber pays, how long the subscription lasts and how much quota it grants. Create one to open the storefront.')
+  const emptyTitle = t('No subscription plans yet')
+
+  // Ten columns need roughly 1180px, so on a phone the table is three viewports wide.
+  // The cards are the same rows and the same column definitions, read top to bottom
+  // instead of sideways — the arrangement the admin tables already use.
   return (
-    <DataTable
-      columns={columns}
-      emptyAction={props.emptyAction}
-      emptyDescription={t('A plan describes what a subscriber pays, how long the subscription lasts and how much quota it grants. Create one to open the storefront.')}
-      emptyTitle={t('No subscription plans yet')}
-      isFetching={props.isFetching}
-      isLoading={props.isLoading}
-      label={t('Subscription plans')}
-      loadingLabel={t('Loading subscription plans')}
-      minWidthClassName="min-w-[1180px]"
-      skeletonRows={4}
-      table={table}
-    />
+    <>
+      <DataTable
+        className="hidden md:block"
+        columns={columns}
+        emptyAction={props.emptyAction}
+        emptyDescription={emptyDescription}
+        emptyTitle={emptyTitle}
+        isFetching={props.isFetching}
+        isLoading={props.isLoading}
+        label={t('Subscription plans')}
+        loadingLabel={t('Loading subscription plans')}
+        minWidthClassName="min-w-[1180px]"
+        skeletonRows={4}
+        table={table}
+      />
+
+      <div className="p-4 md:hidden">
+        <MobileCardList
+          emptyAction={props.emptyAction}
+          emptyDescription={emptyDescription}
+          emptyTitle={emptyTitle}
+          isFetching={props.isFetching}
+          isLoading={props.isLoading}
+          label={t('Subscription plan cards')}
+          loadingLabel={t('Loading subscription plans')}
+          skeletonRows={4}
+          table={table}
+        />
+      </div>
+    </>
   )
 }

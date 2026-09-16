@@ -70,9 +70,11 @@ export function BalanceCard(props: BalanceCardProps) {
 
       {user.data ? (
         <>
+          {/* Cents: 18px, regular, muted — the same treatment the wallet uses, so the
+              balance is not two visibly different numbers on two pages. */}
           <p className="mono mt-1 text-5xl font-bold text-foreground">
             {whole}
-            <span className="text-lg text-muted">{fraction}</span>
+            <span className="text-lg font-normal text-muted">{fraction}</span>
           </p>
 
           {recentUsage.isPending ? (

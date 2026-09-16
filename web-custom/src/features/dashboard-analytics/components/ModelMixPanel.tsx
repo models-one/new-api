@@ -47,7 +47,7 @@ export function ModelMixPanel(props: ModelMixPanelProps) {
   return (
     <Panel>
       <Panel.Header
-        description={t('Every user together, from /api/data/. This endpoint reports no username, so it cannot be split per user.')}
+        description={t('Every user together. These platform totals carry no usernames, so they cannot be split per user.')}
         title={t('Platform model mix')}
       />
       <Panel.Body>
@@ -85,7 +85,7 @@ export function ModelMixPanel(props: ModelMixPanelProps) {
             />
             <DerivationNote>
               {t(
-                'Summed in this console per model name. The MODEL_SLICE_LIMIT = {{limit}} largest get their own slice; the rest are added into one "more models" slice rather than dropped.',
+                'Totalled per model. The {{limit}} largest get their own slice; everything smaller is grouped into one rather than dropped.',
                 { limit: MODEL_SLICE_LIMIT },
               )}
             </DerivationNote>

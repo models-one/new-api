@@ -36,11 +36,13 @@ import {
   LOG_OTHER_COUNT_KEYS,
   LOG_TYPE_FILTER_VALUES,
   LOG_TYPE_LABEL_KEYS,
+  formatLogDayTime,
   logAdminOtherEntries,
   logOtherEntries,
   logRequestId,
   logRowId,
   logTypeTone,
+  logsSpanMultipleDays,
   useTimeIsSubSecond,
   type LogOtherEntry,
 } from '@/features/logs/log-presentation'
@@ -229,7 +231,7 @@ function LogDetailPanel(props: { log: UserLog; isAdminView: boolean }) {
         <div className="min-w-0 lg:col-span-2">
           <p className="eyebrow">{t('Admin-only metadata')}</p>
           <p className="mt-2 text-sm leading-6 text-muted">
-            {t('Only the all-users scope carries these keys — /api/log/self strips them. Shown under their raw backend paths.')}
+            {t('Recorded for administrators only, and shown under their original names.')}
           </p>
           <DescriptionList
             className="mt-3"
@@ -311,6 +313,15 @@ export function LogsPage() {
     || searchValue !== ''
     || (isAdminView && channelId !== '')
 
+  /**
+   * Driven by the rows on screen, not by the selected range: a 24-hour window still
+   * crosses midnight, and an all-time window can hold a single busy day.
+   */
+  const showDayInTimeColumn = useMemo(
+    () => logsSpanMultipleDays((logs ?? []).map((log) => log.created_at)),
+    [logs],
+  )
+
   const columns = useMemo<DataTableColumns<UserLog>>(() => {
     /**
      * Three columns that only carry information in the everyone scope.
@@ -370,7 +381,11 @@ export function LogsPage() {
         cell: ({ row }) => (
           <MonoCell
             title={formatDateTime(row.original.created_at, locale)}
-            value={formatTime(row.original.created_at, locale)}
+            value={
+              showDayInTimeColumn
+                ? formatLogDayTime(row.original.created_at, locale)
+                : formatTime(row.original.created_at, locale)
+            }
           />
         ),
         meta: { label: t('Time'), mono: true },
@@ -407,17 +422,30 @@ export function LogsPage() {
         meta: { label: t('Request ID'), mobilePrimary: true, mono: true },
       },
       {
+        // Model ids and key names are open-ended strings, so both columns are capped
+        // and truncate with the full value on hover. Left to size themselves they set
+        // the width of the whole table from whatever the longest row happens to hold.
         id: 'model_name',
         enableSorting: false,
         header: ({ column }) => <DataTableColumnHeader column={column} title={t('Model')} />,
-        cell: ({ row }) => <MonoCell value={row.original.model_name} />,
+        cell: ({ row }) =>
+          row.original.model_name === '' ? (
+            <MonoCell value={null} />
+          ) : (
+            <TruncatedCell maxWidthClassName="max-w-[9rem]" mono value={row.original.model_name} />
+          ),
         meta: { label: t('Model'), mono: true },
       },
       {
         id: 'token_name',
         enableSorting: false,
         header: ({ column }) => <DataTableColumnHeader column={column} title={t('API key')} />,
-        cell: ({ row }) => <MonoCell value={row.original.token_name} />,
+        cell: ({ row }) =>
+          row.original.token_name === '' ? (
+            <MonoCell value={null} />
+          ) : (
+            <TruncatedCell maxWidthClassName="max-w-[10rem]" mono value={row.original.token_name} />
+          ),
         meta: { label: t('API key'), mono: true },
       },
       ...adminColumns,
@@ -489,7 +517,7 @@ export function LogsPage() {
         meta: { align: 'right', label: t('Details') },
       },
     ]
-  }, [isAdminView, locale, quotaPerUnit, t])
+  }, [isAdminView, locale, quotaPerUnit, showDayInTimeColumn, t])
 
   const { table, paginationControls } = useDataTable<UserLog>({
     columns,
@@ -629,9 +657,16 @@ export function LogsPage() {
             ) : undefined
           }
           filters={
-            <>
+            /**
+             * A grid, not a wrapping row of fixed-width controls: three controls with
+             * room for two wrapped the third under the first and left an empty
+             * rectangle beside it, which reads as a control that failed to render.
+             * Two columns where they fit, with the odd one out spanning the row so
+             * neither row has a hole; one column below that, where two would leave
+             * each select too narrow to read its own value.
+             */
+            <div className="grid w-[10rem] max-w-full grid-cols-1 gap-2 xl:w-[19rem] xl:grid-cols-2">
               <NativeSelect
-                className="w-40"
                 hideLabel
                 label={t('Log type')}
                 onChange={(event) => {
@@ -643,7 +678,6 @@ export function LogsPage() {
                 value={String(logType)}
               />
               <NativeSelect
-                className="w-40"
                 disabled={groupsQuery.isLoading}
                 hideLabel
                 label={t('Group')}
@@ -656,7 +690,7 @@ export function LogsPage() {
                 value={group}
               />
               <NativeSelect
-                className="w-40"
+                className={isAdminView ? undefined : 'xl:col-span-2'}
                 hideLabel
                 label={t('Time range')}
                 onChange={(event) => handleTimeRangeChange(event.target.value as TimeRangeId)}
@@ -666,7 +700,6 @@ export function LogsPage() {
               />
               {isAdminView ? (
                 <SearchInput
-                  className="w-40"
                   hideLabel
                   label={t('Channel ID')}
                   onKeyDown={(event) => {
@@ -681,15 +714,21 @@ export function LogsPage() {
                   value={channelDraft}
                 />
               ) : null}
-            </>
+            </div>
           }
           filtersLabel={t('Request log filters')}
           isResetDisabled={!hasActiveFilters}
           label={t('Request log filters')}
           search={
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            /**
+             * Wraps rather than squeezes. The field selector, the box and the button
+             * together need more room than the toolbar's search slot has at a laptop
+             * width, and a flex row shrinks the box first: the placeholder was being
+             * cut mid-word, so the control stopped saying what it searched.
+             */
+            <div className="flex flex-wrap items-start gap-2">
               <NativeSelect
-                className="sm:w-36 sm:shrink-0"
+                className="w-full shrink-0 sm:w-32"
                 hideLabel
                 label={t('Search field')}
                 onChange={(event) => {
@@ -703,7 +742,7 @@ export function LogsPage() {
                 value={searchField}
               />
               <SearchInput
-                className="min-w-0 sm:flex-1"
+                className="min-w-[11rem] flex-1"
                 description={searchDescriptions[searchField]}
                 hideLabel
                 label={searchLabels[searchField]}
@@ -718,7 +757,7 @@ export function LogsPage() {
                 size="sm"
                 value={searchDraft}
               />
-              <Button onClick={commitSearch} size="sm" variant="outline">
+              <Button className="shrink-0" onClick={commitSearch} size="sm" variant="outline">
                 {t('Search')}
               </Button>
             </div>

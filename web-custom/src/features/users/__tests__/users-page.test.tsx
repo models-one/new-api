@@ -219,14 +219,17 @@ describe('the account table', () => {
       .toHaveAttribute('aria-valuetext', '50.0%')
   })
 
-  it('spells out that the meter and the money are worked out client-side', async () => {
+  // This used to assert the note quoted `used_quota`, `QUOTA_PER_UNIT` and `/api/status`
+  // back at the reader. That was the defect, so the assertion is inverted: the note has to
+  // say what the two derived figures MEAN, without naming a server internal and without
+  // explaining which side of the wire computed them.
+  it('explains the derived figures without naming server internals', async () => {
     renderPage()
     await accountTable()
 
-    expect(
-      screen.getByText(/quota ÷ \(quota \+ used_quota\)/),
-    ).toBeInTheDocument()
-    expect(screen.getByText(/QUOTA_PER_UNIT \(500,000\)/)).toBeInTheDocument()
+    const note = screen.getByText(/lifetime quota still unspent/)
+    expect(note).toHaveTextContent('quota rate')
+    expect(note.textContent).not.toMatch(/used_quota|QUOTA_PER_UNIT|\/api\/status|the server/)
   })
 
   it('shows the admin remark and hides a display name that repeats the username', async () => {

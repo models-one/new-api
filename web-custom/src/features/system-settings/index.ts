@@ -8,7 +8,6 @@ export { SYSTEM_SETTINGS_ROLE, useSystemSettingsAccess } from '@/features/system
 export type { SystemSettingsAccess, SystemSettingsAccessState } from '@/features/system-settings/access'
 
 export { SettingsSection } from '@/features/system-settings/components/SettingsSection'
-export { SectionPlaceholder } from '@/features/system-settings/components/SectionPlaceholder'
 
 export {
   DEFAULT_SETTINGS_GROUP_ID,

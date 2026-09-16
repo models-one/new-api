@@ -101,7 +101,7 @@ export function ModelTokenPanel(props: ModelTokenPanelProps) {
         <InfoIcon aria-hidden="true" className="mt-1 size-4 shrink-0 text-primary" />
         <p>
           {t(
-            'Percentages are calculated in this console: model tokens divided by your total tokens for the range.',
+            'Each percentage is that model’s share of your tokens for the range.',
           )}
         </p>
       </div>

@@ -305,7 +305,7 @@ export function ChatEmbedView(props: { chatId: string }) {
               <DescriptionList items={details} label={t('Connection details')} />
               <p className="mt-4 text-xs leading-5 text-muted">
                 {t(
-                  'Built in this browser: CHAT_TEMPLATE, the address an administrator configured, with {{keyToken}} replaced by your API key and {{addressToken}} replaced by SERVER_ADDRESS from the gateway status. Nothing from the page address is used, and the console refuses any template whose own origin is not written out in full.',
+                  'This link is built in your browser from the address an administrator configured, with {{keyToken}} replaced by your API key and {{addressToken}} by this gateway\u2019s address. Nothing from the page you are on is used, and a link that does not spell out its own destination in full is refused.',
                   { addressToken: ADDRESS_PLACEHOLDER, keyToken: KEY_PLACEHOLDER },
                 )}
               </p>

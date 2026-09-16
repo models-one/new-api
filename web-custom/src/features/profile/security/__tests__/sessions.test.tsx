@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import '@/i18n/config'
+
+import i18n from '@/i18n/config'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -84,7 +85,10 @@ beforeEach(() => {
   })
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  void i18n.changeLanguage('en')
+})
 
 describe('SessionsPanel', () => {
   it('marks the session the user is reading the page in', async () => {
@@ -101,6 +105,21 @@ describe('SessionsPanel', () => {
     expect(await screen.findByText('Chrome · macOS')).toBeInTheDocument()
     expect(screen.getByText('Chrome · Android')).toBeInTheDocument()
     expect(screen.getByText(/OAuth · GitHub/)).toBeInTheDocument()
+  })
+
+  it('times the sessions in the interface language, not the language of the machine', async () => {
+    // The defect this pins: a zh-CN browser reading the English console showed
+    // "2026年9月16日 10:42:31" under English labels, because the date helper fell
+    // through to the host locale instead of the language the console is rendered in.
+    renderPanel()
+    const englishRows = await screen.findAllByRole('listitem')
+    expect(within(englishRows[0]).queryByText(/年/)).not.toBeInTheDocument()
+
+    cleanup()
+    await i18n.changeLanguage('zh')
+    renderPanel()
+    const chineseRows = await screen.findAllByRole('listitem')
+    expect(within(chineseRows[0]).getByText(/年/)).toBeInTheDocument()
   })
 
   it('says the device name is derived in the browser', async () => {

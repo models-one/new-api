@@ -99,7 +99,6 @@ export function SubscriptionsPage() {
       <PageHeader
         action={createButton}
         description={t('What a subscriber pays, how long it lasts, and how much quota it grants.')}
-        eyebrow={t('Administration')}
         title={t('Subscription plans')}
       />
 

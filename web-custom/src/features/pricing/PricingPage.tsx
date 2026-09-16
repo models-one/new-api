@@ -243,12 +243,17 @@ export function PricingPage() {
         {pricing.isSuccess ? (
           <>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Every card in the row carries a caption: StatCard pins its footer to the
+                  bottom, so one captioned card used to stretch its captionless neighbours
+                  and leave them looking half-rendered. */}
               <StatCard
+                footer={t('The full catalogue, before any filters.')}
                 icon={<BoxesIcon />}
                 label={t('Models published')}
                 value={formatNumber(models.length)}
               />
               <StatCard
+                footer={t('Distinct providers across those models.')}
                 icon={<ServerIcon />}
                 iconTone="info"
                 label={t('Providers listed')}

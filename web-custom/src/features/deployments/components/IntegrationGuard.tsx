@@ -93,13 +93,13 @@ export function IntegrationGuard(props: IntegrationGuardProps) {
   const flagDetail = ((): string => {
     switch (state.kind) {
       case 'disabled':
-        return t('model_deployment.ionet.enabled is off. Nothing on this page can be requested until an administrator switches the provider on.')
+        return t('The io.net provider is switched off. Nothing on this page works until an administrator turns it on.')
       case 'unconfigured':
-        return t('The provider is switched on, but no io.net API key is stored. The server refuses every deployment route while the key is empty.')
+        return t('The provider is switched on, but no io.net API key is stored. Nothing can be requested until a key is saved.')
       case 'settings-error':
-        return t('The settings route did not answer, so neither switch could be read.')
+        return t('The settings could not be read, so neither switch is known.')
       default:
-        return t('model_deployment.ionet.enabled is on and an API key is stored. The key itself is never returned by the server.')
+        return t('The io.net provider is switched on and an API key is stored. The key itself is never shown again once saved.')
     }
   })()
 
@@ -111,7 +111,7 @@ export function IntegrationGuard(props: IntegrationGuardProps) {
       case 'settings-error':
         return t('Not attempted: the switches could not be read.')
       case 'unreachable':
-        return t('io.net rejected the stored key, or could not be reached. The server sends its own words back verbatim.')
+        return t('io.net rejected the stored key, or could not be reached. Its own words are quoted below.')
       default:
         return t('The stored key is being sent to io.net to list the hardware this account may rent.')
     }

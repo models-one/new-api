@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { MaskedValue } from '@/components/ui/MaskedValue'
 import { Spinner } from '@/components/ui/Spinner'
 import { AuthLayout } from '@/features/auth/AuthLayout'
+import { AuthSwitchLink } from '@/features/auth/components/AuthSwitchLink'
 import {
   RESET_COUNTDOWN_SECONDS,
   confirmPasswordReset,
@@ -133,16 +134,7 @@ export function ResetPasswordPage(props: ResetPasswordSearch) {
         </Button>
       )}
 
-      {newPassword === null ? (
-        <p className="text-sm leading-6 text-muted">
-          <Link
-            className="font-semibold text-primary underline underline-offset-2 hover:text-primary-strong"
-            to="/sign-in"
-          >
-            {t('Back to sign in')}
-          </Link>
-        </p>
-      ) : null}
+      {newPassword === null ? <AuthSwitchLink action={t('Back to sign in')} to="/sign-in" /> : null}
     </AuthLayout>
   )
 }

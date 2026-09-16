@@ -173,7 +173,7 @@ export function QuotaDialog(props: QuotaDialogProps) {
         />
 
         <NumberInput
-          description={t('Converted to quota units before sending: amount × QUOTA_PER_UNIT ({{perUnit}}). QUOTA_PER_UNIT is quota_per_unit from /api/status.', {
+          description={t('An amount of money. This deployment counts {{perUnit}} quota units to the dollar.', {
             perUnit: formatNumber(quotaPerUnit),
           })}
           error={showError && !isValid ? amountError : undefined}

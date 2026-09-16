@@ -195,7 +195,7 @@ export function PlanDrawer(props: PlanDrawerProps) {
             />
 
             <NumberInput
-              description={t('Stored as {{units}} quota units — amount × quota_per_unit ({{perUnit}}). 0 grants unlimited quota.', {
+              description={t('Stored as {{units}} quota units, at this deployment’s rate of {{perUnit}} to the dollar. 0 grants unlimited quota.', {
                 perUnit: formatNumber(props.quotaPerUnit),
                 units: formatNumber(quotaUnits),
               })}

@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import '@/i18n/config'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { AxiosError, type AxiosResponse } from 'axios'
 import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -179,7 +179,8 @@ describe('RankingsPage config gate', () => {
     renderPage()
 
     expect(await screen.findByRole('heading', { name: 'Model leaderboard' })).toBeInTheDocument()
-    // DataTable renders a mobile card list alongside the table, so every cell appears twice.
+    // Each leaderboard renders a table and a card list from one column definition, so every
+    // cell is in the DOM twice; CSS decides which of the two the viewport shows.
     expect(screen.getAllByText('gpt-4o-mini').length).toBeGreaterThan(0)
     expect(screen.getByRole('heading', { name: 'Provider leaderboard' })).toBeInTheDocument()
     // The compact cell keeps the exact count reachable on hover, grouped rather than raw.
@@ -282,6 +283,50 @@ describe('RankingsPage states', () => {
     expect(screen.getAllByText('New').length).toBeGreaterThan(0)
     expect(screen.queryByText('+100%')).not.toBeInTheDocument()
     expect(screen.getAllByText('+24.6%').length).toBeGreaterThan(0)
+  })
+
+  it('claims no change for a provider, whose growth it cannot tell from "brand new"', async () => {
+    // A vendor row has growth_pct but no previous_rank, and the server reports 100 for a row
+    // with nothing behind it — so on a gateway with no prior period every provider was badged
+    // "+100%" directly under a model table correctly badging the same fact as "New".
+    serve({ headerNavModules: '', rankings: liveSnapshot })
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Provider leaderboard' })
+    const providers = screen.getByRole('table', { name: 'Provider leaderboard' })
+    expect(within(providers).queryByRole('columnheader', { name: 'Change' })).not.toBeInTheDocument()
+    // 19.3% is the growth only the vendor rows carry; the models keep their own Change column.
+    expect(screen.queryByText('+19.3%')).not.toBeInTheDocument()
+    const models = screen.getByRole('table', { name: 'Model leaderboard' })
+    expect(within(models).getByRole('columnheader', { name: 'Change' })).toBeInTheDocument()
+  })
+
+  it('gives a phone the whole row as a card, not six columns cut off at the card edge', async () => {
+    serve({ headerNavModules: '', rankings: liveSnapshot })
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Model leaderboard' })
+    const modelCards = screen.getByRole('region', { name: 'Model leaderboard cards' })
+    // Tokens and Share are the columns a 390px table amputated; on a card they are labelled.
+    expect(within(modelCards).getAllByText('Tokens').length).toBeGreaterThan(0)
+    expect(within(modelCards).getAllByText('Share').length).toBeGreaterThan(0)
+
+    const providerCards = screen.getByRole('region', { name: 'Provider leaderboard cards' })
+    expect(within(providerCards).getAllByText('Busiest model').length).toBeGreaterThan(0)
+  })
+
+  it('explains the stat cards without naming a column, a constant or an endpoint', async () => {
+    serve({ headerNavModules: '', rankings: liveSnapshot })
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Model leaderboard' })
+    expect(screen.getByText('Added up across the 20 busiest models.')).toBeInTheDocument()
+    expect(screen.getByText('Models that had no traffic in the previous 7 days.')).toBeInTheDocument()
+
+    const page = document.body.textContent ?? ''
+    for (const leak of ['total_tokens', 'previous_rank', 'rankingLeaderboardLimit', 'Derived:']) {
+      expect(page).not.toContain(leak)
+    }
   })
 
   it('re-requests the snapshot for the period the visitor picks', async () => {

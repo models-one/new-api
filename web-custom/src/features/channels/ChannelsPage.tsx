@@ -77,6 +77,21 @@ import { formatCurrency, formatDateTime, formatNumber } from '@/lib/format'
 
 const DEFAULT_PAGE_SIZE = 20
 
+/**
+ * Column chrome for the two columns an operator scans last. Twelve columns at their
+ * natural width do not fit the content area of a 1440px window, and everything they
+ * overflow by pushes the row actions past the right edge, where the only thing announcing
+ * them is a scrollbar macOS does not draw. Folding these away until the window is
+ * genuinely wide keeps the whole row, actions included, on screen.
+ *
+ * Only the wide table hides them: `MobileCardList` reads `meta.hideOnMobile`, not these
+ * classes, so the phone cards still carry every field.
+ */
+const TAIL_COLUMN = {
+  cellClassName: 'hidden 2xl:table-cell',
+  headerClassName: 'hidden 2xl:table-cell',
+} as const
+
 /** The tri-state a header checkbox needs: all, some, or none of the page selected. */
 function selectAllState(all: boolean, some: boolean): CheckboxState {
   if (all) return true
@@ -399,7 +414,7 @@ export function ChannelsPage() {
           <DataTableColumnHeader align="right" column={column} title={t('Weight')} />
         ),
         cell: ({ row }) => <MonoCell align="right" value={formatNumber(row.original.weight ?? 0)} />,
-        meta: { align: 'right', hideOnMobile: true, label: t('Weight'), mono: true },
+        meta: { ...TAIL_COLUMN, align: 'right', hideOnMobile: true, label: t('Weight'), mono: true },
       },
       {
         accessorKey: 'balance',
@@ -463,7 +478,7 @@ export function ChannelsPage() {
             </Tooltip>
           )
         },
-        meta: { label: t('Last test') },
+        meta: { ...TAIL_COLUMN, label: t('Last test') },
       },
       {
         id: 'actions',
@@ -856,7 +871,7 @@ export function ChannelsPage() {
           filters={
             <>
               <NativeSelect
-                className="w-40"
+                className="w-full sm:w-40"
                 hideLabel
                 label={t('Status')}
                 onChange={(event) => updateFilters({ status: event.target.value })}
@@ -865,7 +880,7 @@ export function ChannelsPage() {
                 value={filters.status}
               />
               <NativeSelect
-                className="w-48"
+                className="w-full sm:w-48"
                 hideLabel
                 label={t('Provider')}
                 onChange={(event) => updateFilters({ type: event.target.value })}
@@ -874,7 +889,7 @@ export function ChannelsPage() {
                 value={filters.type}
               />
               <NativeSelect
-                className="w-40"
+                className="w-full sm:w-40"
                 disabled={groupsQuery.data === undefined}
                 hideLabel
                 label={t('Group')}
@@ -884,7 +899,7 @@ export function ChannelsPage() {
                 value={filters.group}
               />
               <Input
-                className="w-52"
+                className="w-full sm:w-52"
                 hideLabel
                 inputClassName="mono"
                 label={t('Model')}
@@ -1026,7 +1041,7 @@ export function ChannelsPage() {
               isLoading={listQuery.isLoading}
               label={t('Channels')}
               loadingLabel={t('Loading channels')}
-              minWidthClassName="min-w-[92rem]"
+              minWidthClassName="min-w-[60rem] 2xl:min-w-[78rem]"
               table={table}
             />
 
@@ -1053,7 +1068,7 @@ export function ChannelsPage() {
       </Panel>
 
       <p className="text-xs leading-5 text-muted">
-        {t('Testing a channel and refreshing its balance are real calls to the provider: they spend upstream credit and take as long as the provider takes. Balance queries are implemented for a handful of providers only; every other type answers "not implemented". A stored key is never returned by the server, so the editor cannot show it and leaving the key blank keeps it.')}
+        {t('Testing a channel and refreshing its balance are real calls to the provider: they spend upstream credit and take as long as the provider takes. Only a few providers report a balance at all. A stored key is never shown again, so leaving the key blank in the editor keeps the one already saved.')}
       </p>
 
       <ChannelDrawer

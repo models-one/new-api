@@ -324,7 +324,7 @@ export function SyncDialog(props: SyncDialogProps) {
           count={plan.skip.length}
           emptyText={t('Upstream defines every model that is missing one.')}
           icon={<CircleSlashIcon aria-hidden="true" className="size-4" />}
-          note={t('Worked out in the browser: the models with no definition, minus the ones this preview offers to create. The sync reports the same set back as skipped.')}
+          note={t('Models with no definition that this preview is not offering to create. The sync leaves them untouched.')}
           title={t('Skipped')}
           tone="muted"
         >
@@ -341,8 +341,8 @@ export function SyncDialog(props: SyncDialogProps) {
           </p>
           <p className="mt-1 text-xs leading-5 text-muted">
             {totalQuery.data === undefined
-              ? t('The registry total could not be read, so this count is unavailable.')
-              : t('Worked out in the browser: REGISTRY_TOTAL ({{total}}) − definitions that differ ({{changed}}). It counts rows that already match upstream, rows upstream does not publish, and rows with the official upstream turned off.', {
+              ? t('The number of definitions could not be read, so this count is unavailable.')
+              : t('{{changed}} of the {{total}} definitions here differ from upstream; the rest are left as they are — they already match, upstream does not publish them, or they are set to ignore upstream.', {
                 changed: formatNumber(plan.conflicts.length),
                 total: formatNumber(totalQuery.data),
               })}

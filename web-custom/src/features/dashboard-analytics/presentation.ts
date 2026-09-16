@@ -21,6 +21,23 @@ export function flowStageLabel(kind: FlowStageKind, t: TFunction): string {
 }
 
 /**
+ * The same six dimensions in the plural, for sentences that count them — the
+ * "All …" filter option reads "All API key" if the singular is interpolated.
+ */
+export const FLOW_STAGE_PLURAL_KEYS: Readonly<Record<FlowStageKind, string>> = {
+  user: 'users',
+  node: 'nodes',
+  token: 'API keys',
+  group: 'groups',
+  model: 'models',
+  channel: 'channels',
+}
+
+export function flowStagePlural(kind: FlowStageKind, t: TFunction): string {
+  return t(FLOW_STAGE_PLURAL_KEYS[kind])
+}
+
+/**
  * How a node reads when the server named it, and what it reads instead when it
  * did not. Three cases, and they mean different things:
  *

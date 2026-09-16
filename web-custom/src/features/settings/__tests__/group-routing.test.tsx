@@ -246,6 +246,29 @@ describe('SettingsPage group routing', () => {
     }))
   })
 
+  it('leaves the pager out when every key fits on one page', async () => {
+    renderSettings()
+    await screen.findByRole('heading', { name: 'Production Router' })
+
+    // Three keys, ten per page: a pager here is chrome with nowhere to go.
+    expect(screen.queryByRole('navigation', { name: 'API key pages' })).not.toBeInTheDocument()
+  })
+
+  it('shows the pager once the server reports more keys than one page holds', async () => {
+    mockedGetJson.mockImplementation(async (url) => {
+      if (url === '/api/status') return { quota_per_unit: 500_000 }
+      if (url === '/api/user/self/groups') return groupsFixture
+      if (url === '/api/token/') {
+        return { page: 1, page_size: 10, total: 25, items: [buildToken()] }
+      }
+      throw new Error(`unmocked GET ${url}`)
+    })
+    renderSettings()
+    await screen.findByRole('heading', { name: 'Production Router' })
+
+    expect(screen.getByRole('navigation', { name: 'API key pages' })).toBeInTheDocument()
+  })
+
   it('shows a retryable error instead of an empty list when the fetch fails', async () => {
     mockedGetJson.mockImplementation(async (url) => {
       if (url === '/api/status') return { quota_per_unit: 500_000 }
