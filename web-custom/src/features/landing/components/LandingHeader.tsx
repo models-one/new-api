@@ -2,20 +2,27 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { BrandMark } from '@/components/system/BrandMark'
 import { serverStatusQuery } from '@/lib/api/status'
 
 export function LandingHeader() {
   const { t } = useTranslation()
   const statusQuery = useQuery(serverStatusQuery())
   const systemName = statusQuery.data?.system_name?.trim() ?? ''
+  const logo = statusQuery.data?.logo?.trim() ?? ''
   const docsLink = statusQuery.data?.docs_link?.trim() ?? ''
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#0a0e19]/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
         <div className="flex min-w-0 items-center gap-6">
-          <Link className="shrink-0 text-[22px] font-bold text-[#00f0ff] transition-opacity hover:opacity-80" to="/">
-            {systemName}
+          <Link className="shrink-0 transition-opacity hover:opacity-80" to="/">
+            <BrandMark
+              logo={logo}
+              markClassName="h-8 max-w-40"
+              name={systemName}
+              nameClassName="text-[22px] font-bold text-[#00f0ff]"
+            />
           </Link>
           {/* Visible on a phone too. Hiding it behind `md:` left every public page with no
               way to reach any other public page from a handset. */}

@@ -1,8 +1,9 @@
 import { Link } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { ServerStatus } from '@/lib/api/status'
+import { BrandMark } from '@/components/system/BrandMark'
+import { serverStatusQuery, type ServerStatus } from '@/lib/api/status'
 import { queryClient } from '@/lib/query-client'
 import { cn } from '@/lib/utils'
 
@@ -24,11 +25,31 @@ type ErrorStateProps = {
 
 export function ErrorState(props: ErrorStateProps) {
   const { t } = useTranslation()
-  // Read the cached status rather than subscribing to it. This component is what the
-  // router renders when something already went wrong, including a failure early enough
-  // that no provider is mounted — `useQuery` would throw there and replace the error
-  // page with a blank screen. An unfetched cache simply means no brand line.
-  const status = queryClient.getQueryData<ServerStatus>(['server-status'])
+  // Fetched through the module-level client rather than `useQuery`. This component is
+  // what renders when something has already gone wrong, including early enough that no
+  // provider is mounted, and the hook would throw there and replace the error page with
+  // a blank screen. Reading the cache alone was not enough either: somebody who lands
+  // straight on a 404 has fetched nothing yet, so the brand line never appeared — which
+  // was the defect this lockup exists to fix.
+  const [status, setStatus] = useState<ServerStatus | undefined>(() =>
+    queryClient.getQueryData<ServerStatus>(['server-status']),
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    queryClient
+      .ensureQueryData(serverStatusQuery())
+      .then((data) => {
+        if (!cancelled) setStatus(data)
+      })
+      // An error page must never be the thing that throws. No status simply means no
+      // brand line above the numeral.
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const systemName = status?.system_name?.trim() ?? ''
   const logo = status?.logo?.trim() ?? ''
   const hasActions = props.action !== undefined || props.secondaryAction !== undefined
@@ -44,15 +65,14 @@ export function ErrorState(props: ErrorStateProps) {
         {systemName === '' && logo === '' ? null : (
           <Link
             aria-label={systemName === '' ? t('Back to home') : systemName}
-            className="inline-flex items-center gap-2.5 rounded-[4px] text-muted transition-colors hover:text-foreground"
+            className="inline-flex min-w-0 rounded-[4px] transition-opacity hover:opacity-80"
             to="/"
           >
-            {logo === '' ? null : (
-              <img alt="" className="size-7 rounded-full object-cover" src={logo} />
-            )}
-            {systemName === '' ? null : (
-              <span className="text-base font-bold text-foreground">{systemName}</span>
-            )}
+            <BrandMark
+              logo={logo}
+              name={systemName}
+              nameClassName="text-base font-bold text-foreground"
+            />
           </Link>
         )}
       </header>

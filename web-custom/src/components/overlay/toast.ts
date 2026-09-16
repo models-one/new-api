@@ -24,6 +24,37 @@ type PromiseToastMessages<TData> = {
   error?: string | ((error: unknown) => string)
 }
 
+/**
+ * Copy for the server error codes whose `message` is only an HTTP reason phrase.
+ *
+ * `/api/user/login` answers a session-cap refusal with `{ code: 'AUTH_SESSION_LIMIT',
+ * message: 'Conflict' }`, and rendering the message put the single word "Conflict" in
+ * the sign-in form. The legacy console carries the same table at
+ * `web/src/lib/server-error-message.ts`; keep the two in step when either gains a code.
+ */
+const serverErrorCodeMessages: Record<string, () => string> = {
+  AUTH_SESSION_LIMIT: () =>
+    t('You are signed in on too many devices. On one of them, go to Account → Security → Active sessions and choose “Sign out other sessions” — or reset your password, which signs out everything.'),
+  AUTH_SESSION_ISSUANCE_LIMIT: () =>
+    t('Too many sign-ins from here in a short time. Wait a few minutes and try again.'),
+  TELEGRAM_BIND_DISABLED: () => t('Telegram sign-in is switched off on this deployment.'),
+  TELEGRAM_BIND_INVALID_REQUEST: () => t('That Telegram authorization is invalid or has expired.'),
+  TELEGRAM_BIND_FLOW_INVALID: () => t('That Telegram link has expired or has already been used.'),
+  TELEGRAM_BIND_SESSION_INVALID: () =>
+    t('The sign-in that started this Telegram link is no longer valid. Start again.'),
+  TELEGRAM_BIND_ALREADY_BOUND: () => t('That Telegram account is already linked to an account.'),
+  TELEGRAM_BIND_USER_DELETED: () => t('That account no longer exists.'),
+  TELEGRAM_BIND_USER_DISABLED: () => t('That account is disabled.'),
+  TELEGRAM_BIND_INTERNAL_ERROR: () => t('Telegram linking failed. Try again.'),
+}
+
+function codeMessage(payload: unknown): string | undefined {
+  if (typeof payload !== 'object' || payload === null) return undefined
+  const code = (payload as { code?: unknown }).code
+  if (typeof code !== 'string') return undefined
+  return serverErrorCodeMessages[code]?.()
+}
+
 function envelopeMessage(payload: unknown): string | undefined {
   if (typeof payload !== 'object' || payload === null) return undefined
   const message = (payload as { message?: unknown }).message
@@ -75,7 +106,10 @@ export function toErrorMessage(error: unknown, fallback?: string): string {
   }
 
   if (axios.isAxiosError(error)) {
-    return envelopeMessage(error.response?.data)
+    // The code wins over the message: the server pairs a specific code with a generic
+    // reason phrase, and the phrase on its own tells the reader nothing to act on.
+    return codeMessage(error.response?.data)
+      ?? envelopeMessage(error.response?.data)
       ?? httpStatusMessage(error.response?.status)
       ?? (error.message.trim().length > 0 ? error.message : resolvedFallback)
   }
@@ -84,7 +118,7 @@ export function toErrorMessage(error: unknown, fallback?: string): string {
     return error.message.trim().length > 0 ? error.message : resolvedFallback
   }
 
-  return envelopeMessage(error) ?? resolvedFallback
+  return codeMessage(error) ?? envelopeMessage(error) ?? resolvedFallback
 }
 
 export const toast = {

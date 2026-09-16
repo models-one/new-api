@@ -3,6 +3,7 @@ import ArrowLeftIcon from 'lucide-react/dist/esm/icons/arrow-left'
 import { useId, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { BrandMark } from '@/components/system/BrandMark'
 import { SkipToMain } from '@/components/system/SkipToMain'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useAuthServerConfig } from '@/features/auth/server-config'
@@ -45,14 +46,11 @@ export function AuthLayout(props: AuthLayoutProps) {
               <Skeleton height={14} width={104} />
             </span>
           ) : (
-            <span className="flex items-center gap-2.5">
-              {config.logo === '' ? null : (
-                <img alt="" className="size-7 rounded-full object-cover" src={config.logo} />
-              )}
-              <span className="text-base font-bold text-foreground">
-                {config.systemName === '' ? t('Back to home') : config.systemName}
-              </span>
-            </span>
+            <BrandMark
+              logo={config.logo}
+              name={config.systemName === '' ? t('Back to home') : config.systemName}
+              nameClassName="text-base font-bold text-foreground"
+            />
           )}
         </Link>
       </header>

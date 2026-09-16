@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { BrandMark } from '@/components/system/BrandMark'
 import { serverStatusQuery } from '@/lib/api/status'
 
 import { SkipToMain } from '@/components/system/SkipToMain'
@@ -21,7 +22,9 @@ const MAIN_ID = 'pricing-main'
 export function PublicFrame(props: { children: ReactNode }) {
   const { t } = useTranslation()
   // The operator's own name, the way the sign-in page and the console rail read it.
-  const systemName = useQuery(serverStatusQuery()).data?.system_name?.trim() ?? ''
+  const status = useQuery(serverStatusQuery()).data
+  const systemName = status?.system_name?.trim() ?? ''
+  const logo = status?.logo?.trim() ?? ''
 
   return (
     <div className="landing-page flex min-h-screen flex-col text-foreground">
@@ -31,10 +34,15 @@ export function PublicFrame(props: { children: ReactNode }) {
         <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
           <div className="flex min-w-0 items-center gap-6">
             <Link
-              className="shrink-0 text-[22px] font-bold text-[#00f0ff] transition-opacity hover:opacity-80"
+              className="shrink-0 transition-opacity hover:opacity-80"
               to="/"
             >
-              {systemName}
+              <BrandMark
+                logo={logo}
+                markClassName="h-8 max-w-40"
+                name={systemName}
+                nameClassName="text-[22px] font-bold text-[#00f0ff]"
+              />
             </Link>
             <nav aria-label={t('Public navigation')} className="hidden items-center gap-2 md:flex">
               <Link

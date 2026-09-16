@@ -3,6 +3,7 @@ import { Fragment, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SkipToMain } from '@/components/system/SkipToMain'
+import { BrandMark } from '@/components/system/BrandMark'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useServerStatus } from '@/hooks/use-server-status'
 import { cn } from '@/lib/utils'
@@ -39,6 +40,7 @@ export function PublicPageFrame(props: PublicPageFrameProps) {
   const { t } = useTranslation()
   const { data: status, isPending } = useServerStatus()
   const systemName = status?.system_name?.trim() ?? ''
+  const logo = status?.logo?.trim() ?? ''
 
   const legalLinks: PublicLegalLink[] = []
   if (status?.user_agreement_enabled === true) {
@@ -57,11 +59,8 @@ export function PublicPageFrame(props: PublicPageFrameProps) {
 
       <header className="border-b border-border bg-sunken/90 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-[1100px] items-center justify-between gap-4 px-4 sm:px-6">
-          <Link
-            className="text-lg font-bold text-primary transition-opacity hover:opacity-80"
-            to="/"
-          >
-            {systemName}
+          <Link className="min-w-0 transition-opacity hover:opacity-80" to="/">
+            <BrandMark logo={logo} name={systemName} nameClassName="text-lg font-bold text-primary" />
           </Link>
           <nav aria-label={t('Public navigation')}>
             <Link

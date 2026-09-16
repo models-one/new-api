@@ -12,18 +12,34 @@ import { router } from '@/routes'
 import { useAuthStore } from '@/stores/auth-store'
 
 /**
- * The browser tab, and with it every bookmark and history entry, names the deployment.
- * `index.html` can only ship a static title, so it carries a neutral one and this swaps
- * in the operator's `system_name` once `/api/status` answers.
+ * The browser tab — and with it every bookmark, history entry and pinned tab — carries
+ * the deployment's own name and mark. `index.html` can only ship static ones, so it
+ * carries a neutral title and the legacy `/logo.png`, and these are swapped for the
+ * operator's once `/api/status` answers.
  */
-function DocumentTitle() {
+function DocumentBranding() {
   const { data } = useQuery(serverStatusQuery())
   const systemName = data?.system_name?.trim() ?? ''
+  const logo = data?.logo?.trim() ?? ''
 
   useEffect(() => {
     if (systemName === '') return
     document.title = systemName
   }, [systemName])
+
+  useEffect(() => {
+    if (logo === '') return
+    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+    if (link === null) {
+      link = document.createElement('link')
+      link.rel = 'icon'
+      document.head.append(link)
+    }
+    link.href = logo
+    // The type hint in the markup is for the PNG fallback; an operator's logo can be any
+    // format the browser reads, so let it sniff rather than claiming the wrong one.
+    link.removeAttribute('type')
+  }, [logo])
 
   return null
 }
@@ -59,7 +75,7 @@ export function AppProviders(props: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthSessionCoordinator />
-      <DocumentTitle />
+      <DocumentBranding />
       {props.children}
       <Toaster closeButton duration={5000} position="top-center" richColors theme="dark" />
     </QueryClientProvider>

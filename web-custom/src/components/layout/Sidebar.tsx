@@ -237,7 +237,7 @@ export function Sidebar(props: SidebarProps) {
         <div className="flex min-h-16 shrink-0 items-center justify-between px-2">
           <Link className="flex min-w-0 items-center gap-3" onClick={props.onClose} to="/dashboard">
             {logo ? (
-              <img alt="" className="size-9 shrink-0 rounded-[4px] object-cover" src={logo} />
+              <img alt="" className="h-9 w-auto max-w-24 shrink-0 object-contain" src={logo} />
             ) : (
               <span className="grid size-9 shrink-0 place-items-center rounded-[4px] border border-primary/30 bg-primary/10 text-primary">
                 <NetworkIcon aria-hidden="true" className="size-5" />
