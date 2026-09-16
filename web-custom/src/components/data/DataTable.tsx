@@ -108,7 +108,10 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
           aria-label={props.label}
           className={cn('w-full border-collapse text-left text-sm', props.minWidthClassName)}
         >
-          <thead className="bg-surface-high/40 text-xs text-muted">
+          {/* Tracked uppercase, the way the design reference sets every column header.
+              Button labels stay sentence case: the reference is inconsistent about those
+              and this console's are full phrases, which uppercase makes harder to read. */}
+          <thead className="bg-surface-high/40 text-[0.7rem] tracking-[0.08em] text-muted uppercase">
             {props.table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
