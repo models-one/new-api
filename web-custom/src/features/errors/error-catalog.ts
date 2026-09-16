@@ -43,11 +43,21 @@ export function isErrorVariant(value: string): value is ErrorVariant {
  * back to a plain 500.
  */
 export function getHttpStatus(error: unknown): number | undefined {
-  if (typeof error !== 'object' || error === null || !('response' in error)) return undefined
-
-  const { response } = error
-  if (typeof response !== 'object' || response === null || !('status' in response)) return undefined
-
-  const { status } = response
-  return typeof status === 'number' ? status : undefined
+  // Errors reach this page wrapped: a failed auth bootstrap throws
+  // `AuthenticationUnavailableError` with the transport failure as its `cause`. Reading
+  // only the outer object turned a rate-limited sign-in into "500 Something went wrong",
+  // which blames the server for a limit it applied on purpose.
+  let candidate: unknown = error
+  for (let depth = 0; depth < 5 && typeof candidate === 'object' && candidate !== null; depth += 1) {
+    if ('response' in candidate) {
+      const { response } = candidate
+      if (typeof response === 'object' && response !== null && 'status' in response) {
+        const { status } = response
+        if (typeof status === 'number') return status
+      }
+    }
+    if (!('cause' in candidate)) return undefined
+    candidate = (candidate as { cause: unknown }).cause
+  }
+  return undefined
 }

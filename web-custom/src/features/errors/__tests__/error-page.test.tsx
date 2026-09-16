@@ -58,7 +58,6 @@ async function renderAtRoute(node: ReactNode) {
 
 describe('ErrorPage surfaces', () => {
   it.each([
-    ['401', <UnauthorizedPage key="401" />, 'Unauthorized access'],
     ['403', <ForbiddenPage key="403" />, 'Access forbidden'],
     ['404', <NotFoundErrorPage key="404" />, 'Page not found'],
     ['500', <ServerErrorPage key="500" />, 'Something went wrong'],
@@ -71,6 +70,18 @@ describe('ErrorPage surfaces', () => {
     expect(screen.getByRole('main', { name: title })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Go back' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to home' })).toHaveAttribute('href', '/')
+  })
+
+  // 401 is the one status whose remedy is an action rather than a destination, so it
+  // leads with sign-in and keeps home as the secondary route out.
+  it('leads the 401 surface with a sign-in link', async () => {
+    await renderAtRoute(<UnauthorizedPage />)
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Unauthorized access' })).toBeInTheDocument()
+    expect(screen.getByText('401')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in')
+    expect(screen.getByRole('link', { name: 'Back to home' })).toHaveAttribute('href', '/')
+    expect(screen.queryByRole('button', { name: 'Go back' })).not.toBeInTheDocument()
   })
 
   it('sends the history-back action one entry back', async () => {

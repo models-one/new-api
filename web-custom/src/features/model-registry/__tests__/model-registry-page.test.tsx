@@ -235,8 +235,10 @@ describe('the definition table', () => {
   it('shows a real empty state when nothing is defined', async () => {
     renderPage()
 
-    const table = await definitionTable()
-    expect(await table.findByText('No model definitions yet')).toBeInTheDocument()
+    // The empty state now renders beside the table rather than as a spanning cell, so it
+    // is queried at page scope; the desktop table and the mobile card list each render
+    // one, hence findAllByText.
+    expect(await screen.findAllByText('No model definitions yet')).not.toHaveLength(0)
   })
 
   it('offers a retry rather than an empty table when the list request fails', async () => {

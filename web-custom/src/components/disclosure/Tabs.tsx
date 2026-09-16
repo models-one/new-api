@@ -84,14 +84,16 @@ function TabsList(props: TabsListProps) {
         const vertical = state.orientation === 'vertical'
         if (variant === 'pill') {
           return cn(
-            'flex gap-1 rounded-[6px] border border-border bg-sidebar p-1',
-            vertical ? 'flex-col items-stretch' : 'items-center',
+            'flex gap-1 rounded-[6px] border border-border bg-sunken p-1',
+            vertical ? 'flex-col items-stretch' : 'scroll-x-hint items-center',
             props.className,
           )
         }
         return cn(
           'flex gap-1',
-          vertical ? 'flex-col items-stretch border-r border-border' : 'items-center border-b border-border',
+          vertical
+            ? 'flex-col items-stretch border-r border-border'
+            : 'scroll-x-hint items-center border-b border-border',
           props.className,
         )
       }}

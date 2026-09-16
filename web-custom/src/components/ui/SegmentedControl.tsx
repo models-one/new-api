@@ -36,7 +36,11 @@ export function SegmentedControl<TValue extends string = string>(
     <div
       aria-label={label}
       className={cn(
-        'inline-flex items-center rounded-[var(--radius-panel)] border border-border bg-sidebar p-1',
+        // `max-w-full` plus a scrolling track is what keeps this control inside the page.
+        // Without it the options simply keep their intrinsic width, push past the border
+        // that is supposed to contain them, and drag the whole document into a sideways
+        // scroll — four period options are already wider than a 390px phone.
+        'inline-flex max-w-full items-center overflow-x-auto rounded-[var(--radius-panel)] border border-border bg-sunken p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         fullWidth && 'flex w-full',
         className,
       )}
@@ -48,7 +52,7 @@ export function SegmentedControl<TValue extends string = string>(
           <button
             aria-pressed={selected}
             className={cn(
-              'flex items-center justify-center gap-2 rounded-[4px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+              'flex items-center justify-center gap-2 whitespace-nowrap rounded-[4px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50',
               sizeClasses[size],
               fullWidth ? 'flex-1' : 'flex-none',
               selected ? 'bg-surface-high text-primary' : 'text-muted hover:text-foreground',

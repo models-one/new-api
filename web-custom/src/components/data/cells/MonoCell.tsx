@@ -28,7 +28,7 @@ export function MonoCell(props: MonoCellProps) {
   return (
     <span
       className={cn(
-        'mono block',
+        'mono block whitespace-nowrap',
         alignClasses[props.align ?? 'left'],
         props.tone ? toneTextClasses[props.tone] : '',
         props.className,

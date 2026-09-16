@@ -145,7 +145,7 @@ export function PlansTable(props: PlansTableProps) {
         id: 'actions',
         header: t('Actions'),
         enableSorting: false,
-        meta: { align: 'right', label: t('Actions') },
+        meta: { sticky: 'right', align: 'right', label: t('Actions') },
         cell: ({ row }) => {
           const plan = row.original
           const actions: DataTableRowAction[] = [

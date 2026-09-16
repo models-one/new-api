@@ -3,7 +3,8 @@
 @theme {
   --color-background: #05070a;
   --color-canvas: #080c14;
-  --color-sidebar: #0a0e19;
+  --color-sidebar: #171b27;
+  --color-sunken: #0a0e19;
   --color-surface: #0f131e;
   --color-surface-raised: #171b27;
   --color-surface-high: #202532;
@@ -12,6 +13,9 @@
   --color-foreground: #dfe2f2;
   --color-muted: #94a1ad;
   --color-primary: #00dce8;
+  /* The design's active-navigation fill. Deliberately blue, not the cyan accent:
+     it has to read as a selected row rather than as one more accented control. */
+  --color-nav-active: #0857b5;
   --color-primary-strong: #7df4ff;
   --color-primary-foreground: #001416;
   --color-secondary: #a855f7;
@@ -78,6 +82,24 @@ textarea:focus-visible,
 [role='switch']:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/*
+ * A control inside `.field` is already announced by the chrome around it, which turns its
+ * border cyan on focus-within. Letting the control keep the ring above draws a second,
+ * square cyan rectangle inside the rounded field — two indicators for one focus.
+ * The text control defers to the chrome; a nested button (the reveal-password eye, a
+ * clear button) keeps its own ring but inset, so it reads as belonging to that button.
+ */
+.field > :focus-visible,
+.field > * > :focus-visible {
+  outline: none;
+}
+
+.field button:focus-visible,
+.field [role='button']:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 ::selection {
@@ -188,6 +210,53 @@ textarea:focus-visible,
 
   .landing-status-dot {
     animation: landing-status-pulse 2.4s ease-in-out infinite;
+  }
+
+  /*
+   * The navigation rail holds more entries than a laptop window fits. macOS hides overlay
+   * scrollbars until something scrolls, so the rail keeps a permanently visible one:
+   * without it a group heading resting on the fold reads as a heading with no items.
+   */
+  /*
+   * Horizontal strips that can outgrow their container — tab bars, section navigation.
+   * They already scrolled; what they lacked was any sign of it, so a label cut in half
+   * at the edge read as a layout bug rather than as "keep going".
+   */
+  .scroll-x-hint {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  .scroll-x-hint::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .scroll-x-hint::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--color-border-strong);
+  }
+
+  .scroll-x-hint::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--color-border-strong);
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
   }
 
   .settings-canvas {

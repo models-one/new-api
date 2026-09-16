@@ -3,6 +3,8 @@ import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { formatDateTime } from '@/lib/format'
+
 import {
   Checkbox,
   Input,
@@ -328,7 +330,7 @@ export function ModelDrawer(props: ModelDrawerProps) {
           <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
             <Badge className="mono" size="sm" tone="muted">{`#${current.id}`}</Badge>
             <span>
-              {t('Created {{date}}', { date: new Date(current.created_time * 1000).toLocaleString() })}
+              {t('Created {{date}}', { date: formatDateTime(current.created_time) })}
             </span>
           </p>
         ) : null}

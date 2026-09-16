@@ -3,6 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 import '@/i18n/config'
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -45,7 +46,14 @@ async function renderLandingPage() {
   })
 
   await router.load()
-  render(<RouterProvider router={router} />)
+  // The public chrome reads the operator's own name from `/api/status`, so the landing
+  // page needs the same query client the app gives it at runtime.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
 }
 
 describe('LandingPage', () => {
@@ -56,7 +64,7 @@ describe('LandingPage', () => {
     expect(screen.getByRole('heading', { name: 'Scale Without Friction' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '100+ Model Support' })).toBeInTheDocument()
     expect(screen.getByText('integration.ts')).toBeInTheDocument()
-    expect(screen.getByRole('contentinfo')).toHaveTextContent('Built for the future of AI.')
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument()
   })
 
   it('renders both animated logo orbits and the floating mark', async () => {

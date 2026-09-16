@@ -263,7 +263,7 @@ export function DeploymentsPage() {
             </ActionsCell>
           )
         },
-        meta: { align: 'right', label: t('Actions') },
+        meta: { align: 'right', label: t('Actions'), sticky: 'right' },
       },
     ],
     [locale, openDetail, t, targetOf],

@@ -1,7 +1,9 @@
 import ChevronLeftIcon from 'lucide-react/dist/esm/icons/chevron-left'
 import ChevronRightIcon from 'lucide-react/dist/esm/icons/chevron-right'
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { NativeSelect } from '@/components/form/NativeSelect'
 import { Button } from '@/components/ui/Button'
 import type { DataTablePaginationControls } from '@/components/data/use-data-table'
 import { cn } from '@/lib/utils'
@@ -28,6 +30,7 @@ const defaultPageSizeOptions = [10, 20, 50, 100]
  */
 export function DataTablePagination(props: DataTablePaginationProps) {
   const { t } = useTranslation()
+  const pageSizeLabelId = useId()
   const pageSizeOptions = props.pageSizeOptions ?? defaultPageSizeOptions
   const showPageSize = props.showPageSize ?? true
   const pageCount = Math.max(1, props.pageCount)
@@ -47,24 +50,29 @@ export function DataTablePagination(props: DataTablePaginationProps) {
         {t('Showing {{from}}-{{to}} of {{total}}', { from, to, total: props.total })}
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {showPageSize ? (
-          <label className="flex items-center gap-2 text-xs text-muted">
-            {t('Rows per page')}
-            <select
-              className="field mono h-10 px-2 text-sm"
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <span id={pageSizeLabelId}>{t('Rows per page')}</span>
+            <NativeSelect
+              aria-labelledby={pageSizeLabelId}
+              hideLabel
+              label={t('Rows per page')}
               onChange={(event) => props.onPageSizeChange(Number(event.target.value))}
-              value={props.pageSize}
-            >
-              {pageSizeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
+              options={pageSizeOptions.map((option) => ({
+                label: String(option),
+                value: String(option),
+              }))}
+              selectClassName="mono w-[5.5rem]"
+              size="sm"
+              value={String(props.pageSize)}
+            />
+          </div>
         ) : null}
 
+        {/* The three page controls stay one unit: when the row wraps on a phone, the
+            next-page arrow must not end up alone on a line of its own. */}
+        <div className="flex shrink-0 items-center gap-2">
         <Button
           aria-label={t('Previous page')}
           disabled={props.page <= 1}
@@ -90,6 +98,7 @@ export function DataTablePagination(props: DataTablePaginationProps) {
         >
           <ChevronRightIcon aria-hidden="true" />
         </Button>
+        </div>
       </div>
     </nav>
   )

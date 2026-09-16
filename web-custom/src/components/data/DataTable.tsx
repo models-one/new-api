@@ -1,10 +1,10 @@
 import { flexRender, type Row, type Table } from '@tanstack/react-table'
-import { Fragment, type KeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTableEmpty } from '@/components/data/DataTableEmpty'
 import { DataTableSkeleton } from '@/components/data/DataTableSkeleton'
-import { alignClasses } from '@/components/data/table-meta'
+import { alignClasses, stickyRightClasses } from '@/components/data/table-meta'
 import type { DataTableColumns } from '@/components/data/use-data-table'
 import { cn } from '@/lib/utils'
 
@@ -57,13 +57,52 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
   const columnCount = props.table.getVisibleLeafColumns().length || props.columns?.length || 1
   const isEmpty = !isLoading && rows.length === 0
 
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [scrollableRight, setScrollableRight] = useState(false)
+
+  // Several of these tables are wider than the window they live in. macOS overlay
+  // scrollbars stay hidden until something scrolls, so the only sign that columns
+  // continue past the edge would be the columns themselves being cut — which reads as a
+  // rendering bug. The fade says "there is more this way".
+  useEffect(() => {
+    const node = scrollRef.current
+    if (node === null) return
+    const update = () => {
+      setScrollableRight(node.scrollLeft + node.clientWidth < node.scrollWidth - 1)
+    }
+    update()
+    node.addEventListener('scroll', update, { passive: true })
+    const observer = new ResizeObserver(update)
+    observer.observe(node)
+    return () => {
+      node.removeEventListener('scroll', update)
+      observer.disconnect()
+    }
+  }, [rows.length, columnCount])
+
+  // The empty state sits outside the scrolling table on purpose. Rendered as a spanning
+  // cell it inherits the table's min-width, so on a phone a 1180px-wide "nothing here"
+  // block centres its text off-screen and leaves a header row over an empty box.
+  if (isEmpty) {
+    return (
+      <div className={cn('relative', props.className)}>
+        <DataTableEmpty
+          action={props.emptyAction}
+          description={props.emptyDescription}
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className={cn('relative', props.className)}>
       <div aria-live="polite" className="sr-only" role="status">
         {isLoading || isFetching ? (props.loadingLabel ?? t('Loading results')) : ''}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" ref={scrollRef}>
         <table
           aria-busy={isLoading || isFetching}
           aria-label={props.label}
@@ -85,6 +124,7 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
                       className={cn(
                         'px-5 py-3 font-semibold',
                         alignClasses[meta?.align ?? 'left'],
+                        meta?.sticky === 'right' && cn(stickyRightClasses, 'bg-surface-high'),
                         meta?.headerClassName,
                       )}
                       colSpan={header.colSpan}
@@ -104,16 +144,6 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
           <tbody>
             {isLoading ? (
               <DataTableSkeleton columnCount={columnCount} rowCount={props.skeletonRows} />
-            ) : null}
-
-            {isEmpty ? (
-              <DataTableEmpty
-                action={props.emptyAction}
-                colSpan={columnCount}
-                description={props.emptyDescription}
-                icon={props.emptyIcon}
-                title={props.emptyTitle}
-              />
             ) : null}
 
             {isLoading
@@ -147,6 +177,7 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
                             'px-5 py-4',
                             alignClasses[meta?.align ?? 'left'],
                             meta?.mono ? 'mono' : '',
+                            meta?.sticky === 'right' && cn(stickyRightClasses, 'bg-surface'),
                             meta?.cellClassName,
                           )}
                           key={cell.id}
@@ -169,6 +200,12 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
           </tbody>
         </table>
       </div>
+      {scrollableRight ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-surface to-transparent"
+        />
+      ) : null}
     </div>
   )
 }

@@ -46,7 +46,11 @@ export function DonutChart(props: DonutChartProps) {
   let consumed = 0
   const slices = segments.map((segment, index) => {
     const value = Number.isFinite(segment.value) ? Math.max(0, segment.value) : 0
-    const percent = total > 0 ? (value / total) * 100 : 0
+    const rawPercent = total > 0 ? (value / total) * 100 : 0
+    // The dash lengths are summed in floating point, so the last slice can come out a
+    // hair past 100 and wrap back over the first one — a spike across the 12 o'clock
+    // seam. Clamping every slice to the ring it has left keeps the join clean.
+    const percent = Math.max(0, Math.min(rawPercent, 100 - consumed))
     const slice = {
       key: `${index}-${segment.name}`,
       name: segment.name,
@@ -72,7 +76,7 @@ export function DonutChart(props: DonutChartProps) {
       emptyLabel={props.emptyLabel}
       footer={
         showLegend && slices.length > 0 ? (
-          <ul className="flex flex-col gap-2 text-sm">
+          <ul className="flex max-w-xl flex-col gap-2 text-sm">
             {slices.map((slice) => (
               <li className="flex items-center gap-3" key={slice.key}>
                 <span

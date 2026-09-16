@@ -1,4 +1,19 @@
+import i18next from 'i18next'
+
 import { DEFAULT_QUOTA_PER_UNIT } from '@/lib/api/status'
+
+/**
+ * The locale every date helper falls back to.
+ *
+ * Passing `undefined` to `toLocaleDateString` uses the HOST locale, not the one the
+ * console is rendered in — a zh-CN browser reading an English console then gets
+ * "2026年9月16日" next to "Never expires". The interface language is the only correct
+ * default, so callers that do not thread `i18n.language` still get it.
+ */
+function activeLocale(locale?: string): string {
+  if (locale !== undefined && locale !== '') return locale
+  return i18next.resolvedLanguage ?? i18next.language ?? 'en'
+}
 
 /**
  * Quota is stored as an integer; dividing by quota_per_unit (from `/api/status`)
@@ -69,7 +84,7 @@ export function toUnixSeconds(date: Date): number {
 
 export function formatDate(seconds: number, locale?: string): string {
   if (!seconds || seconds < 0) return '—'
-  return fromUnixSeconds(seconds).toLocaleDateString(locale, {
+  return fromUnixSeconds(seconds).toLocaleDateString(activeLocale(locale), {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
@@ -78,7 +93,7 @@ export function formatDate(seconds: number, locale?: string): string {
 
 export function formatDateTime(seconds: number, locale?: string): string {
   if (!seconds || seconds < 0) return '—'
-  return fromUnixSeconds(seconds).toLocaleString(locale, {
+  return fromUnixSeconds(seconds).toLocaleString(activeLocale(locale), {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
@@ -91,7 +106,7 @@ export function formatDateTime(seconds: number, locale?: string): string {
 
 export function formatTime(seconds: number, locale?: string): string {
   if (!seconds || seconds < 0) return '—'
-  return fromUnixSeconds(seconds).toLocaleTimeString(locale, {
+  return fromUnixSeconds(seconds).toLocaleTimeString(activeLocale(locale), {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',

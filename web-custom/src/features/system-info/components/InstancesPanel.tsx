@@ -306,7 +306,7 @@ export function InstancesPanel() {
         enableSorting: false,
         header: () => <span className="sr-only">{t('Actions')}</span>,
         id: 'actions',
-        meta: { align: 'right', label: t('Actions') },
+        meta: { sticky: 'right', align: 'right', label: t('Actions') },
       },
     ],
     [locale, pendingDeleteNode, t],

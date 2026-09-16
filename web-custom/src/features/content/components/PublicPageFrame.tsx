@@ -38,6 +38,7 @@ const MAIN_ID = 'main-content'
 export function PublicPageFrame(props: PublicPageFrameProps) {
   const { t } = useTranslation()
   const { data: status, isPending } = useServerStatus()
+  const systemName = status?.system_name?.trim() ?? ''
 
   const legalLinks: PublicLegalLink[] = []
   if (status?.user_agreement_enabled === true) {
@@ -54,13 +55,13 @@ export function PublicPageFrame(props: PublicPageFrameProps) {
     <div className="settings-canvas flex min-h-screen flex-col text-foreground">
       <SkipToMain targetId={MAIN_ID} />
 
-      <header className="border-b border-border bg-sidebar/90 backdrop-blur-xl">
+      <header className="border-b border-border bg-sunken/90 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-[1100px] items-center justify-between gap-4 px-4 sm:px-6">
           <Link
             className="text-lg font-bold text-primary transition-opacity hover:opacity-80"
             to="/"
           >
-            Models.one
+            {systemName}
           </Link>
           <nav aria-label={t('Public navigation')}>
             <Link
@@ -86,9 +87,9 @@ export function PublicPageFrame(props: PublicPageFrameProps) {
         {props.children}
       </main>
 
-      <footer className="border-t border-border bg-sidebar/60">
+      <footer className="border-t border-border bg-sunken/60">
         <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-4 px-4 py-8 sm:px-6 md:flex-row md:items-center md:justify-between">
-          <p className="text-xs text-muted">© {new Date().getFullYear()} Models.one</p>
+          <p className="text-xs text-muted">© {new Date().getFullYear()} {systemName}</p>
           {isPending ? (
             <Skeleton label={t('Loading site configuration')} width="14rem" />
           ) : (

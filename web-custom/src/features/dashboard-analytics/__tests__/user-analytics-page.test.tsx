@@ -186,10 +186,9 @@ describe('empty and error states', () => {
 
     expect(await screen.findByText('Nothing to rank')).toBeInTheDocument()
     expect(await screen.findByText('No model traffic')).toBeInTheDocument()
-    // The desktop table and the mobile card list are both in the DOM under
-    // happy-dom, so the empty state is scoped to the table.
-    const table = await userTable()
-    expect(table.getByText('No user activity')).toBeInTheDocument()
+    // The desktop table and the mobile card list are both in the DOM under happy-dom and
+    // each renders its own empty state, which now sits beside the table rather than in it.
+    expect(await screen.findAllByText('No user activity')).not.toHaveLength(0)
   })
 
   it('reports a failed user query with a retry and hides the panels', async () => {

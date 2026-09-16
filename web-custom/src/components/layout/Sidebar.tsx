@@ -1,7 +1,6 @@
 import type { ComponentType, SVGProps } from 'react'
 import ActivityIcon from 'lucide-react/dist/esm/icons/activity'
 import BarChart3Icon from 'lucide-react/dist/esm/icons/chart-no-axes-column-increasing'
-import CircleHelpIcon from 'lucide-react/dist/esm/icons/circle-help'
 import CreditCardIcon from 'lucide-react/dist/esm/icons/credit-card'
 import FileClockIcon from 'lucide-react/dist/esm/icons/file-clock'
 import KeyRoundIcon from 'lucide-react/dist/esm/icons/key-round'
@@ -26,11 +25,13 @@ import CpuIcon from 'lucide-react/dist/esm/icons/cpu'
 import XIcon from 'lucide-react/dist/esm/icons/x'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/Button'
 import { logout } from '@/features/auth/api'
 import { selfUserQuery } from '@/lib/api/user'
+import { serverStatusQuery } from '@/lib/api/status'
 import { getLegacySignInHref, isPreviewMode } from '@/lib/navigation'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,12 @@ type NavigationItem = {
   labelKey: string
   to: string
   icon: NavigationIcon
+  /**
+   * Base path this entry owns, when it differs from `to`. `System settings` links straight
+   * at a leaf section but owns every path under `/system-settings`, so a visitor landing on
+   * the bare section-less URL still lights it up.
+   */
+  match?: string
   /** Hidden below `common.RoleAdminUser`. The server refuses regardless; this only keeps
    *  a link out of sight that would land the user on a denial. */
   adminOnly?: boolean
@@ -82,6 +89,7 @@ const administrationNavigation: NavigationItem[] = [
   {
     labelKey: 'System settings',
     to: '/system-settings/site/system-info',
+    match: '/system-settings',
     icon: SlidersHorizontalIcon,
     adminOnly: true,
   },
@@ -92,17 +100,43 @@ type SidebarProps = {
   onClose: () => void
 }
 
+function navigationBase(item: NavigationItem): string {
+  return item.match ?? item.to
+}
+
+/**
+ * The single entry a path belongs to.
+ *
+ * Plain prefix matching lights two rows at once — `/dashboard/flow` sits under both
+ * `Dashboard` and `Traffic flow`, `/models/metadata` under both `Models` and
+ * `Model registry` — so the deepest matching base wins and everything else stays dark.
+ */
+function activeNavigationPath(pathname: string, items: readonly NavigationItem[]): string | undefined {
+  let best: string | undefined
+  for (const item of items) {
+    const base = navigationBase(item)
+    if (pathname !== base && !pathname.startsWith(base + '/')) continue
+    if (best === undefined || base.length > best.length) best = base
+  }
+  return best
+}
+
 function NavigationLink(props: { item: NavigationItem; active: boolean; onClick: () => void }) {
   const { t } = useTranslation()
   const Icon = props.item.icon
 
   return (
     <Link
+      // The router's own active detection is prefix-based, so it marks `Dashboard`
+      // current while the reader is on `/dashboard/flow` and two rows light up at once.
+      // `exact` silences it; which single entry owns the path is decided above.
+      activeOptions={{ exact: true }}
       aria-current={props.active ? 'page' : undefined}
       className={cn(
         'flex min-h-10 items-center gap-3 rounded-[4px] border border-transparent px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-high hover:text-foreground',
-        props.active && 'border-primary/25 bg-primary/10 text-primary',
+        props.active && 'border-nav-active bg-nav-active text-white hover:bg-nav-active hover:text-white',
       )}
+      data-active={props.active ? 'true' : undefined}
       onClick={props.onClick}
       to={props.item.to}
     >
@@ -116,19 +150,58 @@ export function Sidebar(props: SidebarProps) {
   const { t } = useTranslation()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const logoutMutation = useMutation({ mutationFn: logout })
+  const statusQuery = useQuery(serverStatusQuery())
 
   // The role rides on the sign-in bundle whenever this SPA performed the login; a cold
   // load (hard refresh, bookmark) has only the session cookie, so `/api/user/self` fills
   // the gap. It is the query the console already caches.
-  const storedRole = useAuthStore((state) => state.auth.user?.role)
-  const selfQuery = useQuery({ ...selfUserQuery(), enabled: storedRole === undefined })
-  const role = storedRole ?? selfQuery.data?.role
+  const storedUser = useAuthStore((state) => state.auth.user)
+  const selfQuery = useQuery({ ...selfUserQuery(), enabled: storedUser === null })
+  const role = storedUser?.role ?? selfQuery.data?.role
+  const accountName =
+    storedUser?.display_name || storedUser?.username ||
+    selfQuery.data?.display_name || selfQuery.data?.username || ''
+  const accountEmail = storedUser?.email ?? selfQuery.data?.email ?? ''
+  const accountGroup = storedUser?.group ?? selfQuery.data?.group ?? ''
+
   const visibleAdministration = administrationNavigation.filter(
     (item) => !item.adminOnly || (role !== undefined && role >= ADMIN_ROLE),
   )
+  const allItems = [...primaryNavigation, ...workspaceNavigation, ...visibleAdministration]
+  const activePath = activeNavigationPath(pathname, allItems)
+  const isActive = (item: NavigationItem) => navigationBase(item) === activePath
 
-  // `/profile` owns three sibling routes, so its entry stays lit on all of them.
-  const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
+  // The operator's own name and mark, the way the sign-in page already shows them. A
+  // console that says "Models.one" on a deployment branded something else is telling the
+  // user they are on the wrong site.
+  const systemName = statusQuery.data?.system_name?.trim()
+  const logo = statusQuery.data?.logo?.trim()
+
+  const navRef = useRef<HTMLElement | null>(null)
+  const [hasMoreBelow, setHasMoreBelow] = useState(false)
+
+  // 22 entries do not fit a laptop window, so the rail scrolls. Two things follow from
+  // that: the entry for the current page has to be brought into view (otherwise an admin
+  // route shows no active row at all), and the fact that there IS more below has to be
+  // visible — macOS hides overlay scrollbars until you scroll, which turns a group
+  // heading sitting on the fold into a heading with apparently nothing under it.
+  useEffect(() => {
+    const nav = navRef.current
+    if (nav === null) return
+    const updateOverflowHint = () => {
+      setHasMoreBelow(nav.scrollTop + nav.clientHeight < nav.scrollHeight - 1)
+    }
+    const active = nav.querySelector('[data-active="true"]')
+    if (active !== null) active.scrollIntoView({ block: 'nearest' })
+    updateOverflowHint()
+    nav.addEventListener('scroll', updateOverflowHint, { passive: true })
+    const observer = new ResizeObserver(updateOverflowHint)
+    observer.observe(nav)
+    return () => {
+      nav.removeEventListener('scroll', updateOverflowHint)
+      observer.disconnect()
+    }
+  }, [activePath, visibleAdministration.length])
 
   const handleLogout = () => {
     if (isPreviewMode()) {
@@ -161,59 +234,58 @@ export function Sidebar(props: SidebarProps) {
         )}
         id="app-sidebar"
       >
-        <div className="flex min-h-14 items-center justify-between px-2">
+        <div className="flex min-h-16 shrink-0 items-center justify-between px-2">
           <Link className="flex min-w-0 items-center gap-3" onClick={props.onClose} to="/dashboard">
-            <span className="grid size-9 shrink-0 place-items-center rounded-[4px] border border-primary/30 bg-primary/10 text-primary">
-              <NetworkIcon aria-hidden="true" className="size-5" />
-            </span>
+            {logo ? (
+              <img alt="" className="size-9 shrink-0 rounded-[4px] object-cover" src={logo} />
+            ) : (
+              <span className="grid size-9 shrink-0 place-items-center rounded-[4px] border border-primary/30 bg-primary/10 text-primary">
+                <NetworkIcon aria-hidden="true" className="size-5" />
+              </span>
+            )}
             <span className="min-w-0">
-              <span className="block truncate text-lg font-bold text-primary">Models.one</span>
-              <span className="block truncate text-xs font-medium text-muted">{t('API Gateway')}</span>
+              <span className="block truncate text-lg font-bold text-primary">
+                {systemName === undefined || systemName === '' ? t('Console') : systemName}
+              </span>
+              <span className="block truncate text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">
+                {t('API Gateway')}
+              </span>
             </span>
           </Link>
           <Button
             aria-label={t('Close navigation')}
-            className="size-9 min-h-9 px-0 lg:hidden"
+            className="lg:hidden"
             onClick={props.onClose}
+            size="icon-md"
             variant="quiet"
           >
             <XIcon aria-hidden="true" />
           </Button>
         </div>
 
-        <nav className="mt-6 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto" aria-label={t('Console sections')}>
-          <div className="flex flex-col gap-1">
-            {primaryNavigation.map((item) => (
-              <NavigationLink
-                active={isActive(item.to)}
-                item={item}
-                key={item.to}
-                onClick={props.onClose}
-              />
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <p className="eyebrow px-3">{t('Workspace')}</p>
+        <div className="relative min-h-0 flex-1">
+          <nav
+            aria-label={t('Console sections')}
+            className="sidebar-scroll flex h-full flex-col gap-6 overflow-y-auto pt-6 pb-2"
+            ref={navRef}
+          >
             <div className="flex flex-col gap-1">
-              {workspaceNavigation.map((item) => (
+              {primaryNavigation.map((item) => (
                 <NavigationLink
-                  active={isActive(item.to)}
+                  active={isActive(item)}
                   item={item}
                   key={item.to}
                   onClick={props.onClose}
                 />
               ))}
             </div>
-          </div>
 
-          {visibleAdministration.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <p className="eyebrow px-3">{t('Administration')}</p>
+              <p className="eyebrow px-3">{t('Workspace')}</p>
               <div className="flex flex-col gap-1">
-                {visibleAdministration.map((item) => (
+                {workspaceNavigation.map((item) => (
                   <NavigationLink
-                    active={isActive(item.to)}
+                    active={isActive(item)}
                     item={item}
                     key={item.to}
                     onClick={props.onClose}
@@ -221,23 +293,54 @@ export function Sidebar(props: SidebarProps) {
                 ))}
               </div>
             </div>
-          ) : null}
-        </nav>
 
-        <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4">
-          <Button className="w-full" variant="outline">
-            {t('Upgrade to Pro')}
+            {visibleAdministration.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <p className="eyebrow px-3">{t('Administration')}</p>
+                <div className="flex flex-col gap-1">
+                  {visibleAdministration.map((item) => (
+                    <NavigationLink
+                      active={isActive(item)}
+                      item={item}
+                      key={item.to}
+                      onClick={props.onClose}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </nav>
+          {hasMoreBelow ? (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-sidebar to-transparent"
+            />
+          ) : null}
+        </div>
+
+        <div className="mt-4 flex shrink-0 items-center gap-3 border-t border-border pt-4">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-high text-xs font-bold text-foreground">
+            {accountName.slice(0, 2).toUpperCase() || '—'}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-foreground">
+              {accountName === '' ? t('Account') : accountName}
+            </span>
+            <span className="block truncate text-xs text-muted">
+              {accountEmail === '' ? accountGroup : accountEmail}
+            </span>
+          </span>
+          <Button
+            aria-busy={logoutMutation.isPending}
+            aria-label={t('Logout')}
+            disabled={logoutMutation.isPending}
+            onClick={handleLogout}
+            size="icon-md"
+            title={t('Logout')}
+            variant="quiet"
+          >
+            <LogOutIcon aria-hidden="true" />
           </Button>
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="quiet">
-              <CircleHelpIcon aria-hidden="true" />
-              {t('Help')}
-            </Button>
-            <Button aria-busy={logoutMutation.isPending} disabled={logoutMutation.isPending} onClick={handleLogout} variant="quiet">
-              <LogOutIcon aria-hidden="true" />
-              {t('Logout')}
-            </Button>
-          </div>
         </div>
       </aside>
     </>

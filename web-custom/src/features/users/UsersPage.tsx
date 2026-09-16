@@ -400,7 +400,7 @@ export function UsersPage() {
               </ActionsCell>
             )
           },
-          meta: { align: 'right', label: t('Actions') },
+          meta: { align: 'right', label: t('Actions'), sticky: 'right' },
         },
       ]
     },

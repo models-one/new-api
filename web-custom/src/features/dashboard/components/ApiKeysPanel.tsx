@@ -132,7 +132,7 @@ export function ApiKeysPanel() {
       {
         id: 'actions',
         header: t('Actions'),
-        meta: { align: 'right', label: t('Actions') },
+        meta: { sticky: 'right', align: 'right', label: t('Actions') },
         cell: ({ row }) => <TokenRowActions token={row.original} />,
       },
     ],

@@ -236,8 +236,8 @@ describe('empty and error states', () => {
     await settled()
 
     expect(await screen.findByText('No traffic in this range')).toBeInTheDocument()
-    const table = await pathTable()
-    expect(table.getByText('No paths to show')).toBeInTheDocument()
+    // The empty state renders beside the table now, not as a spanning cell inside it.
+    expect(await screen.findAllByText('No paths to show')).not.toHaveLength(0)
   })
 
   it('offers a retry and suppresses the panels when the endpoint fails', async () => {

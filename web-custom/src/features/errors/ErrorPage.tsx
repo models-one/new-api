@@ -101,28 +101,56 @@ export function ErrorPage(props: ErrorPageProps) {
   const router = useRouter()
   const content = useErrorContent(props.variant, props.error)
 
-  const secondaryAction = props.onRetry ? (
-    <Button className="w-full sm:w-auto" onClick={props.onRetry} variant="outline">
-      {t('Try again')}
-    </Button>
-  ) : (
-    <Button className="w-full sm:w-auto" onClick={() => router.history.go(-1)} variant="outline">
-      {t('Go back')}
-    </Button>
-  )
+  // A visitor who opened this URL directly has nothing to go back to, and a control that
+  // silently does nothing is worse than one that is not there. The router owns the
+  // history this console navigates, so it is the one that can answer.
+  const canGoBack = router.history.canGoBack()
+
+  let secondaryAction: ReactNode
+  if (props.onRetry) {
+    secondaryAction = (
+      <Button className="w-full sm:w-auto" onClick={props.onRetry} variant="outline">
+        {t('Try again')}
+      </Button>
+    )
+  } else if (canGoBack) {
+    secondaryAction = (
+      <Button className="w-full sm:w-auto" onClick={() => router.history.go(-1)} variant="outline">
+        {t('Go back')}
+      </Button>
+    )
+  }
+
+  // 401 is the one status whose remedy is a specific action rather than "go elsewhere",
+  // so signing in leads and home follows.
+  const isUnauthorized = props.variant === '401'
 
   return (
     <ErrorState
       action={
-        <Button className="w-full sm:w-auto" render={<Link to="/" />}>
-          {t('Back to home')}
-        </Button>
+        isUnauthorized ? (
+          <Button className="w-full sm:w-auto" render={<Link to="/sign-in" />}>
+            {t('Sign in')}
+          </Button>
+        ) : (
+          <Button className="w-full sm:w-auto" render={<Link to="/" />}>
+            {t('Back to home')}
+          </Button>
+        )
       }
       code={content.code}
       description={props.description ?? content.description}
       icon={content.icon}
       label={content.title}
-      secondaryAction={secondaryAction}
+      secondaryAction={
+        isUnauthorized ? (
+          <Button className="w-full sm:w-auto" render={<Link to="/" />} variant="outline">
+            {t('Back to home')}
+          </Button>
+        ) : (
+          secondaryAction
+        )
+      }
       title={content.title}
     />
   )

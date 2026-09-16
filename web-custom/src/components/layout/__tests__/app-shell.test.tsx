@@ -44,10 +44,21 @@ describe('AppShell', () => {
     await renderAppShell()
 
     expect(screen.getByRole('complementary', { name: 'Primary navigation' })).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: 'Resource links' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('searchbox', { name: 'Search console' })).toBeInTheDocument()
     expect(screen.getByText('Usage module')).toBeInTheDocument()
+  })
+
+  // The header used to carry a Docs/Support/Changelog nav, a search box and a bell, none
+  // of which had a handler or a route behind them. They are gone; the account menu is
+  // the one control that remains, and it does something.
+  it('gives the header no control that does nothing', async () => {
+    await renderAppShell()
+
+    expect(screen.queryByRole('navigation', { name: 'Resource links' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('searchbox', { name: 'Search console' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Notifications' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Upgrade to Pro' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Help' })).not.toBeInTheDocument()
   })
 
   it('keeps the mobile menu expanded state aligned with the visible sidebar', async () => {

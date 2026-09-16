@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { AxisTick, ChartLegendItem, ChartTable } from '@/components/chart/types'
@@ -45,6 +45,35 @@ function horizontalTickStyle(position: number): CSSProperties {
   return { left: `${fraction * 100}%`, transform: 'translateX(-50%)' }
 }
 
+/**
+ * Axis labels are positioned by fraction, so two of them can land on top of each other
+ * whenever the plot is narrow or the labels are long — "$10.00" printed over "$15.00"
+ * reads as a rendering fault, not as a dense axis. Keeping the first of each colliding
+ * run leaves every surviving tick exactly where it was.
+ *
+ * `text-[11px]` in the mono stack is close enough to 0.62em per character for this; the
+ * estimate only has to be good enough to decide which labels fit.
+ */
+const TICK_CHARACTER_WIDTH = 6.9
+const TICK_LABEL_GAP = 8
+
+function dropCollidingTicks(ticks: readonly AxisTick[], width: number): readonly AxisTick[] {
+  if (width <= 0 || ticks.length < 2) return ticks
+  const kept: AxisTick[] = []
+  let lastRight = Number.NEGATIVE_INFINITY
+  for (const tick of ticks) {
+    const labelWidth = tick.label.length * TICK_CHARACTER_WIDTH
+    const centre = clamp(tick.position, 0, 1) * width
+    const left = Math.max(0, Math.min(centre - labelWidth / 2, width - labelWidth))
+    if (left < lastRight + TICK_LABEL_GAP) continue
+    kept.push(tick)
+    lastRight = left + labelWidth
+  }
+  // An axis reduced to a single label says less than no axis at all, but it is still
+  // honest; only bail out to the raw list when the estimate rejected everything.
+  return kept.length > 0 ? kept : ticks.slice(0, 1)
+}
+
 function verticalTickStyle(position: number): CSSProperties {
   const fraction = clamp(position, 0, 1)
   if (fraction <= 0.02) return { bottom: 0 }
@@ -72,8 +101,22 @@ export function ChartFrame(props: ChartFrameProps) {
   // domain's start. Rendering those is worse than rendering none: a time-formatted axis
   // labels the empty chart with the unix epoch.
   const visibleYTicks = isEmpty ? [] : yTicks
-  const visibleXTicks = isEmpty ? [] : xTicks
   const categoryHeader = props.table.categoryHeader ?? t('Category')
+
+  const tickRowRef = useRef<HTMLDivElement | null>(null)
+  const [tickRowWidth, setTickRowWidth] = useState(0)
+
+  useEffect(() => {
+    const node = tickRowRef.current
+    if (node === null) return
+    const update = () => setTickRowWidth(node.clientWidth)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  const visibleXTicks = isEmpty ? [] : dropCollidingTicks(xTicks, tickRowWidth)
 
   return (
     <div className={cn('flex min-w-0 flex-col gap-4', props.className)}>
@@ -163,8 +206,8 @@ export function ChartFrame(props: ChartFrameProps) {
             )}
           </div>
 
-          {visibleXTicks.length > 0 ? (
-            <div aria-hidden="true" className="relative mt-2 h-4">
+          {isEmpty ? null : (
+            <div aria-hidden="true" className="relative mt-2 h-4" ref={tickRowRef}>
               {visibleXTicks.map((tick) => (
                 <span
                   className="mono absolute max-w-full truncate text-[11px] leading-none text-muted"
@@ -175,7 +218,7 @@ export function ChartFrame(props: ChartFrameProps) {
                 </span>
               ))}
             </div>
-          ) : null}
+          )}
         </div>
       </div>
 

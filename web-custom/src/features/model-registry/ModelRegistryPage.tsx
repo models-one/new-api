@@ -352,7 +352,7 @@ export function ModelRegistryPage() {
             </ActionsCell>
           )
         },
-        meta: { align: 'right', label: t('Actions') },
+        meta: { align: 'right', label: t('Actions'), sticky: 'right' },
       },
     ],
     [locale, openEdit, runStatus, statusMutationPending, t, vendorList],

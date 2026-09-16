@@ -43,7 +43,7 @@ export function CallbackGuide(props: CallbackGuideProps) {
           <div className="flex flex-wrap items-center justify-between gap-2" key={row.label}>
             <dt className="text-xs text-muted">{row.label}</dt>
             <dd className="flex min-w-0 items-center gap-1">
-              <code className="mono truncate rounded-[3px] bg-sidebar px-1.5 py-0.5 text-xs text-foreground">
+              <code className="mono truncate rounded-[3px] bg-sunken px-1.5 py-0.5 text-xs text-foreground">
                 {row.value}
               </code>
               <CopyButton label={row.copyLabel} size="icon-sm" value={row.value} />

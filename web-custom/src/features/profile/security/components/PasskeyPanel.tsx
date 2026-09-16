@@ -3,6 +3,8 @@ import FingerprintIcon from 'lucide-react/dist/esm/icons/fingerprint'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { formatDateTime } from '@/lib/format'
+
 import { ConfirmDialog, toErrorMessage, toast } from '@/components/overlay'
 import { Alert, Button, IconBadge, Panel, Skeleton, StatusBadge } from '@/components/ui'
 import { isPasskeySupported } from '@/features/auth/passkey'
@@ -187,7 +189,9 @@ export function PasskeyPanel() {
               <p className="text-sm leading-6 text-muted">
                 {lastUsedAt
                   ? t('Last used to sign in on {{date}}', {
-                    date: new Date(lastUsedAt).toLocaleString(),
+                    // `last_used_at` is an ISO string, while the shared formatter takes the
+                    // unix seconds every other endpoint in this API returns.
+                    date: formatDateTime(Math.floor(new Date(lastUsedAt).getTime() / 1000)),
                   })
                   : t('This passkey has not been used to sign in yet.')}
               </p>

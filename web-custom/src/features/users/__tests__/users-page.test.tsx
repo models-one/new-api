@@ -197,8 +197,10 @@ describe('the account table', () => {
   it('shows a real empty state when nothing matches', async () => {
     renderPage()
 
-    const table = await accountTable()
-    expect(await table.findByText('No accounts yet')).toBeInTheDocument()
+    // The empty state now renders beside the table rather than as a spanning cell, so it
+    // is queried at page scope; the desktop table and the mobile card list each render
+    // one, hence findAllByText.
+    expect(await screen.findAllByText('No accounts yet')).not.toHaveLength(0)
   })
 
   it('converts the balance with quota_per_unit and shows the derived share', async () => {

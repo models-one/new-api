@@ -1,25 +1,40 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { serverStatusQuery } from '@/lib/api/status'
+
 export function LandingHeader() {
   const { t } = useTranslation()
+  const statusQuery = useQuery(serverStatusQuery())
+  const systemName = statusQuery.data?.system_name?.trim() ?? ''
+  const docsLink = statusQuery.data?.docs_link?.trim() ?? ''
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#0a0e19]/90 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 sm:px-8 lg:px-12">
-        <div className="flex items-center gap-8">
-          <Link className="text-[22px] font-bold text-[#00f0ff] transition-opacity hover:opacity-80" to="/">
-            Models.one
+      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
+        <div className="flex min-w-0 items-center gap-6">
+          <Link className="shrink-0 text-[22px] font-bold text-[#00f0ff] transition-opacity hover:opacity-80" to="/">
+            {systemName}
           </Link>
-          <nav aria-label={t('Public navigation')} className="hidden items-center gap-2 md:flex">
-            <Link className="landing-nav-link" to="/models">{t('Models')}</Link>
-            <a className="landing-nav-link" href="#capabilities">{t('Pricing')}</a>
-            <a className="landing-nav-link" href="#integration">{t('Docs')}</a>
-            <Link className="landing-nav-link" to="/organization">{t('Enterprise')}</Link>
+          {/* Visible on a phone too. Hiding it behind `md:` left every public page with no
+              way to reach any other public page from a handset. */}
+          <nav
+            aria-label={t('Public navigation')}
+            className="scroll-x-hint flex min-w-0 items-center gap-2"
+          >
+            <Link className="landing-nav-link shrink-0" to="/models">{t('Models')}</Link>
+            <Link className="landing-nav-link shrink-0" to="/pricing">{t('Pricing')}</Link>
+            <Link className="landing-nav-link shrink-0" to="/rankings">{t('Rankings')}</Link>
+            {docsLink === '' ? null : (
+              <a className="landing-nav-link shrink-0" href={docsLink} rel="noreferrer" target="_blank">
+                {t('Docs')}
+              </a>
+            )}
           </nav>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           <Link className="hidden px-4 py-2 text-sm text-foreground transition-colors hover:text-[#00f0ff] sm:inline-flex" to="/dashboard">
             {t('Sign In')}
           </Link>

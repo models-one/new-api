@@ -170,9 +170,11 @@ describe('the code table', () => {
   it('shows a real empty state when the deployment has issued nothing', async () => {
     renderPage()
 
-    const table = await codeTable()
-    expect(await table.findByText('No redemption codes yet')).toBeInTheDocument()
-    expect(table.getByText('Codes you create appear here with their value and redemption state.')).toBeInTheDocument()
+    // The empty state now renders beside the table rather than as a spanning cell, so it
+    // is queried at page scope; the desktop table and the mobile card list each render
+    // one, hence findAllByText.
+    expect(await screen.findAllByText('No redemption codes yet')).not.toHaveLength(0)
+    expect(screen.getAllByText('Codes you create appear here with their value and redemption state.')).not.toHaveLength(0)
   })
 
   it('masks the code, reveals it on demand, and offers a copy control', async () => {

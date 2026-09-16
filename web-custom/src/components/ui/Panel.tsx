@@ -57,14 +57,18 @@ function PanelHeader(props: PanelHeaderProps) {
   return (
     <div
       className={cn(
-        'flex items-center justify-between gap-4 border-b border-border px-5 py-4',
+        // Wraps rather than squeezes. A non-shrinking action row (a segmented control, a
+        // range picker) used to win the whole width on a phone, leaving the heading
+        // truncated to nothing and the panel wider than the screen; now the actions drop
+        // to their own line and the title keeps its space.
+        'flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-border px-5 py-4',
         props.className,
       )}
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 flex-1 basis-[min(100%,16rem)] items-center gap-3">
         {props.icon ? <span className="shrink-0 [&_svg]:size-5">{props.icon}</span> : null}
         <div className="min-w-0">
-          <Heading className="truncate text-lg font-bold text-foreground" id={props.titleId}>
+          <Heading className="text-lg font-bold text-balance text-foreground" id={props.titleId}>
             {props.title}
           </Heading>
           {props.description ? (
@@ -73,7 +77,7 @@ function PanelHeader(props: PanelHeaderProps) {
         </div>
       </div>
       {props.actions ? (
-        <div className="flex shrink-0 items-center gap-2">{props.actions}</div>
+        <div className="flex min-w-0 max-w-full items-center gap-2">{props.actions}</div>
       ) : null}
     </div>
   )

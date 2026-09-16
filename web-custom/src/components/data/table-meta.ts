@@ -9,6 +9,10 @@ export const alignClasses: Record<DataTableAlign, string> = {
   right: 'text-right',
 }
 
+/** Chrome for a column pinned to the right edge of a horizontally scrolling table. */
+export const stickyRightClasses =
+  'sticky right-0 z-10 before:pointer-events-none before:absolute before:inset-y-0 before:-left-6 before:w-6 before:bg-gradient-to-l before:from-surface before:to-transparent'
+
 /**
  * Per-column presentation declared once on the column definition, so the table
  * chrome, the mobile card list and the cell primitives stay in agreement.
@@ -27,6 +31,12 @@ export type DataTableColumnMeta<TData = unknown, TValue = unknown> = {
   mobilePrimary?: boolean
   /** Optional plain-text projection used for card titles and export-style output. */
   toText?: (value: TValue, row: TData) => string
+  /**
+   * Pins the column to the right edge of the horizontal scroll area. Set it on the row
+   * actions column: without it a table that needs more width than the viewport hides its
+   * own controls off-screen, and macOS draws no scrollbar to say so.
+   */
+  sticky?: 'right'
 }
 
 declare module '@tanstack/react-table' {

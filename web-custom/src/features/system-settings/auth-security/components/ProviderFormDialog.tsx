@@ -246,7 +246,7 @@ export function ProviderFormDialog(props: ProviderFormDialogProps) {
         <div className="panel-muted flex flex-wrap items-center justify-between gap-2 px-4 py-3">
           <span className="text-xs text-muted">{t('Authorization callback URL')}</span>
           <span className="flex min-w-0 items-center gap-1">
-            <code className="mono truncate rounded-[3px] bg-sidebar px-1.5 py-0.5 text-xs text-foreground">
+            <code className="mono truncate rounded-[3px] bg-sunken px-1.5 py-0.5 text-xs text-foreground">
               {callbackUrl}
             </code>
             <CopyButton label={t('Copy the callback URL')} size="icon-sm" value={callbackUrl} />

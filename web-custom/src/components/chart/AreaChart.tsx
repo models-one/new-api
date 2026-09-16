@@ -5,7 +5,7 @@ import {
   createPlotProjection,
   horizontalTicks,
   niceDomain,
-  sampleDomain,
+  sampleCategories,
   verticalTicks,
 } from '@/components/chart/scales'
 import { buildSeriesTable, seriesCategories, seriesExtent } from '@/components/chart/series'
@@ -56,9 +56,7 @@ export function AreaChart(props: AreaChartProps) {
 
   const categories = seriesCategories(series)
   const xValues =
-    categories.length > 1 && categories.length <= xTickCount
-      ? categories
-      : sampleDomain(bounds.x, xTickCount)
+    categories.length > 1 ? sampleCategories(categories, xTickCount) : categories
 
   const legend: ChartLegendItem[] = series.map((entry, index) => ({
     name: entry.name,

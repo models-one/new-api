@@ -275,8 +275,10 @@ describe('the channel table', () => {
   it('shows a real empty state, which is what a fresh deployment renders', async () => {
     renderPage()
 
-    const table = await channelTable()
-    expect(await table.findByText('No channels yet')).toBeInTheDocument()
+    // The empty state now renders beside the table rather than as a spanning cell, so it
+    // is queried at page scope; the desktop table and the mobile card list each render
+    // one, hence findAllByText.
+    expect(await screen.findAllByText('No channels yet')).not.toHaveLength(0)
   })
 
   it('offers a retry rather than an empty table when the list request fails', async () => {

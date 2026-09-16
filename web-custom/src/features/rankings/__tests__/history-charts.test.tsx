@@ -41,23 +41,28 @@ describe('ModelVolumeChart axis', () => {
     const { container } = render(<ModelVolumeChart history={monthHistory()} periodLabel="Last 30 days" />)
 
     // The axis strip is aria-hidden — the screen-reader table carries the values — so it has to
-    // be read out of the DOM. `LineChart` samples ticks evenly once the buckets outnumber
-    // xTickCount and hands the formatter a fractional x plus a tick ORDINAL; formatting by that
-    // ordinal would print Aug 1..Aug 6 evenly spread over a thirty-day plot, a time axis this
-    // data never had.
+    // be read out of the DOM. `LineChart` strides the real buckets once they outnumber
+    // xTickCount, so every tick is a day that exists and consecutive ticks are the same
+    // number of days apart. Sampling the numeric domain instead landed ticks between
+    // buckets, which the day formatter rounded into an axis that appeared to skip days.
     const drawn = [...container.querySelectorAll('[aria-hidden="true"] span')]
       .map((node) => node.textContent ?? '')
       .filter((text) => text.startsWith('Aug '))
 
     expect(drawn.length).toBeGreaterThan(2)
     expect(drawn.at(0)).toBe('Aug 1')
-    expect(drawn.at(-1)).toBe('Aug 30')
 
     const days = drawn.map((text) => Number(text.slice('Aug '.length)))
     // Every drawn date is a bucket that exists, and they climb across the window.
     expect(days.every((day) => day >= 1 && day <= 30)).toBe(true)
     expect([...days].sort((left, right) => left - right)).toEqual(days)
     expect(new Set(days).size).toBe(days.length)
+
+    // The gap between ticks is constant: equal pixel spacing has to carry equal time.
+    const gaps = days.slice(1).map((day, index) => day - (days[index] as number))
+    expect(new Set(gaps).size).toBe(1)
+    // And the axis still reaches the end of the window, to within one step.
+    expect(30 - (days.at(-1) as number)).toBeLessThan(gaps[0] as number)
   })
 
   it('gives the screen-reader table one exact row per bucket', () => {

@@ -34,12 +34,12 @@ export function DataTableToolbar(props: DataTableToolbarProps) {
     <section
       aria-label={props.label}
       className={cn(
-        'flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between',
+        'flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-start lg:justify-between',
         props.className,
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-        {props.search ? <div className="min-w-0 sm:w-full sm:max-w-sm">{props.search}</div> : null}
+      <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-start">
+        {props.search ? <div className="min-w-0 sm:w-full sm:max-w-md">{props.search}</div> : null}
         {props.filters ? (
           <div className="flex flex-wrap items-center gap-2" {...filterGroupProps}>
             {props.filters}

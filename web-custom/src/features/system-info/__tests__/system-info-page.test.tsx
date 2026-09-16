@@ -244,8 +244,10 @@ describe('the instances panel', () => {
   it('shows a real empty state when nothing has reported a heartbeat', async () => {
     renderPage()
 
-    const table = await instanceTable()
-    expect(await table.findByText('No node has reported a heartbeat')).toBeInTheDocument()
+    // The empty state now renders beside the table rather than as a spanning cell, so it
+    // is queried at page scope; the desktop table and the mobile card list each render
+    // one, hence findAllByText.
+    expect(await screen.findAllByText('No node has reported a heartbeat')).not.toHaveLength(0)
     expect(screen.getByRole('button', { name: 'Prune stale' })).toBeDisabled()
   })
 
@@ -515,8 +517,10 @@ describe('the model performance panel', () => {
   it('shows a real empty state when no request was recorded in the window', async () => {
     renderPage()
 
-    const table = within(await screen.findByRole('table', { name: 'Model performance summary' }))
-    expect(await table.findByText('No model metrics in this window')).toBeInTheDocument()
+    // The empty state now renders beside the table rather than as a spanning cell, so it
+    // is queried at page scope; the desktop table and the mobile card list each render
+    // one, hence findAllByText.
+    expect(await screen.findAllByText('No model metrics in this window')).not.toHaveLength(0)
   })
 
   it('grades a model the gateway recorded, using the ported thresholds', async () => {

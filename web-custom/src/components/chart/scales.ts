@@ -1,3 +1,5 @@
+import i18next from 'i18next'
+
 import type { AxisTick } from '@/components/chart/types'
 import { CHART_VIEWBOX_HEIGHT, CHART_VIEWBOX_WIDTH } from '@/components/chart/types'
 
@@ -215,18 +217,25 @@ export function createTimeScale(
   }
 }
 
+/** Axis ticks follow the interface language, never the host's. See `lib/format.ts`. */
+function localeOrInterface(locale?: string): string {
+  if (locale !== undefined && locale !== '') return locale
+  return i18next.resolvedLanguage ?? i18next.language ?? 'en'
+}
+
 /** Picks a tick format that suits the visible time span. */
 export function formatTimeTick(milliseconds: number, spanMs: number, locale?: string): string {
   if (!Number.isFinite(milliseconds)) return '—'
   const date = new Date(milliseconds)
+  const tickLocale = localeOrInterface(locale)
 
   if (spanMs <= 2 * DAY) {
-    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
+    return date.toLocaleTimeString(tickLocale, { hour: '2-digit', minute: '2-digit', hour12: false })
   }
   if (spanMs <= 365 * DAY) {
-    return date.toLocaleDateString(locale, { month: 'short', day: '2-digit' })
+    return date.toLocaleDateString(tickLocale, { month: 'short', day: '2-digit' })
   }
-  return date.toLocaleDateString(locale, { month: 'short', year: 'numeric' })
+  return date.toLocaleDateString(tickLocale, { month: 'short', year: 'numeric' })
 }
 
 export type PlotProjection = {
@@ -316,6 +325,26 @@ export function horizontalTicks(
     label: format(value, index),
     })),
   )
+}
+
+/**
+ * `count`-ish ticks taken from the real category values, at a fixed index stride.
+ *
+ * Sampling the numeric domain instead lands ticks between data points: on a daily series
+ * that means timestamps at 13:12 on one day and 09:36 on another, which the day formatter
+ * rounds into "Sep 09, Sep 10, Sep 12, Sep 14" — an axis that appears to skip a day while
+ * its ticks are evenly spaced. Striding the categories keeps every tick on a real point,
+ * so equal pixel gaps carry equal time gaps.
+ */
+export function sampleCategories(categories: readonly number[], count: number): number[] {
+  const target = Math.max(2, Math.floor(count))
+  if (categories.length <= target) return [...categories]
+  const stride = Math.ceil((categories.length - 1) / (target - 1))
+  const sampled: number[] = []
+  for (let index = 0; index < categories.length; index += stride) {
+    sampled.push(categories[index] as number)
+  }
+  return sampled
 }
 
 /** `count` evenly spaced values spanning the domain, used when data is dense. */

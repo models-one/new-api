@@ -294,7 +294,7 @@ export function RedemptionCodesPage() {
           ]
           return <ActionsCell actions={actions} label={t('Actions for {{name}}', { name: code.name })} />
         },
-        meta: { align: 'right', label: t('Actions') },
+        meta: { align: 'right', label: t('Actions'), sticky: 'right' },
       },
     ],
     [locale, openEdit, pendingToggleId, quotaPerUnit, t, toggleStatus],

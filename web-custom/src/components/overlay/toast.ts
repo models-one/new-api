@@ -36,6 +36,36 @@ function envelopeMessage(payload: unknown): string | undefined {
  * Turns anything thrown — an axios error carrying the `{ success, message }` envelope,
  * a plain `Error`, a string, a bare envelope object — into a message worth showing.
  */
+/**
+ * Copy for the transport failures that carry no `{ success, message }` envelope.
+ *
+ * Without this the axios message reaches the user verbatim — a sign-in form that has hit
+ * the server's rate limit renders the literal string "Request failed with status code
+ * 429", which names an implementation detail and tells nobody what to do next.
+ */
+function httpStatusMessage(status: number | undefined): string | undefined {
+  switch (status) {
+    case 401:
+      return t('Your session has expired. Sign in again to continue.')
+    case 403:
+      return t('You do not have permission to do that.')
+    case 404:
+      return t('That resource no longer exists.')
+    case 408:
+      return t('The server took too long to answer. Try again.')
+    case 429:
+      return t('Too many attempts. Wait a few minutes and try again.')
+    case 502:
+    case 503:
+    case 504:
+      return t('The service is temporarily unavailable. Try again shortly.')
+    default:
+      return status !== undefined && status >= 500
+        ? t('The server could not complete this request.')
+        : undefined
+  }
+}
+
 export function toErrorMessage(error: unknown, fallback?: string): string {
   const resolvedFallback = fallback ?? t('Request failed')
 
@@ -46,6 +76,7 @@ export function toErrorMessage(error: unknown, fallback?: string): string {
 
   if (axios.isAxiosError(error)) {
     return envelopeMessage(error.response?.data)
+      ?? httpStatusMessage(error.response?.status)
       ?? (error.message.trim().length > 0 ? error.message : resolvedFallback)
   }
 

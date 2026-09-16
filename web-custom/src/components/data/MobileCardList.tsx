@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTableEmpty } from '@/components/data/DataTableEmpty'
-import { alignClasses } from '@/components/data/table-meta'
 import { cn } from '@/lib/utils'
 
 type MobileCardListProps<TData> = {
@@ -121,7 +120,6 @@ export function MobileCardList<TData>(props: MobileCardListProps<TData>) {
                               <dd
                                 className={cn(
                                   'mt-1 text-sm text-foreground',
-                                  alignClasses[cell.column.columnDef.meta?.align ?? 'left'],
                                   cell.column.columnDef.meta?.mono ? 'mono' : '',
                                 )}
                               >
