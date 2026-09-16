@@ -198,7 +198,7 @@ export function EmailSection() {
           invalid={form.errors.SMTPFrom !== undefined}
           label={t('From address')}
           onChange={(event) => form.setField('SMTPFrom', event.target.value)}
-          placeholder="Models.one <noreply@example.com>"
+          placeholder={t('Your service name <noreply@example.com>')}
           value={form.values.SMTPFrom}
         />
       </div>

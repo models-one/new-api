@@ -311,9 +311,11 @@ export function Sidebar(props: SidebarProps) {
             ) : null}
           </nav>
           {hasMoreBelow ? (
+            // Darkens the bottom edge. Fading to the rail's OWN colour, which is what this
+            // did first, paints the rail onto the rail and shows nothing at all.
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-sidebar to-transparent"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/85 to-transparent"
             />
           ) : null}
         </div>

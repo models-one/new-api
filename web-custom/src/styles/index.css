@@ -222,10 +222,15 @@ textarea:focus-visible,
    * They already scrolled; what they lacked was any sign of it, so a label cut in half
    * at the edge read as a layout bug rather than as "keep going".
    */
+  /*
+   * `scrollbar-width` is deliberately NOT set here. Chrome honours it in preference to
+   * the ::-webkit-scrollbar rules below, and on macOS that means an overlay scrollbar
+   * that reserves no space and stays invisible until something scrolls — which is the
+   * whole problem this class exists to solve. Styling the pseudo-elements alone gives a
+   * classic, always-visible bar; Firefox falls back to its own, which is also visible.
+   */
   .scroll-x-hint {
     overflow-x: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border-strong) transparent;
   }
 
   .scroll-x-hint::-webkit-scrollbar {
@@ -242,8 +247,7 @@ textarea:focus-visible,
   }
 
   .sidebar-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border-strong) transparent;
+    overflow-y: scroll;
   }
 
   .sidebar-scroll::-webkit-scrollbar {

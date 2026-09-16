@@ -1,6 +1,9 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { serverStatusQuery } from '@/lib/api/status'
 
 import { SkipToMain } from '@/components/system/SkipToMain'
 
@@ -17,6 +20,8 @@ const MAIN_ID = 'pricing-main'
  */
 export function PublicFrame(props: { children: ReactNode }) {
   const { t } = useTranslation()
+  // The operator's own name, the way the sign-in page and the console rail read it.
+  const systemName = useQuery(serverStatusQuery()).data?.system_name?.trim() ?? ''
 
   return (
     <div className="landing-page flex min-h-screen flex-col text-foreground">
@@ -29,7 +34,7 @@ export function PublicFrame(props: { children: ReactNode }) {
               className="shrink-0 text-[22px] font-bold text-[#00f0ff] transition-opacity hover:opacity-80"
               to="/"
             >
-              Models.one
+              {systemName}
             </Link>
             <nav aria-label={t('Public navigation')} className="hidden items-center gap-2 md:flex">
               <Link
