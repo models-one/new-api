@@ -1,0 +1,383 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-background: #111214;
+  --color-canvas: #141517;
+  --color-sidebar: #18191c;
+  --color-sunken: #131416;
+  --color-surface: #191b1e;
+  --color-surface-raised: #202225;
+  --color-surface-high: #292c30;
+  --color-border: #2b2e32;
+  --color-border-strong: #42464d;
+  --color-foreground: #eae9e5;
+  --color-muted: #989ca4;
+  --color-primary: #e7ad57;
+  --color-nav-active: #332b20;
+  --color-primary-strong: #f6c477;
+  --color-primary-foreground: #21190f;
+  --color-secondary: #90b6a0;
+  --color-info: #8ba9d1;
+  --color-success: #80bc9b;
+  --color-warning: #e7ad57;
+  --color-destructive: #ff8f87;
+  --font-sans: 'Public Sans Variable', 'Public Sans', system-ui, sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --radius-panel: 6px;
+  --radius-control: 4px;
+}
+
+:root {
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+
+html {
+  min-width: 320px;
+  background: var(--color-background);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+[role='option']:focus-visible,
+[role='menuitem']:focus-visible,
+[role='tab']:focus-visible,
+[role='checkbox']:focus-visible,
+[role='radio']:focus-visible,
+[role='switch']:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/*
+ * A control inside `.field` is already announced by the chrome around it, which turns its
+ * border cyan on focus-within. Letting the control keep the ring above draws a second,
+ * square cyan rectangle inside the rounded field — two indicators for one focus.
+ * The text control defers to the chrome; a nested button (the reveal-password eye, a
+ * clear button) keeps its own ring but inset, so it reads as belonging to that button.
+ */
+.field > :focus-visible,
+.field > * > :focus-visible {
+  outline: none;
+}
+
+.field button:focus-visible,
+.field [role='button']:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+::selection {
+  background: rgba(231, 173, 87, 0.25);
+  color: var(--color-foreground);
+}
+
+@layer components {
+  .landing-page {
+    background:
+      linear-gradient(110deg, rgba(231, 173, 87, 0.025), transparent 38%),
+      linear-gradient(320deg, rgba(144, 182, 160, 0.018), transparent 32%),
+      #111214;
+  }
+
+  .landing-nav-link {
+    border-radius: 4px;
+    padding: 0.4rem 0.75rem;
+    color: #b9cacb;
+    font-size: 0.875rem;
+    transition: color 160ms ease, background-color 160ms ease;
+  }
+
+  .landing-nav-link:hover {
+    background: rgba(49, 52, 65, 0.5);
+    color: #dfe2f2;
+  }
+
+  .landing-bento,
+  .landing-code-card {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(25, 27, 30, 0.84), rgba(19, 20, 22, 0.92));
+    box-shadow: 0 20px 54px rgba(0, 0, 0, 0.12);
+    transition: border-color 220ms ease, box-shadow 220ms ease;
+  }
+
+  .landing-bento:hover,
+  .landing-code-card:hover {
+    border-color: rgba(231, 173, 87, 0.28);
+    box-shadow: inset 0 0 24px rgba(231, 173, 87, 0.035), 0 20px 54px rgba(0, 0, 0, 0.15);
+  }
+
+  .landing-bento:first-child {
+    background:
+      linear-gradient(235deg, rgba(231, 173, 87, 0.11), transparent 48%),
+      linear-gradient(180deg, rgba(25, 27, 30, 0.86), rgba(19, 20, 22, 0.94));
+  }
+
+  .landing-code-card {
+    background: #141517;
+  }
+
+  .landing-footer-link {
+    color: #b9cacb;
+    transition: color 160ms ease;
+  }
+
+  .landing-footer-link:hover {
+    color: #e7ad57;
+  }
+
+  .landing-deferred-section {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 720px;
+  }
+
+  .landing-logo-stage {
+    isolation: isolate;
+  }
+
+  .landing-orbit::before,
+  .landing-orbit::after {
+    position: absolute;
+    border-radius: 999px;
+    background: #e7ad57;
+    box-shadow: 0 0 16px rgba(231, 173, 87, 0.7);
+    content: '';
+  }
+
+  .landing-orbit::before {
+    top: -3px;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+  }
+
+  .landing-orbit::after {
+    right: -2px;
+    bottom: 32%;
+    width: 4px;
+    height: 4px;
+    opacity: 0.6;
+  }
+
+  .landing-orbit-outer {
+    animation: landing-orbit 36s linear infinite;
+  }
+
+  .landing-orbit-inner {
+    animation: landing-orbit-reverse 24s linear infinite;
+  }
+
+  .landing-logo-float {
+    animation: landing-logo-float 6s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .landing-status-dot {
+    animation: landing-status-pulse 2.4s ease-in-out infinite;
+  }
+
+  /*
+   * The navigation rail holds more entries than a laptop window fits. macOS hides overlay
+   * scrollbars until something scrolls, so the rail keeps a permanently visible one:
+   * without it a group heading resting on the fold reads as a heading with no items.
+   */
+  /*
+   * Horizontal strips that can outgrow their container — tab bars, section navigation.
+   * They already scrolled; what they lacked was any sign of it, so a label cut in half
+   * at the edge read as a layout bug rather than as "keep going".
+   */
+  /*
+   * `scrollbar-width` is deliberately NOT set here. Chrome honours it in preference to
+   * the ::-webkit-scrollbar rules below, and on macOS that means an overlay scrollbar
+   * that reserves no space and stays invisible until something scrolls — which is the
+   * whole problem this class exists to solve. Styling the pseudo-elements alone gives a
+   * classic, always-visible bar; Firefox falls back to its own, which is also visible.
+   */
+  .scroll-x-hint {
+    overflow-x: auto;
+  }
+
+  .scroll-x-hint::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .scroll-x-hint::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--color-border-strong);
+  }
+
+  .scroll-x-hint::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .sidebar-scroll {
+    overflow-y: scroll;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--color-border-strong);
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .settings-canvas {
+    background-color: var(--color-background);
+  }
+
+  .panel {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-panel);
+    background: var(--color-surface);
+  }
+
+  .panel-muted {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-panel);
+    background: var(--color-sunken);
+  }
+
+  .field {
+    min-height: 40px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-sunken);
+    color: var(--color-foreground);
+    transition: border-color 150ms ease, background-color 150ms ease;
+  }
+
+  .field:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  .field:focus,
+  .field:focus-within {
+    border-color: var(--color-primary);
+    outline: none;
+  }
+
+  .data-grid {
+    background-image:
+      linear-gradient(rgba(223, 226, 242, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(223, 226, 242, 0.035) 1px, transparent 1px);
+    background-size: 100% 25%, 25% 100%;
+  }
+
+  .eyebrow {
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes landing-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes landing-orbit-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes landing-logo-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes landing-status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(231, 173, 87, 0.15), 0 0 10px rgba(231, 173, 87, 0.5);
+    opacity: 1;
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px rgba(231, 173, 87, 0), 0 0 16px rgba(231, 173, 87, 0.7);
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@layer components {
+  /* Indeterminate ProgressBar track fill. Clamped by the prefers-reduced-motion block above. */
+  .progress-indeterminate {
+    animation: progress-indeterminate 1.4s ease-in-out infinite;
+    will-change: transform;
+  }
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(300%);
+  }
+}

@@ -1,0 +1,78 @@
+// @vitest-environment happy-dom
+
+import '@testing-library/jest-dom/vitest'
+import '@/i18n/config'
+
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { AppShell } from '@/components/layout/AppShell'
+
+afterEach(cleanup)
+
+async function renderAppShell() {
+  const rootRoute = createRootRoute({ component: AppShell })
+  const usageRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/usage',
+    component: () => <div>Usage module</div>,
+  })
+  const router = createRouter({
+    history: createMemoryHistory({ initialEntries: ['/usage'] }),
+    routeTree: rootRoute.addChildren([usageRoute]),
+  })
+
+  await router.load()
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  queryClient.setQueryData(['server-status'], { system_name: 'new-api', logo: '', docs_link: '' })
+  queryClient.setQueryData(['user', 'self'], { username: 'tester', group: 'default', role: 1 })
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
+}
+
+describe('AppShell', () => {
+  it('renders the shared Usage navigation and header around a feature route', async () => {
+    await renderAppShell()
+
+    expect(screen.getByRole('complementary', { name: 'Primary navigation' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Usage' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Usage module')).toBeInTheDocument()
+  })
+
+  // The header used to carry a Docs/Support/Changelog nav, a search box and a bell, none
+  // of which had a handler or a route behind them. They are gone; the account menu is
+  // the one control that remains, and it does something.
+  it('gives the header no control that does nothing', async () => {
+    await renderAppShell()
+
+    expect(screen.queryByRole('navigation', { name: 'Resource links' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('searchbox', { name: 'Search console' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Notifications' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Upgrade to Pro' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Help' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the mobile menu expanded state aligned with the visible sidebar', async () => {
+    await renderAppShell()
+
+    const openButton = screen.getByRole('button', { name: 'Open navigation' })
+    expect(openButton).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(openButton)
+    expect(openButton).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close navigation' })[0])
+    expect(openButton).toHaveAttribute('aria-expanded', 'false')
+  })
+})

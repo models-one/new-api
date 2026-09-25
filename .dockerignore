@@ -11,4 +11,7 @@ docs
 /web/dist
 /web-custom/node_modules
 /web-custom/dist
+/web-custom-v2/node_modules
+/web-custom-v2/dist
+/web-custom-v2/coverage
 !THIRD-PARTY-LICENSES.md
