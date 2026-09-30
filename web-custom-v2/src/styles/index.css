@@ -126,29 +126,64 @@ textarea:focus-visible,
     color: #dfe2f2;
   }
 
-  .landing-bento,
-  .landing-code-card {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    background: linear-gradient(180deg, rgba(25, 27, 30, 0.84), rgba(19, 20, 22, 0.92));
-    box-shadow: 0 20px 54px rgba(0, 0, 0, 0.12);
-    transition: border-color 220ms ease, box-shadow 220ms ease;
+  .landing-cta-primary,
+  .landing-cta-secondary {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 4px;
+    padding: 0 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
   }
 
-  .landing-bento:hover,
-  .landing-code-card:hover {
-    border-color: rgba(231, 173, 87, 0.28);
-    box-shadow: inset 0 0 24px rgba(231, 173, 87, 0.035), 0 20px 54px rgba(0, 0, 0, 0.15);
+  .landing-cta-primary {
+    position: relative;
+    overflow: hidden;
+    background: #e7ad57;
+    color: #111214;
   }
 
-  .landing-bento:first-child {
-    background:
-      linear-gradient(235deg, rgba(231, 173, 87, 0.11), transparent 48%),
-      linear-gradient(180deg, rgba(25, 27, 30, 0.86), rgba(19, 20, 22, 0.94));
+  .landing-cta-primary:hover {
+    background: #f6c477;
   }
 
-  .landing-code-card {
-    background: #141517;
+  /* A light band that sweeps across the button on hover. */
+  .landing-cta-primary::after {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+    content: '';
+    transform: translateX(-120%);
+    transition: transform 700ms ease;
+  }
+
+  .landing-cta-primary:hover::after {
+    transform: translateX(120%);
+  }
+
+  .landing-cta-primary svg,
+  .landing-arrow-link svg {
+    transition: transform 200ms ease;
+  }
+
+  .landing-cta-primary:hover svg,
+  .landing-arrow-link:hover svg {
+    transform: translateX(3px);
+  }
+
+  .landing-cta-secondary {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.03);
+    color: #dfe2f2;
+  }
+
+  .landing-cta-secondary:hover {
+    border-color: rgba(231, 173, 87, 0.5);
+    color: #f6c477;
   }
 
   .landing-footer-link {
@@ -163,47 +198,6 @@ textarea:focus-visible,
   .landing-deferred-section {
     content-visibility: auto;
     contain-intrinsic-size: auto 720px;
-  }
-
-  .landing-logo-stage {
-    isolation: isolate;
-  }
-
-  .landing-orbit::before,
-  .landing-orbit::after {
-    position: absolute;
-    border-radius: 999px;
-    background: #e7ad57;
-    box-shadow: 0 0 16px rgba(231, 173, 87, 0.7);
-    content: '';
-  }
-
-  .landing-orbit::before {
-    top: -3px;
-    left: 50%;
-    width: 6px;
-    height: 6px;
-  }
-
-  .landing-orbit::after {
-    right: -2px;
-    bottom: 32%;
-    width: 4px;
-    height: 4px;
-    opacity: 0.6;
-  }
-
-  .landing-orbit-outer {
-    animation: landing-orbit 36s linear infinite;
-  }
-
-  .landing-orbit-inner {
-    animation: landing-orbit-reverse 24s linear infinite;
-  }
-
-  .landing-logo-float {
-    animation: landing-logo-float 6s ease-in-out infinite;
-    will-change: transform;
   }
 
   .landing-status-dot {
@@ -317,29 +311,6 @@ textarea:focus-visible,
   }
 }
 
-@keyframes landing-orbit {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes landing-orbit-reverse {
-  to {
-    transform: rotate(-360deg);
-  }
-}
-
-@keyframes landing-logo-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
 @keyframes landing-status-pulse {
   0%,
   100% {
@@ -350,6 +321,455 @@ textarea:focus-visible,
   50% {
     box-shadow: 0 0 0 5px rgba(231, 173, 87, 0), 0 0 16px rgba(231, 173, 87, 0.7);
     opacity: 0.7;
+  }
+}
+
+@property --landing-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@layer components {
+  .landing-dot-grid {
+    background-image: radial-gradient(rgba(223, 226, 242, 0.08) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse 70% 65% at 50% 0%, #000 25%, transparent 75%);
+  }
+
+  .landing-gradient-text {
+    background-image: linear-gradient(90deg, #e7ad57, #f3d19a, #90b6a0, #f3d19a, #e7ad57);
+    background-size: 200% 100%;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* A 1px border drawn by a conic gradient; `--landing-glow-fill` must match the box's own background. */
+  .landing-glow-border {
+    border: 1px solid transparent;
+    background:
+      linear-gradient(var(--landing-glow-fill, #191b1e), var(--landing-glow-fill, #191b1e)) padding-box,
+      conic-gradient(
+          from var(--landing-angle),
+          rgba(255, 255, 255, 0.1) 0deg 240deg,
+          rgba(231, 173, 87, 0.85) 300deg,
+          rgba(255, 255, 255, 0.1) 350deg
+        )
+        border-box;
+  }
+
+  .landing-flow {
+    background-image: repeating-linear-gradient(180deg, rgba(231, 173, 87, 0.8) 0 4px, transparent 4px 8px);
+  }
+
+  .landing-live-dot {
+    box-shadow: 0 0 10px rgba(231, 173, 87, 0.8);
+  }
+
+  .landing-card-icon {
+    transition: color 240ms ease, background-color 240ms ease;
+  }
+
+  .landing-card {
+    transition: transform 240ms ease, border-color 240ms ease, box-shadow 240ms ease;
+  }
+
+  .landing-card:hover {
+    border-color: rgba(231, 173, 87, 0.35);
+    box-shadow: 0 16px 40px -20px rgba(231, 173, 87, 0.45);
+  }
+
+  .landing-card:hover .landing-card-icon {
+    background: #e7ad57;
+    color: #111214;
+  }
+
+  /* Static by default: a centred, wrapping row. The duplicate list only exists for the loop. */
+  .landing-marquee-track {
+    display: flex;
+    justify-content: center;
+  }
+
+  .landing-marquee-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem 3rem;
+  }
+
+  .landing-marquee-copy {
+    display: none;
+  }
+
+  /* A marker riding each orbit ring, so the rotation reads even though the ring is a circle. */
+  .landing-orbit::after {
+    position: absolute;
+    top: -4px;
+    left: calc(50% - 4px);
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: #e7ad57;
+    box-shadow: 0 0 14px rgba(231, 173, 87, 0.9);
+    content: '';
+  }
+
+  .landing-orbit-inner::after {
+    top: auto;
+    bottom: -3px;
+    width: 6px;
+    height: 6px;
+    background: #90b6a0;
+    box-shadow: 0 0 12px rgba(144, 182, 160, 0.9);
+  }
+
+  /* Only meaningful when it can follow the scroll; see the `@supports` block below. */
+  .landing-scroll-progress {
+    display: none;
+  }
+}
+
+/*
+ * Landing-page motion. It all lives under `no-preference` instead of relying on the global
+ * reduced-motion clamp below: scroll-driven animations ignore `animation-duration`, so the
+ * clamp would not stop them, and a clamped infinite marquee would freeze half-scrolled.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @layer components {
+    .landing-rise {
+      animation: landing-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) var(--landing-delay, 0ms) both;
+    }
+
+    .landing-gradient-text {
+      animation: landing-shimmer 6s ease-in-out infinite alternate;
+    }
+
+    .landing-glow {
+      animation: landing-breathe 9s ease-in-out infinite alternate;
+    }
+
+    .landing-orb {
+      animation: landing-drift 16s ease-in-out infinite alternate;
+    }
+
+    .landing-glow-border {
+      animation: landing-spin 8s linear infinite;
+    }
+
+    .landing-draw {
+      animation: landing-draw 1600ms cubic-bezier(0.4, 0, 0.2, 1) 1100ms both;
+    }
+
+    .landing-live-dot {
+      animation:
+        landing-fade-in 300ms ease 2600ms both,
+        landing-ping 2s ease-out 2600ms infinite;
+    }
+
+    .landing-grow-x {
+      transform-origin: left;
+      animation: landing-grow-x 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) var(--landing-delay, 0ms) both;
+    }
+
+    .landing-grow-y {
+      transform-origin: bottom;
+      animation: landing-grow-y 1000ms cubic-bezier(0.2, 0.7, 0.2, 1) var(--landing-delay, 0ms) both;
+    }
+
+    .landing-reveal {
+      animation: landing-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    }
+
+    .landing-flow {
+      animation: landing-flow 700ms linear infinite;
+    }
+
+    .landing-shine {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .landing-shine::after {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+      content: '';
+      animation: landing-shine 2.8s ease-in-out infinite;
+    }
+
+    .landing-card:hover {
+      transform: translateY(-3px);
+    }
+
+    .landing-marquee[data-marquee] {
+      overflow: hidden;
+      mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+    }
+
+    .landing-marquee[data-marquee] .landing-marquee-track {
+      width: max-content;
+      justify-content: flex-start;
+      animation: landing-marquee 40s linear infinite;
+    }
+
+    .landing-marquee[data-marquee]:hover .landing-marquee-track {
+      animation-play-state: paused;
+    }
+
+    /* Each copy is at least as wide as the strip, so the seam never scrolls into view. */
+    .landing-marquee[data-marquee] .landing-marquee-list {
+      min-width: 1120px;
+      flex-wrap: nowrap;
+      justify-content: space-around;
+      padding-inline: 1.5rem;
+    }
+
+    .landing-marquee[data-marquee] .landing-marquee-copy {
+      display: flex;
+    }
+
+    .landing-orbit-outer {
+      animation: landing-orbit 36s linear infinite;
+    }
+
+    .landing-orbit-inner {
+      animation: landing-orbit 24s linear infinite reverse;
+    }
+
+    .landing-logo-float {
+      animation: landing-float 6s ease-in-out infinite alternate;
+    }
+
+    /*
+     * Where supported, below-the-fold elements play as they scroll into view instead of on
+     * load. `--landing-step` staggers siblings that enter together. This comes last because
+     * the `animation` shorthands above reset `animation-timeline`.
+     */
+    @supports (animation-timeline: view()) {
+      .landing-reveal,
+      .landing-on-view {
+        animation-timeline: view();
+        animation-range: entry calc(5% + var(--landing-step, 0) * 8%) cover calc(28% + var(--landing-step, 0) * 8%);
+      }
+
+      .landing-scroll-progress {
+        display: block;
+        transform-origin: left;
+        animation: landing-grow-x 1ms linear both;
+        animation-timeline: scroll(root);
+      }
+
+      /* The hero drifts up and dims as the page scrolls away from it. */
+      .landing-hero-exit {
+        animation: landing-hero-exit 1ms linear both;
+        animation-timeline: scroll(root);
+        animation-range: 0 70vh;
+      }
+
+      .landing-hero-exit.landing-mark-exit {
+        animation-name: landing-mark-exit;
+      }
+
+      /* The console starts tipped back and lies flat by the time it is well into view. */
+      .landing-console-tilt {
+        transform-origin: 50% 0;
+        animation: landing-console-tilt 1ms linear both;
+        animation-timeline: view();
+        animation-range: entry 0% cover 45%;
+      }
+
+      /*
+       * The statement pins for the length of its 240vh section while its words light up in
+       * order. Without scroll timelines the section keeps its normal height and full-strength text.
+       */
+      .landing-statement {
+        height: 240vh;
+        view-timeline-name: --landing-statement;
+      }
+
+      .landing-statement-pin {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        padding-block: 0;
+      }
+
+      .landing-statement-word {
+        animation: landing-word 1ms linear both;
+        animation-timeline: --landing-statement;
+        animation-range:
+          contain calc(var(--landing-word-index) / var(--landing-word-count) * 80%)
+          contain calc((var(--landing-word-index) + 1) / var(--landing-word-count) * 80% + 4%);
+      }
+    }
+  }
+}
+
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+@keyframes landing-shimmer {
+  from {
+    background-position: 0% 50%;
+  }
+
+  to {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes landing-breathe {
+  from {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes landing-drift {
+  from {
+    transform: translate(0, 0);
+  }
+
+  to {
+    transform: translate(var(--landing-orb-x, 48px), -36px);
+  }
+}
+
+@keyframes landing-spin {
+  to {
+    --landing-angle: 360deg;
+  }
+}
+
+@keyframes landing-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes landing-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes landing-ping {
+  0% {
+    box-shadow: 0 0 10px rgba(231, 173, 87, 0.8), 0 0 0 0 rgba(231, 173, 87, 0.6);
+  }
+
+  100% {
+    box-shadow: 0 0 10px rgba(231, 173, 87, 0.8), 0 0 0 10px rgba(231, 173, 87, 0);
+  }
+}
+
+@keyframes landing-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes landing-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes landing-flow {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 0 8px;
+  }
+}
+
+@keyframes landing-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes landing-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes landing-float {
+  from {
+    transform: translateY(-8px);
+  }
+
+  to {
+    transform: translateY(8px);
+  }
+}
+
+@keyframes landing-hero-exit {
+  to {
+    opacity: 0.2;
+    transform: translateY(-64px);
+  }
+}
+
+@keyframes landing-mark-exit {
+  to {
+    opacity: 0.15;
+    transform: translateY(-24px) scale(0.82) rotate(-10deg);
+  }
+}
+
+@keyframes landing-console-tilt {
+  from {
+    transform: perspective(1600px) rotateX(24deg) scale(0.9);
+  }
+
+  to {
+    transform: perspective(1600px) rotateX(0deg) scale(1);
+  }
+}
+
+@keyframes landing-word {
+  from {
+    opacity: 0.16;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes landing-marquee {
+  to {
+    transform: translateX(-50%);
   }
 }
 

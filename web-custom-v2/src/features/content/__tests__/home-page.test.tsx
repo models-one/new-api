@@ -40,7 +40,7 @@ describe('HomePage', () => {
     await renderPublicPage(HomePage)
 
     expect(
-      await screen.findByRole('heading', { name: 'Scale Without Friction' }),
+      await screen.findByRole('heading', { name: 'The AI gateway built for production' }),
     ).toBeInTheDocument()
   })
 
@@ -49,7 +49,7 @@ describe('HomePage', () => {
     await renderPublicPage(HomePage)
 
     expect(await screen.findByRole('heading', { name: 'Welcome to Acme AI' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Scale Without Friction' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'The AI gateway built for production' })).not.toBeInTheDocument()
   })
 
   it('sanitizes operator HTML before it reaches the page', async () => {
@@ -79,7 +79,7 @@ describe('HomePage', () => {
     await renderPublicPage(HomePage)
 
     expect(screen.getByRole('status')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Scale Without Friction' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'The AI gateway built for production' })).not.toBeInTheDocument()
   })
 
   it('paints the cached custom page immediately on a repeat visit', async () => {
@@ -98,7 +98,7 @@ describe('HomePage', () => {
     await renderPublicPage(HomePage)
 
     expect(
-      await screen.findByRole('heading', { name: 'Scale Without Friction' }),
+      await screen.findByRole('heading', { name: 'The AI gateway built for production' }),
     ).toBeInTheDocument()
   })
 
@@ -108,7 +108,7 @@ describe('HomePage', () => {
     await renderPublicPage(HomePage)
 
     expect(
-      await screen.findByRole('heading', { name: 'Scale Without Friction' }),
+      await screen.findByRole('heading', { name: 'The AI gateway built for production' }),
     ).toBeInTheDocument()
     expect(window.localStorage.getItem('home_page_content')).toBeNull()
   })

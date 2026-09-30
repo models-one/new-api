@@ -34,26 +34,48 @@ function linearPath(points: readonly ProjectedPoint[]): string {
 }
 
 /**
- * Catmull-Rom through every point, converted to cubic beziers. Endpoints are
- * duplicated so the curve starts and ends exactly on the data.
+ * Monotone cubic interpolation (Fritsch–Carlson, as in d3's `curveMonotoneX`).
+ *
+ * Each segment's control points sit a third of the way in from its own ends, so
+ * the curve never leaves its segment horizontally — unevenly spaced samples, such
+ * as sparse hourly buckets, cannot make it loop back past the axis the way
+ * Catmull-Rom does. Tangents are flattened at local extremes, so it never swings
+ * above or below the data either (no dip under zero between two zero readings).
  */
 function smoothPath(points: readonly ProjectedPoint[]): string {
   const first = points[0]
   if (first === undefined) return ''
   if (points.length < 3) return linearPath(points)
 
+  const secants = points.slice(1).map((next, index) => {
+    const current = points[index]
+    const width = next.x - current.x
+    return width === 0 ? 0 : (next.y - current.y) / width
+  })
+
+  const tangents = points.map((point, index) => {
+    if (index === 0) return secants[0]
+    if (index === points.length - 1) return secants[secants.length - 1]
+    const before = secants[index - 1]
+    const after = secants[index]
+    if (before * after <= 0) return 0
+    const widthBefore = point.x - points[index - 1].x
+    const widthAfter = points[index + 1].x - point.x
+    const weighted = (before * widthAfter + after * widthBefore) / (widthBefore + widthAfter)
+    return Math.sign(before) * Math.min(Math.abs(before), Math.abs(after), Math.abs(weighted) / 2) * 2
+  })
+
   const commands: string[] = [`M ${first.x} ${first.y}`]
 
   for (let index = 0; index < points.length - 1; index += 1) {
-    const previous = points[Math.max(index - 1, 0)]
     const current = points[index]
     const next = points[index + 1]
-    const following = points[Math.min(index + 2, points.length - 1)]
+    const third = (next.x - current.x) / 3
 
-    const control1X = round(current.x + (next.x - previous.x) / 6)
-    const control1Y = round(current.y + (next.y - previous.y) / 6)
-    const control2X = round(next.x - (following.x - current.x) / 6)
-    const control2Y = round(next.y - (following.y - current.y) / 6)
+    const control1X = round(current.x + third)
+    const control1Y = round(current.y + tangents[index] * third)
+    const control2X = round(next.x - third)
+    const control2Y = round(next.y - tangents[index + 1] * third)
 
     commands.push(`C ${control1X} ${control1Y} ${control2X} ${control2Y} ${next.x} ${next.y}`)
   }

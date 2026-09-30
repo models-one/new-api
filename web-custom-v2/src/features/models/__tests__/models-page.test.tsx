@@ -79,13 +79,13 @@ function buildPayload(models: PricingModel[]): PricingResponse {
   }
 }
 
-function respondWith(models: PricingModel[], selfGroup = 'default') {
+function respondWith(models: PricingModel[], selfGroup = 'default', selfRole = 1) {
   mockedGetRawJson.mockImplementation(async (url) => {
     if (url === '/api/pricing') return buildPayload(models) as never
     throw new Error(`unexpected url ${url}`)
   })
   mockedGetJson.mockImplementation(async (url) => {
-    if (url === '/api/user/self') return { group: selfGroup } as never
+    if (url === '/api/user/self') return { group: selfGroup, role: selfRole } as never
     throw new Error(`unexpected url ${url}`)
   })
 }
@@ -143,12 +143,30 @@ describe('ModelsPage', () => {
     expect(screen.queryByText('$1.25')).not.toBeInTheDocument()
   })
 
-  it('shows an empty state when the gateway publishes no pricing rows', async () => {
+  // `/api/pricing` filters by the caller's usable groups, so an empty list means no
+  // enabled channel serves those groups — the message must say so, not claim that no
+  // prices exist, and must not leave filters over nothing.
+  it('names the unserved groups when the catalogue is empty', async () => {
     respondWith([])
     renderPage()
 
-    expect(await screen.findByText('No models are published yet')).toBeInTheDocument()
+    expect(await screen.findByText('No models are available to you yet')).toBeInTheDocument()
+    expect(
+      screen.getByText(/No enabled channel serves any of your groups: default, vip\./),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText('Pricing group')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Search models')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Model view')).not.toBeInTheDocument()
     expect(screen.queryByText('$0.00')).not.toBeInTheDocument()
+  })
+
+  it('tells an administrator how to open a model to the empty groups', async () => {
+    respondWith([], 'default', 10)
+    renderPage()
+
+    expect(
+      await screen.findByText(/Add one of them to a channel, or make the channel groups user-selectable/),
+    ).toBeInTheDocument()
   })
 
   it('offers a retry when the catalogue request fails', async () => {

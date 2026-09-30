@@ -1,68 +1,90 @@
 import ArrowRightIcon from 'lucide-react/dist/esm/icons/arrow-right'
-import BookOpenIcon from 'lucide-react/dist/esm/icons/book-open'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import modelsOneMark from '@/assets/models-one-mark.png'
+import modelsOneMarkGold from '@/assets/models-one-mark-gold.png'
+import { ConsolePreview } from '@/features/landing/components/ConsolePreview'
+import { pricingQuery } from '@/lib/api/pricing'
 
 export function LandingHero() {
   const { t } = useTranslation()
+  const pricing = useQuery(pricingQuery())
+  const modelCount = pricing.data?.data?.length ?? 0
+  const providerCount = pricing.data?.vendors?.length ?? 0
 
   return (
-    <section className="mx-auto grid min-h-[700px] max-w-[1440px] items-center gap-12 px-4 pb-16 pt-32 sm:px-8 lg:grid-cols-[1.06fr_0.94fr] lg:px-12 lg:pb-10 lg:pt-36">
-      <div className="relative z-10 max-w-[720px]">
-        <div className="mb-7 inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-[#202225] px-4 py-1.5">
-          <span aria-hidden="true" className="landing-status-dot size-2 rounded-full bg-[#e7ad57]" />
-          <span className="text-xs font-semibold uppercase text-[#e7ad57]">{t('Now in Public Beta')}</span>
+    <section className="relative overflow-hidden px-4 pb-20 pt-32 sm:px-8 lg:px-12 lg:pt-36">
+      <div aria-hidden="true" className="landing-dot-grid pointer-events-none absolute inset-x-0 top-0 h-[720px]" />
+      <div
+        aria-hidden="true"
+        className="landing-glow pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(ellipse_at_top,rgba(231,173,87,0.16),transparent_62%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="landing-orb pointer-events-none absolute -left-32 top-40 size-[420px] rounded-full bg-[#e7ad57]/10 blur-[120px]"
+      />
+      <div
+        aria-hidden="true"
+        className="landing-orb pointer-events-none absolute -right-32 top-72 size-[380px] rounded-full bg-[#90b6a0]/10 blur-[120px] [--landing-orb-x:-48px] [animation-delay:-7s]"
+      />
+
+      <div className="relative mx-auto grid max-w-[1200px] items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="landing-hero-exit text-center lg:text-left">
+          <div className="landing-rise inline-flex items-center gap-2 rounded-full border border-white/10 bg-[#202225] px-4 py-1.5">
+            <span aria-hidden="true" className="landing-status-dot size-2 rounded-full bg-[#e7ad57]" />
+            <span className="text-xs font-semibold text-[#e7ad57]">{t('One API for every major model')}</span>
+          </div>
+
+          <h1 className="landing-rise mt-7 text-5xl font-extrabold leading-[1.06] text-[#dfe2f2] [--landing-delay:90ms] sm:text-6xl lg:text-[68px]">
+            {t('The AI gateway')}{' '}
+            <span className="landing-gradient-text block">{t('built for production')}</span>
+          </h1>
+
+          <p className="landing-rise mx-auto mt-7 max-w-2xl text-base leading-7 text-[#b9cacb] [--landing-delay:180ms] sm:text-lg lg:mx-0">
+            {t('Reach every major model through one OpenAI-compatible API, with automatic failover, usage analytics and per-key controls.')}
+          </p>
+
+          <div className="landing-rise mt-9 flex flex-col justify-center gap-3 [--landing-delay:270ms] sm:flex-row sm:gap-4 lg:justify-start">
+            <Link className="landing-cta-primary" to="/dashboard">
+              {t('Get started free')}
+              <ArrowRightIcon aria-hidden="true" className="size-4" />
+            </Link>
+            <Link className="landing-cta-secondary" to="/models">
+              {t('Browse models')}
+            </Link>
+          </div>
+
+          {modelCount === 0 ? null : (
+            <p className="landing-rise mt-6 text-sm text-[#989ca4] [--landing-delay:360ms]">
+              {providerCount === 0
+                ? t('{{models}} models available right now', { models: modelCount })
+                : t('{{models}} models from {{providers}} providers, available right now', {
+                    models: modelCount,
+                    providers: providerCount,
+                  })}
+            </p>
+          )}
         </div>
 
-        <h1 className="max-w-[760px] text-5xl font-extrabold leading-[1.08] text-[#dfe2f2] sm:text-6xl lg:text-[72px]">
-          {t('Unified API Gateway for a')}
-          <span className="mt-2 block bg-gradient-to-r from-[#e7ad57] via-[#e9c896] to-[#90b6a0] bg-clip-text text-transparent [text-shadow:0_0_20px_rgba(231,173,87,0.14)]">
-            {t('Vast Range of AI Models')}
-          </span>
-        </h1>
-
-        <p className="mt-7 max-w-2xl text-base leading-7 text-[#b9cacb] sm:text-lg">
-          {t('Integrate, orchestrate, and deploy top-tier AI models through a single, high-performance endpoint. Built for developers who demand speed, reliability, and scale.')}
-        </p>
-
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-          <Link
-            className="inline-flex min-h-13 items-center justify-center gap-2 rounded-[6px] bg-[#e7ad57] px-7 py-3.5 text-sm font-bold text-[#111214] transition-[box-shadow,background-color] hover:bg-[#f6c477] hover:shadow-[0_0_22px_rgba(231,173,87,0.48)]"
-            to="/dashboard"
-          >
-            {t('Start Building Free')}
-            <ArrowRightIcon aria-hidden="true" className="size-4" />
-          </Link>
-          <a
-            className="inline-flex min-h-13 items-center justify-center gap-2 rounded-[6px] border border-white/10 bg-[#191b1e]/70 px-7 py-3.5 text-sm font-semibold text-foreground transition-[border-color,color,background-color] hover:border-[#e7ad57]/40 hover:bg-[#202225] hover:text-[#e7ad57]"
-            href="#integration"
-          >
-            <BookOpenIcon aria-hidden="true" className="size-4" />
-            {t('Read Documentation')}
-          </a>
+        {/* The brand mark; the header already names the site, so this is decoration. */}
+        <div aria-hidden="true" className="landing-hero-exit landing-mark-exit">
+          <div className="landing-rise landing-logo-stage relative mx-auto grid aspect-square w-full max-w-[320px] place-items-center [--landing-delay:200ms] lg:max-w-[480px]">
+            <div className="landing-orbit landing-orbit-outer absolute size-[92%] rounded-full border border-[#e7ad57]/15" />
+            <div className="landing-orbit landing-orbit-inner absolute size-[72%] rounded-full border border-white/10" />
+            <div className="absolute size-[60%] rounded-full bg-[radial-gradient(circle,rgba(231,173,87,0.18),transparent_70%)]" />
+            <div className="absolute size-[54%] rounded-[12px] border border-white/15 bg-[#141517]/80 shadow-[inset_0_0_42px_rgba(231,173,87,0.05)]" />
+            <div className="landing-logo-float relative z-10 size-[46%]">
+              <img alt="" className="size-full object-contain drop-shadow-[0_0_34px_rgba(231,173,87,0.35)]" src={modelsOneMarkGold} />
+            </div>
+          </div>
         </div>
-
-        <dl className="mt-10 grid max-w-[630px] grid-cols-2 border-t border-white/20 pt-6 sm:max-w-[520px]">
-          <div>
-            <dd className="text-2xl font-bold text-[#e7ad57]">99.99%</dd>
-            <dt className="mt-1 text-[10px] font-semibold uppercase text-[#b9cacb]">{t('Uptime SLA')}</dt>
-          </div>
-          <div className="border-l border-white/10 pl-6">
-            <dd className="text-2xl font-bold text-[#dfe2f2]">Sub-50ms</dd>
-            <dt className="mt-1 text-[10px] font-semibold uppercase text-[#b9cacb]">{t('Global Latency')}</dt>
-          </div>
-        </dl>
       </div>
 
-      <div className="landing-logo-stage relative mx-auto grid aspect-square w-full max-w-[560px] place-items-center" aria-hidden="true">
-        <div className="landing-orbit landing-orbit-outer absolute size-[88%] rounded-full border border-[#e7ad57]/10" />
-        <div className="landing-orbit landing-orbit-inner absolute size-[70%] rounded-full border border-white/10" />
-        <div className="absolute size-[78%] rounded-[8px] border border-[#e7ad57]/15 bg-[#111214]/60" />
-        <div className="absolute size-[62%] rounded-[8px] border border-white/15 bg-[#141517]/86 shadow-[inset_0_0_42px_rgba(231,173,87,0.035)]" />
-        <div className="landing-logo-float relative z-10 size-[58%]">
-          <img alt="" className="size-full object-contain drop-shadow-[0_0_34px_rgba(231,173,87,0.3)]" src={modelsOneMark} />
+      {/* Three wrappers because each sets its own `animation`: scroll tilt, entrance, then the border glow inside. */}
+      <div className="landing-console-tilt">
+        <div className="landing-rise [--landing-delay:450ms]">
+          <ConsolePreview />
         </div>
       </div>
     </section>

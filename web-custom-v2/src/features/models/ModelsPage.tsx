@@ -41,6 +41,8 @@ import {
 } from '@/lib/api/pricing'
 import { selfUserQuery } from '@/lib/api/user'
 
+const ADMIN_ROLE = 10
+
 export function ModelsPage() {
   const { t } = useTranslation()
   const pricing = useQuery(pricingQuery())
@@ -60,6 +62,9 @@ export function ModelsPage() {
   const isLoading = pricing.isLoading || self.isLoading
   const payload = pricing.data
   const models = useMemo(() => payload?.data ?? [], [payload])
+  // `/api/pricing` only lists models an enabled channel serves to one of the caller's
+  // usable groups, so an empty catalogue means a group mismatch, not missing prices.
+  const catalogueEmpty = !isLoading && models.length === 0
   const vendors = useMemo(() => payload?.vendors ?? [], [payload])
   const groupNames = Object.keys(payload?.usable_group ?? {})
   const ownGroup = self.data?.group ?? ''
@@ -191,150 +196,154 @@ export function ModelsPage() {
 
       {!pricing.isError ? (
         <>
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2.5">
+          {catalogueEmpty ? null : (
+            <>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <NativeSelect
+                  hideLabel
+                  size="sm"
+                  label={t('Endpoint type')}
+                  options={[
+                    { value: '', label: t('All endpoints') },
+                    ...endpointTypeOptions(models).map((type) => ({ value: type, label: type })),
+                  ]}
+                  value={endpointFilter}
+                  onChange={(event) => {
+                    setEndpointFilter(event.target.value)
+                    setPage(1)
+                  }}
+                />
+                <NativeSelect
+                  hideLabel
+                  size="sm"
+                  label={t('Provider')}
+                  options={[
+                    { value: '', label: t('All providers') },
+                    ...providerNames.map((name) => ({ value: name, label: name })),
+                  ]}
+                  value={providerFilter}
+                  onChange={(event) => {
+                    setProviderFilter(event.target.value)
+                    setPage(1)
+                  }}
+                />
+                <NativeSelect
+                  hideLabel
+                  size="sm"
+                  label={t('Capabilities')}
+                  options={[
+                    { value: '', label: t('All capabilities') },
+                    ...capabilities.map((tag) => ({ value: tag, label: tag })),
+                  ]}
+                  value={capabilityFilter}
+                  onChange={(event) => {
+                    setCapabilityFilter(event.target.value)
+                    setPage(1)
+                  }}
+                />
+                {hasFilters ? (
+                  <Button onClick={resetFilters} size="sm" variant="quiet">
+                    {t('Reset filters')}
+                  </Button>
+                ) : null}
+              </div>
               <NativeSelect
+                className="min-w-40"
                 hideLabel
                 size="sm"
-                label={t('Endpoint type')}
-                options={[
-                  { value: '', label: t('All endpoints') },
-                  ...endpointTypeOptions(models).map((type) => ({ value: type, label: type })),
-                ]}
-                value={endpointFilter}
+                label={t('Pricing group')}
+                options={groupNames.map((name) => ({
+                  value: name,
+                  label:
+                    payload?.group_ratio[name] === undefined
+                      ? name
+                      : `${name} · ${payload.group_ratio[name]}×`,
+                }))}
+                value={selectedGroup}
                 onChange={(event) => {
-                  setEndpointFilter(event.target.value)
+                  setGroupChoice(event.target.value)
+                  setPage(1)
+                }}
+                disabled={groupNames.length === 0}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <SegmentedControl
+                label={t('Availability')}
+                size="sm"
+                value={availability}
+                options={[
+                  { id: 'all', label: t('All models'), count: models.length },
+                  { id: 'group', label: t('Available in this group'), count: availableCount },
+                ]}
+                onChange={(next) => {
+                  setAvailability(next)
+                  setPage(1)
+                }}
+              />
+              <span className="text-[11px] text-muted">
+                {t('Token prices in USD per 1M tokens.')}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <SearchInput
+                className="min-w-48 flex-1"
+                hideLabel
+                debounceMs={200}
+                label={t('Search models')}
+                placeholder={t('Search models, providers, or capabilities…')}
+                value={search}
+                onValueChange={(next) => {
+                  setSearch(next)
                   setPage(1)
                 }}
               />
               <NativeSelect
+                className="w-44"
                 hideLabel
                 size="sm"
-                label={t('Provider')}
+                label={t('Sort models')}
+                value={sort}
                 options={[
-                  { value: '', label: t('All providers') },
-                  ...providerNames.map((name) => ({ value: name, label: name })),
+                  { value: 'name', label: t('Name: A–Z') },
+                  { value: 'input', label: t('Input price: low to high') },
+                  { value: 'output', label: t('Output price: low to high') },
                 ]}
-                value={providerFilter}
                 onChange={(event) => {
-                  setProviderFilter(event.target.value)
+                  setSort(event.target.value)
                   setPage(1)
                 }}
               />
-              <NativeSelect
-                hideLabel
-                size="sm"
-                label={t('Capabilities')}
-                options={[
-                  { value: '', label: t('All capabilities') },
-                  ...capabilities.map((tag) => ({ value: tag, label: tag })),
-                ]}
-                value={capabilityFilter}
-                onChange={(event) => {
-                  setCapabilityFilter(event.target.value)
-                  setPage(1)
-                }}
-              />
-              {hasFilters ? (
-                <Button onClick={resetFilters} size="sm" variant="quiet">
-                  {t('Reset filters')}
+              <div
+                aria-label={t('Model view')}
+                className="flex shrink-0 rounded-control border border-border bg-sunken p-0.5"
+                role="group"
+              >
+                <Button
+                  aria-label={t('Table view')}
+                  aria-pressed={view === 'table'}
+                  onClick={() => setView('table')}
+                  size="icon-sm"
+                  variant={view === 'table' ? 'primary' : 'quiet'}
+                >
+                  <ListIcon aria-hidden="true" />
                 </Button>
-              ) : null}
+                <Button
+                  aria-label={t('Card view')}
+                  aria-pressed={view === 'cards'}
+                  onClick={() => setView('cards')}
+                  size="icon-sm"
+                  variant={view === 'cards' ? 'primary' : 'quiet'}
+                >
+                  <LayoutGridIcon aria-hidden="true" />
+                </Button>
+              </div>
             </div>
-            <NativeSelect
-              className="min-w-40"
-              hideLabel
-              size="sm"
-              label={t('Pricing group')}
-              options={groupNames.map((name) => ({
-                value: name,
-                label:
-                  payload?.group_ratio[name] === undefined
-                    ? name
-                    : `${name} · ${payload.group_ratio[name]}×`,
-              }))}
-              value={selectedGroup}
-              onChange={(event) => {
-                setGroupChoice(event.target.value)
-                setPage(1)
-              }}
-              disabled={groupNames.length === 0}
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <SegmentedControl
-              label={t('Availability')}
-              size="sm"
-              value={availability}
-              options={[
-                { id: 'all', label: t('All models'), count: models.length },
-                { id: 'group', label: t('Available in this group'), count: availableCount },
-              ]}
-              onChange={(next) => {
-                setAvailability(next)
-                setPage(1)
-              }}
-            />
-            <span className="text-[11px] text-muted">
-              {t('Token prices in USD per 1M tokens.')}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <SearchInput
-              className="min-w-48 flex-1"
-              hideLabel
-              debounceMs={200}
-              label={t('Search models')}
-              placeholder={t('Search models, providers, or capabilities…')}
-              value={search}
-              onValueChange={(next) => {
-                setSearch(next)
-                setPage(1)
-              }}
-            />
-            <NativeSelect
-              className="w-44"
-              hideLabel
-              size="sm"
-              label={t('Sort models')}
-              value={sort}
-              options={[
-                { value: 'name', label: t('Name: A–Z') },
-                { value: 'input', label: t('Input price: low to high') },
-                { value: 'output', label: t('Output price: low to high') },
-              ]}
-              onChange={(event) => {
-                setSort(event.target.value)
-                setPage(1)
-              }}
-            />
-            <div
-              aria-label={t('Model view')}
-              className="flex shrink-0 rounded-control border border-border bg-sunken p-0.5"
-              role="group"
-            >
-              <Button
-                aria-label={t('Table view')}
-                aria-pressed={view === 'table'}
-                onClick={() => setView('table')}
-                size="icon-sm"
-                variant={view === 'table' ? 'primary' : 'quiet'}
-              >
-                <ListIcon aria-hidden="true" />
-              </Button>
-              <Button
-                aria-label={t('Card view')}
-                aria-pressed={view === 'cards'}
-                onClick={() => setView('cards')}
-                size="icon-sm"
-                variant={view === 'cards' ? 'primary' : 'quiet'}
-              >
-                <LayoutGridIcon aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
+            </>
+          )}
 
           <section
             aria-busy={pricing.isFetching || self.isFetching}
@@ -344,11 +353,21 @@ export function ModelsPage() {
             {isLoading ? (
               <Skeleton className="h-96" label={t('Loading models')} variant="block" />
             ) : null}
-            {!isLoading && models.length === 0 ? (
+            {catalogueEmpty ? (
               <Panel>
                 <EmptyState
-                  title={t('No models are published yet')}
-                  description={t('No model prices have been configured on this gateway yet.')}
+                  title={t('No models are available to you yet')}
+                  description={
+                    (self.data?.role ?? 0) >= ADMIN_ROLE
+                      ? t(
+                          'No enabled channel serves any of these groups: {{groups}}. Add one of them to a channel, or make the channel groups user-selectable in group settings.',
+                          { groups: groupNames.join(', ') },
+                        )
+                      : t(
+                          'No enabled channel serves any of your groups: {{groups}}. Ask an administrator to open one to you.',
+                          { groups: groupNames.join(', ') },
+                        )
+                  }
                 />
               </Panel>
             ) : null}

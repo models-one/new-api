@@ -6,6 +6,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { LanguageMenu } from '@/components/layout/LanguageMenu'
 import { DropdownMenu } from '@/components/overlay/DropdownMenu'
 import { Button } from '@/components/ui/Button'
 import { logout } from '@/features/auth/api'
@@ -97,6 +98,8 @@ export function TopHeader(props: TopHeaderProps) {
       </div>
 
       <div className="flex min-w-0 items-center gap-2 md:gap-3">
+        <LanguageMenu />
+
         <span className="hidden min-w-0 flex-col text-right sm:flex">
           <span className="truncate text-sm font-semibold text-foreground">{accountLabel}</span>
           {accountEmail === '' ? null : (

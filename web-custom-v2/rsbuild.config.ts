@@ -53,6 +53,11 @@ export default defineConfig(({ envMode }) => {
           target: apiProxyTarget,
           changeOrigin: true,
         },
+        // The playground relays through `/pg/chat/completions`, outside `/api`.
+        '/pg': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
       },
     },
     output: {

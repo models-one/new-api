@@ -22,7 +22,8 @@ export function Badge(props: BadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 border font-semibold',
+        // A badge is one short label; wrapping it stacks CJK text a character per line.
+        'inline-flex shrink-0 items-center gap-1.5 border font-semibold whitespace-nowrap',
         pill ? 'rounded-full' : 'rounded-[3px]',
         sizeClasses[size],
         toneSurfaceClasses[tone],

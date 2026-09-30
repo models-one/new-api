@@ -11,44 +11,44 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { LandingPage } from '@/features/landing/LandingPage'
+import { pricingQuery, type PricingResponse } from '@/lib/api/pricing'
+import { serverStatusQuery, type ServerStatus } from '@/lib/api/status'
 
 afterEach(cleanup)
 
+const PRICING = {
+  success: true,
+  data: [{ model_name: 'claude-sonnet-4' }, { model_name: 'gpt-4o' }],
+  vendors: [
+    { id: 1, name: 'Anthropic' },
+    { id: 2, name: 'OpenAI' },
+  ],
+} as PricingResponse
+
 async function renderLandingPage() {
   const rootRoute = createRootRoute()
-  const landingRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    component: LandingPage,
-  })
-  const dashboardRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/dashboard',
-    component: () => <div>Dashboard</div>,
-  })
-  const modelsRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/models',
-    component: () => <div>Models</div>,
-  })
-  const organizationRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/organization',
-    component: () => <div>Organization</div>,
-  })
+  const stubPaths = ['/dashboard', '/models', '/pricing', '/rankings', '/about', '/privacy-policy', '/user-agreement']
   const router = createRouter({
     history: createMemoryHistory({ initialEntries: ['/'] }),
-    routeTree: rootRoute.addChildren([landingRoute, dashboardRoute, modelsRoute, organizationRoute]),
+    routeTree: rootRoute.addChildren([
+      createRoute({ getParentRoute: () => rootRoute, path: '/', component: LandingPage }),
+      ...stubPaths.map((path) => createRoute({ getParentRoute: () => rootRoute, path, component: () => <div /> })),
+    ]),
   })
 
   await router.load()
-  // The public chrome reads the operator's own name from `/api/status`, so the landing
-  // page needs the same query client the app gives it at runtime.
+  // The hero stats, provider strip and code samples read the live catalogue and the
+  // operator's server address, so seed both the way `/api/pricing` and `/api/status` return them.
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  queryClient.setQueryData(pricingQuery().queryKey, PRICING)
+  queryClient.setQueryData(serverStatusQuery().queryKey, {
+    system_name: 'Gateway',
+    server_address: 'https://api.example.com/',
+  } as ServerStatus)
   render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
@@ -57,21 +57,36 @@ async function renderLandingPage() {
 }
 
 describe('LandingPage', () => {
-  it('keeps the complete Stitch landing page content below the hero', async () => {
+  it('leads with the headline, both calls to action and the live catalogue size', async () => {
     await renderLandingPage()
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Unified API Gateway for a')
-    expect(screen.getByRole('heading', { name: 'Scale Without Friction' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '100+ Model Support' })).toBeInTheDocument()
-    expect(screen.getByText('integration.ts')).toBeInTheDocument()
-    expect(screen.getByRole('contentinfo')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('The AI gateway built for production')
+    expect(screen.getAllByRole('link', { name: 'Get started free' })[0]).toHaveAttribute('href', '/dashboard')
+    expect(screen.getByRole('link', { name: 'Browse models' })).toHaveAttribute('href', '/models')
+    expect(screen.getByText('2 models from 2 providers, available right now')).toBeInTheDocument()
+    // The marquee's second copy is aria-hidden, so only the real list is exposed.
+    const providers = within(screen.getByRole('list', { name: 'Models from every major provider' }))
+    expect(providers.getByText('Anthropic')).toBeInTheDocument()
   })
 
-  it('renders both animated logo orbits and the floating mark', async () => {
+  it('points the code sample at the configured server address and a real model', async () => {
     await renderLandingPage()
 
-    const animatedStage = document.querySelector('.landing-logo-stage')
-    expect(animatedStage?.querySelectorAll('.landing-orbit')).toHaveLength(2)
-    expect(animatedStage?.querySelector('.landing-logo-float')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Python' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Node.js' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'cURL' })).toBeInTheDocument()
+    const sample = screen.getByRole('tabpanel')
+    expect(sample).toHaveTextContent('base_url="https://api.example.com/v1"')
+    expect(sample).toHaveTextContent('model="claude-sonnet-4"')
+  })
+
+  it('keeps the feature sections, FAQ and footer attribution', async () => {
+    await renderLandingPage()
+
+    expect(screen.getByRole('heading', { name: 'Route every request' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'See where the money goes' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Stay in control' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'How am I billed?' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/QuantumNous/new-api')
   })
 })
