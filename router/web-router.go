@@ -19,29 +19,37 @@ type WebAssets struct {
 	IndexPage []byte
 }
 
-func SetWebRouter(router *gin.Engine, assets WebAssets) {
+func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatcher gin.HandlerFunc) {
 	frontendFS := common.EmbedFolder(assets.BuildFS, "web/dist")
 	customIndexPage, _ := assets.BuildFS.ReadFile("web/dist/web-custom-index.html")
 
-	router.Use(gzip.Gzip(gzip.DefaultCompression))
-	router.Use(middleware.GlobalWebRateLimit())
-	router.Use(middleware.Cache())
-	router.GET("/", func(c *gin.Context) {
-		c.Set(middleware.RouteTagKey, "web")
-		c.Header("Cache-Control", "no-cache")
-		c.Data(http.StatusOK, "text/html; charset=utf-8", webIndexForPath("/", assets.IndexPage, customIndexPage))
-	})
-	router.Use(static.Serve("/", frontendFS))
-	router.NoRoute(func(c *gin.Context) {
-		c.Set(middleware.RouteTagKey, "web")
-		path := c.Request.URL.Path
-		if strings.HasPrefix(path, "/v1") || strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/assets") || strings.HasPrefix(path, "/web-custom-assets/") {
-			controller.RelayNotFound(c)
-			return
-		}
-		c.Header("Cache-Control", "no-cache")
-		c.Data(http.StatusOK, "text/html; charset=utf-8", webIndexForPath(path, assets.IndexPage, customIndexPage))
-	})
+	router.NoRoute(
+		pluginDispatcher,
+		middleware.RouteTag("web"),
+		gzip.Gzip(gzip.DefaultCompression),
+		middleware.AccessTokenAudit(),
+		middleware.GlobalWebRateLimit(),
+		middleware.Cache(),
+		// static.Serve would answer "/" with the legacy index.html, so the custom console claims it first.
+		func(c *gin.Context) {
+			if c.Request.URL.Path != "/" || len(customIndexPage) == 0 {
+				return
+			}
+			c.Header("Cache-Control", "no-cache")
+			c.Data(http.StatusOK, "text/html; charset=utf-8", customIndexPage)
+			c.Abort()
+		},
+		static.Serve("/", frontendFS),
+		func(c *gin.Context) {
+			path := c.Request.URL.Path
+			if strings.HasPrefix(path, "/v1") || strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/assets") || strings.HasPrefix(path, "/web-custom-assets/") {
+				controller.RelayNotFound(c)
+				return
+			}
+			c.Header("Cache-Control", "no-cache")
+			c.Data(http.StatusOK, "text/html; charset=utf-8", webIndexForPath(path, assets.IndexPage, customIndexPage))
+		},
+	)
 }
 
 func webIndexForPath(path string, legacyIndexPage []byte, customIndexPage []byte) []byte {

@@ -16,53 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
-import { after, describe, test } from 'node:test'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router'
+import { render, screen } from '@testing-library/react'
+import { describe, expect, test } from 'vitest'
 
-import { Window } from 'happy-dom'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
-const domWindow = new Window()
-const domGlobals = [
-  'window',
-  'document',
-  'navigator',
-  'HTMLElement',
-  'Node',
-  'Element',
-  'Event',
-  'CustomEvent',
-  'MutationObserver',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'getComputedStyle',
-] as const
-
-for (const key of domGlobals) {
-  Object.defineProperty(globalThis, key, {
-    configurable: true,
-    value: domWindow[key],
-  })
-}
-
-const { QueryClient, QueryClientProvider } =
-  await import('@tanstack/react-query')
-const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
-  await import('@tanstack/react-router')
-const { act } = await import('react')
-const { createRoot } = await import('react-dom/client')
-const i18next = (await import('i18next')).default
-const { initReactI18next } = await import('react-i18next')
-await i18next.use(initReactI18next).init({
-  lng: 'en',
-  resources: { en: { translation: {} } },
-})
-const { Footer } = await import('../footer')
-const { useSystemConfigStore } = await import('@/stores/system-config-store')
-
-const reactTestGlobals = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT?: boolean
-}
-reactTestGlobals.IS_REACT_ACT_ENVIRONMENT = true
+import { Footer } from '../footer'
 
 async function renderFooter(footerHtml?: string) {
   useSystemConfigStore.getState().setConfig({
@@ -76,57 +42,27 @@ async function renderFooter(footerHtml?: string) {
     user_agreement_enabled: true,
     privacy_policy_enabled: true,
   })
-  const rootRoute = createRootRoute({ component: Footer })
   const router = createRouter({
-    routeTree: rootRoute,
+    routeTree: createRootRoute({ component: Footer }),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
-  const container = document.createElement('div')
-  document.body.append(container)
-  const root = createRoot(container)
 
-  await act(async () => {
-    root.render(
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    )
-  })
-
-  return {
-    container,
-    unmount: async () => {
-      await act(async () => root.unmount())
-      container.remove()
-      queryClient.clear()
-    },
-  }
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  )
+  return screen.findByRole('link', { name: 'support@models.one' })
 }
 
 describe('Footer customer support contact', () => {
-  after(() => {
-    domWindow.close()
-  })
-
   test('shows the support email as a mail link in the standard footer', async () => {
-    const rendered = await renderFooter()
-    const supportLink = rendered.container.querySelector(
-      'footer a[href="mailto:support@models.one"]'
-    )
-
-    assert.ok(supportLink)
-    assert.equal(supportLink.textContent, 'support@models.one')
-    await rendered.unmount()
+    const supportLink = await renderFooter()
+    expect(supportLink).toHaveAttribute('href', 'mailto:support@models.one')
   })
 
   test('shows the support email when custom footer HTML is configured', async () => {
-    const rendered = await renderFooter('<span>Custom footer</span>')
-    const supportLink = rendered.container.querySelector(
-      'footer a[href="mailto:support@models.one"]'
-    )
-
-    assert.ok(supportLink)
-    assert.equal(supportLink.textContent, 'support@models.one')
-    await rendered.unmount()
+    const supportLink = await renderFooter('<span>Custom footer</span>')
+    expect(supportLink).toHaveAttribute('href', 'mailto:support@models.one')
   })
 })

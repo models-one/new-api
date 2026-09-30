@@ -1,32 +1,46 @@
 package model
 
 import (
-	"fmt"
-	"strings"
 	"testing"
 
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
-func TestTokenNormalizeAutoGroupsPreservesPriorityAndRemovesDuplicates(t *testing.T) {
-	token := Token{
-		Group:      "default",
-		AutoGroups: " premium, economy,premium, ,image ",
+// Keys created by the fork's earlier multi-group feature stored their groups as
+// "a,b". After migration they must parse to the same groups, in order.
+func TestMigrateLegacyTokenAutoGroupsRewritesCommaSeparatedValues(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&Token{}))
+
+	stored := map[string]string{
+		"legacy": "vip,default",
+		"spaced": " vip , ,default ",
+		"single": "vip",
+		"json":   `["vip","default"]`,
+		"none":   "",
+	}
+	want := map[string][]string{
+		"legacy": {"vip", "default"},
+		"spaced": {"vip", "default"},
+		"single": {"vip"},
+		"json":   {"vip", "default"},
+		"none":   nil,
+	}
+	for name, autoGroups := range stored {
+		require.NoError(t, db.Create(&Token{Key: name, Name: name, AutoGroups: autoGroups}).Error)
 	}
 
-	require.NoError(t, token.NormalizeAutoGroups())
-	assert.Equal(t, "auto", token.Group)
-	assert.Equal(t, "premium,economy,image", token.AutoGroups)
-	assert.Equal(t, []string{"premium", "economy", "image"}, token.GetAutoGroups())
-}
+	require.NoError(t, migrateLegacyTokenAutoGroups(db))
 
-func TestTokenNormalizeAutoGroupsRejectsOversizedConfiguration(t *testing.T) {
-	groups := make([]string, maxTokenAutoGroups+1)
-	for index := range groups {
-		groups[index] = fmt.Sprintf("group-%d", index)
+	for name, expected := range want {
+		var token Token
+		require.NoError(t, db.Where("name = ?", name).First(&token).Error)
+		groups, err := token.GetAutoGroups()
+		require.NoError(t, err, name)
+		assert.Equal(t, expected, groups, name)
 	}
-	token := Token{AutoGroups: strings.Join(groups, ",")}
-
-	require.Error(t, token.NormalizeAutoGroups())
 }

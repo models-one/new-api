@@ -25,8 +25,8 @@ export type ApiToken = {
   allow_ips: string | null
   used_quota: number
   group: string
-  /** Comma-separated group names; only meaningful when `group` is 'auto'. */
-  auto_groups: string
+  /** Group names tried in order; only meaningful when `group` is 'auto'. */
+  auto_groups: string[] | null
   cross_group_retry: boolean
 }
 
@@ -46,7 +46,7 @@ export type TokenDraft = {
   model_limits: string
   allow_ips: string
   group: string
-  auto_groups: string
+  auto_groups: string[]
   cross_group_retry: boolean
 }
 
@@ -102,10 +102,7 @@ export function deleteTokens(ids: number[]): Promise<unknown> {
   return postJson('/api/token/batch', { ids })
 }
 
-/** Splits the stored comma-separated `auto_groups` column into a list. */
+/** The key's auto groups; the backend returns `null` when none are set. */
 export function parseAutoGroups(token: Pick<ApiToken, 'auto_groups'>): string[] {
-  return token.auto_groups
-    .split(',')
-    .map((group) => group.trim())
-    .filter(Boolean)
+  return (token.auto_groups ?? []).map((group) => group.trim()).filter(Boolean)
 }
