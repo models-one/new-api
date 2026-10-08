@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - mb_dev
+      - new_UI
   workflow_dispatch:
     inputs:
       tag:

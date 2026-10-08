@@ -42,7 +42,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatcher gin.Han
 		static.Serve("/", frontendFS),
 		func(c *gin.Context) {
 			path := c.Request.URL.Path
-			if strings.HasPrefix(path, "/v1") || strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/assets") || strings.HasPrefix(path, "/web-custom-assets/") {
+			if strings.HasPrefix(path, "/v1") || strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/assets") || strings.HasPrefix(path, "/web-custom-assets/") || strings.HasPrefix(path, "/web-custom-v2-assets/") {
 				controller.RelayNotFound(c)
 				return
 			}
