@@ -3,9 +3,9 @@ import { TOKEN_STATUS, parseAutoGroups, type ApiToken } from '@/lib/api/tokens'
 import type { UserGroupMap } from '@/lib/api/user'
 
 /**
- * `model.Token.AutoGroups` is a comma-separated priority list that the relay reads only
- * while `group` is exactly this sentinel (see the backend's NormalizeAutoGroups and
- * CacheGetRandomSatisfiedChannel). Any other `group` value routes to that one group.
+ * `model.Token.AutoGroups` is a priority list that the relay reads only while `group` is
+ * exactly this sentinel (see the backend's Token.GetAutoGroups and GetRequestAutoGroups).
+ * Any other `group` value routes to that one group.
  */
 export const AUTO_GROUP = 'auto'
 

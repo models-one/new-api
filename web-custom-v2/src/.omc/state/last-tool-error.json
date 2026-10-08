@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"W=/Users/tim/work/AI_Projects/middle-api-projects/new-api/web-custom-v2; grep -rn \\\"models-one-mark\\\\|BrandMark\\\" $W/src --include=*.tsx | grep -v __tests__; curl -s -o /dev/null -w \\\"%{ht...",
+  "error": "Exit code 7\n(eval):1: no matches found: --include=*.tsx\n000",
+  "timestamp": "2026-09-30T05:32:55.345Z",
+  "retry_count": 2
+}

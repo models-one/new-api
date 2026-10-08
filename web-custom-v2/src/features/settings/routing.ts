@@ -3,9 +3,9 @@ import { TOKEN_STATUS, parseAutoGroups, type ApiToken } from '@/lib/api/tokens'
 import type { UserGroupMap } from '@/lib/api/user'
 
 /**
- * `model.Token.AutoGroups` is a comma-separated priority list that the relay reads only
- * while `group` is exactly this sentinel (see the backend's NormalizeAutoGroups and
- * CacheGetRandomSatisfiedChannel). Any other `group` value routes to that one group.
+ * `model.Token.AutoGroups` is a priority list that the relay reads only while `group` is
+ * exactly this sentinel (see the backend's Token.GetAutoGroups and GetRequestAutoGroups).
+ * Any other `group` value routes to that one group.
  */
 export const AUTO_GROUP = 'auto'
 
@@ -28,9 +28,9 @@ export function toGroupRoutes(names: string[], groups: UserGroupMap | undefined)
  * A single group is stored as the key's own `group`; two or more require the `auto`
  * sentinel, because that is the only mode in which the backend reads `auto_groups`.
  */
-export function groupFieldsFor(groupNames: string[]): { group: string; auto_groups: string } {
-  if (groupNames.length <= 1) return { group: groupNames[0] ?? '', auto_groups: '' }
-  return { group: AUTO_GROUP, auto_groups: groupNames.join(',') }
+export function groupFieldsFor(groupNames: string[]): { group: string; auto_groups: string[] } {
+  if (groupNames.length <= 1) return { group: groupNames[0] ?? '', auto_groups: [] }
+  return { group: AUTO_GROUP, auto_groups: groupNames }
 }
 
 /** Cross-group retry only has an effect once a key routes through more than one group. */

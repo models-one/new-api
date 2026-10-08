@@ -47,7 +47,7 @@ const RAW_KEY = 'ZsbYkbcr7wIDZIaZvWoOu9AR9Uw5xhrtiRgPERsvLIVqDbvu'
 const enabledToken = {
   accessed_time: 1_787_983_215,
   allow_ips: '',
-  auto_groups: 'default,vip',
+  auto_groups: ['default', 'vip'],
   created_time: 1_787_983_215,
   cross_group_retry: false,
   expired_time: -1,

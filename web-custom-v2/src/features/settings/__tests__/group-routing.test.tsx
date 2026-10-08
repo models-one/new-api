@@ -44,7 +44,7 @@ function buildToken(overrides: Partial<ApiToken> = {}): ApiToken {
     allow_ips: '',
     used_quota: 0,
     group: 'auto',
-    auto_groups: 'default,vip',
+    auto_groups: ['default', 'vip'],
     cross_group_retry: false,
     ...overrides,
   }
@@ -96,8 +96,8 @@ beforeEach(() => {
   mockedPutJson.mockResolvedValue({})
   respondWith([
     buildToken(),
-    buildToken({ id: 2, name: 'Cost Optimized', group: 'vip', auto_groups: '', status: 2 }),
-    buildToken({ id: 3, name: 'Developer Sandbox', group: '', auto_groups: '' }),
+    buildToken({ id: 2, name: 'Cost Optimized', group: 'vip', auto_groups: [], status: 2 }),
+    buildToken({ id: 3, name: 'Developer Sandbox', group: '', auto_groups: [] }),
   ])
 })
 
@@ -190,7 +190,7 @@ describe('SettingsPage group routing', () => {
 
     await waitFor(() => expect(mockedPostJson).toHaveBeenCalledTimes(1))
     expect(mockedPostJson).toHaveBeenCalledWith('/api/token/', expect.objectContaining({
-      auto_groups: 'default,vip',
+      auto_groups: ['default', 'vip'],
       cross_group_retry: true,
       group: 'auto',
       name: 'Realtime Gateway',
@@ -215,7 +215,7 @@ describe('SettingsPage group routing', () => {
 
     await waitFor(() => expect(mockedPostJson).toHaveBeenCalledTimes(1))
     expect(mockedPostJson).toHaveBeenCalledWith('/api/token/', expect.objectContaining({
-      auto_groups: '',
+      auto_groups: [],
       cross_group_retry: false,
       group: 'vip',
     }))
