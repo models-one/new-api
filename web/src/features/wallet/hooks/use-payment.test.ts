@@ -16,8 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'vitest'
 
 import { PAYMENT_TYPES } from '../constants'
 import { requestPaymentAmount, requestSelectedPayment } from './use-payment'
@@ -48,8 +47,8 @@ describe('payment amount routing', () => {
       },
     })
 
-    assert.equal(amount, 18.75)
-    assert.deepEqual(calls, ['waffo:120'])
+    expect(amount).toBe(18.75)
+    expect(calls).toEqual(['waffo:120'])
   })
 
   test('uses the dedicated NOWPayments amount calculator', async () => {
@@ -68,8 +67,8 @@ describe('payment amount routing', () => {
       waffoPancake: async () => ({ success: true, data: '4' }),
     })
 
-    assert.equal(amount, 49.99)
-    assert.deepEqual(calls, ['nowpayments:50'])
+    expect(amount).toBe(49.99)
+    expect(calls).toEqual(['nowpayments:50'])
   })
 })
 
@@ -99,7 +98,7 @@ describe('payment request routing', () => {
       }
     )
 
-    assert.deepEqual(calls, ['nowpayments:50'])
-    assert.equal(response.message, 'success')
+    expect(calls).toEqual(['nowpayments:50'])
+    expect(response.message).toBe('success')
   })
 })
