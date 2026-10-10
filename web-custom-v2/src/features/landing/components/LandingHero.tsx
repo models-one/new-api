@@ -73,7 +73,6 @@ export function LandingHero() {
             <div className="landing-orbit landing-orbit-outer absolute size-[92%] rounded-full border border-[#e7ad57]/15" />
             <div className="landing-orbit landing-orbit-inner absolute size-[72%] rounded-full border border-white/10" />
             <div className="absolute size-[60%] rounded-full bg-[radial-gradient(circle,rgba(231,173,87,0.18),transparent_70%)]" />
-            <div className="absolute size-[54%] rounded-[12px] border border-white/15 bg-[#141517]/80 shadow-[inset_0_0_42px_rgba(231,173,87,0.05)]" />
             <div className="landing-logo-float relative z-10 size-[46%]">
               <img alt="" className="size-full object-contain drop-shadow-[0_0_34px_rgba(231,173,87,0.35)]" src={modelsOneMarkGold} />
             </div>
