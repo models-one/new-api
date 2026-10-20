@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 
+import { useTheme } from '@/lib/theme'
+
 type TurnstileTheme = 'auto' | 'light' | 'dark'
 
 type TurnstileRenderOptions = {
@@ -74,7 +76,10 @@ function loadTurnstileScript(): Promise<void> {
 }
 
 export function Turnstile(props: TurnstileProps) {
-  const { className, refreshKey, siteKey, theme = 'dark' } = props
+  const { className, refreshKey, siteKey } = props
+  // The widget matches the site unless a caller pins it.
+  const siteTheme = useTheme()
+  const theme = props.theme ?? siteTheme
   const containerRef = useRef<HTMLDivElement | null>(null)
   const onVerifyRef = useRef(props.onVerify)
   const onExpireRef = useRef(props.onExpire)

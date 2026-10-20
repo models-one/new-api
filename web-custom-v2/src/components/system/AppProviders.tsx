@@ -8,6 +8,7 @@ import { clearAuthenticatedClientState, clearAuthentication } from '@/lib/auth-s
 import { subscribeAuthSessionEvents } from '@/lib/auth-session-sync'
 import { redirectToLegacySignIn } from '@/lib/navigation'
 import { queryClient } from '@/lib/query-client'
+import { useTheme } from '@/lib/theme'
 import { router } from '@/routes'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -71,13 +72,18 @@ function AuthSessionCoordinator() {
   return null
 }
 
+function ThemedToaster() {
+  const theme = useTheme()
+  return <Toaster closeButton duration={5000} position="top-center" richColors theme={theme} />
+}
+
 export function AppProviders(props: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthSessionCoordinator />
       <DocumentBranding />
       {props.children}
-      <Toaster closeButton duration={5000} position="top-center" richColors theme="dark" />
+      <ThemedToaster />
     </QueryClientProvider>
   )
 }

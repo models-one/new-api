@@ -1,4 +1,3 @@
-import ArrowRightIcon from 'lucide-react/dist/esm/icons/arrow-right'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
@@ -6,29 +5,25 @@ export function ClosingCta() {
   const { t } = useTranslation()
 
   return (
-    <section aria-labelledby="landing-closing" className="landing-reveal px-4 pb-24 sm:px-8 lg:px-12">
-      <div className="landing-glow-border relative mx-auto max-w-[1200px] overflow-hidden rounded-[10px] bg-[#191b1e] px-6 py-16 text-center sm:px-12">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(231,173,87,0.18),transparent_65%)]"
-        />
-        <div className="relative">
-          <h2 className="text-3xl font-extrabold text-[#dfe2f2] sm:text-4xl" id="landing-closing">
+    <section
+      aria-labelledby="home-closing"
+      className="relative overflow-hidden bg-[linear-gradient(120deg,#0f46d6,#1a5cff_55%,#2e9bff)] px-4 py-16 sm:px-8"
+    >
+      <div className="relative mx-auto flex max-w-[1200px] flex-col items-start justify-between gap-8 md:flex-row md:items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-white sm:text-3xl" id="home-closing">
             {t('Start building today')}
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-[#b9cacb]">
+          <p className="mt-3 max-w-xl text-base leading-7 text-white/85">
             {t('Create an account, add balance and make your first request in minutes.')}
           </p>
-          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:gap-4">
-            <Link className="landing-cta-primary" to="/dashboard">
-              {t('Get started free')}
-              <ArrowRightIcon aria-hidden="true" className="size-4" />
-            </Link>
-            <Link className="landing-cta-secondary" to="/pricing">
-              {t('See model pricing')}
-            </Link>
-          </div>
         </div>
+        <Link
+          className="inline-flex min-h-12 shrink-0 items-center rounded-[8px] bg-white px-7 text-base font-bold text-[#1a5cff] transition-colors hover:bg-[#eaf1ff]"
+          to="/sign-up"
+        >
+          {t('Sign up free')}
+        </Link>
       </div>
     </section>
   )

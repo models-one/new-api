@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { BrandMark } from '@/components/system/BrandMark'
 import { serverStatusQuery } from '@/lib/api/status'
 
@@ -30,7 +31,7 @@ export function PublicFrame(props: { children: ReactNode }) {
     <div className="landing-page flex min-h-screen flex-col text-foreground">
       <SkipToMain targetId={MAIN_ID} />
 
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0a0e19]/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
           <div className="flex min-w-0 items-center gap-6">
             <Link
@@ -41,7 +42,7 @@ export function PublicFrame(props: { children: ReactNode }) {
                 logo={logo}
                 markClassName="h-8 max-w-40"
                 name={systemName}
-                nameClassName="text-[22px] font-bold text-[#e7ad57]"
+                nameClassName="text-[22px] font-bold text-primary"
               />
             </Link>
             <nav aria-label={t('Public navigation')} className="hidden items-center gap-2 md:flex">
@@ -58,12 +59,15 @@ export function PublicFrame(props: { children: ReactNode }) {
             </nav>
           </div>
 
-          <Link
-            className="inline-flex min-h-10 shrink-0 items-center rounded-[4px] bg-[#e7ad57] px-4 py-2 text-sm font-bold text-[#111214] transition-[box-shadow,background-color] hover:bg-[#f6c477] hover:shadow-[0_0_18px_rgba(231,173,87,0.4)] sm:px-6"
-            to="/dashboard"
-          >
-            {t('Get started')}
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <ThemeToggle />
+            <Link
+              className="inline-flex min-h-10 shrink-0 items-center rounded-[4px] bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-[box-shadow,background-color] hover:bg-primary-strong hover:shadow-[0_0_18px_rgba(77,141,255,0.4)] sm:px-6"
+              to="/dashboard"
+            >
+              {t('Get started')}
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -74,7 +78,7 @@ export function PublicFrame(props: { children: ReactNode }) {
         {props.children}
       </main>
 
-      <footer className="border-t border-white/10 bg-[#111214]">
+      <footer className="border-t border-border bg-background">
         <div className="mx-auto flex max-w-[1440px] flex-col items-center gap-4 px-4 py-8 text-sm sm:px-8 lg:flex-row lg:justify-between lg:px-12">
           <p className="text-muted">
             {t('Prices are published by this gateway and can change at any time.')}

@@ -1,4 +1,5 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
+// jsdom, not happy-dom: DOMPurify cannot sanitise against happy-dom, and the footer HTML goes through it.
 
 import '@testing-library/jest-dom/vitest'
 import '@/i18n/config'
@@ -11,7 +12,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { LandingPage } from '@/features/landing/LandingPage'
@@ -22,16 +23,20 @@ afterEach(cleanup)
 
 const PRICING = {
   success: true,
-  data: [{ model_name: 'claude-sonnet-4' }, { model_name: 'gpt-4o' }],
+  data: [
+    { model_name: 'deepseek-chat', vendor_id: 1 },
+    { model_name: 'deepseek-reasoner', vendor_id: 1 },
+    { model_name: 'qwen-plus', vendor_id: 2 },
+  ],
   vendors: [
-    { id: 1, name: 'Anthropic' },
-    { id: 2, name: 'OpenAI' },
+    { id: 1, name: 'DeepSeek' },
+    { id: 2, name: '通义千问' },
   ],
 } as PricingResponse
 
 async function renderLandingPage() {
   const rootRoute = createRootRoute()
-  const stubPaths = ['/dashboard', '/models', '/pricing', '/rankings', '/about', '/privacy-policy', '/user-agreement']
+  const stubPaths = ['/sign-in', '/sign-up', '/models', '/pricing', '/rankings', '/about', '/privacy-policy', '/user-agreement']
   const router = createRouter({
     history: createMemoryHistory({ initialEntries: ['/'] }),
     routeTree: rootRoute.addChildren([
@@ -48,6 +53,7 @@ async function renderLandingPage() {
   queryClient.setQueryData(serverStatusQuery().queryKey, {
     system_name: 'Gateway',
     server_address: 'https://api.example.com/',
+    footer_html: '<a href="https://beian.miit.gov.cn/">京ICP备00000000号</a><script>alert(1)</script>',
   } as ServerStatus)
   render(
     <QueryClientProvider client={queryClient}>
@@ -57,36 +63,41 @@ async function renderLandingPage() {
 }
 
 describe('LandingPage', () => {
-  it('leads with the headline, both calls to action and the live catalogue size', async () => {
+  it('leads with the headline, sign-up and the live catalogue size', async () => {
     await renderLandingPage()
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('The AI gateway built for production')
-    expect(screen.getAllByRole('link', { name: 'Get started free' })[0]).toHaveAttribute('href', '/dashboard')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Chinese large models,one API for all of them')
+    expect(screen.getAllByRole('link', { name: 'Sign up free' })[0]).toHaveAttribute('href', '/sign-up')
     expect(screen.getByRole('link', { name: 'Browse models' })).toHaveAttribute('href', '/models')
-    expect(screen.getByText('2 models from 2 providers, available right now')).toBeInTheDocument()
-    // The marquee's second copy is aria-hidden, so only the real list is exposed.
-    const providers = within(screen.getByRole('list', { name: 'Models from every major provider' }))
-    expect(providers.getByText('Anthropic')).toBeInTheDocument()
+    expect(screen.getByText('3 models from 2 providers, available right now')).toBeInTheDocument()
   })
 
-  it('points the code sample at the configured server address and a real model', async () => {
+  it('switches the sample request between the catalogue vendors', async () => {
     await renderLandingPage()
 
-    expect(screen.getByRole('tab', { name: 'Python' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Node.js' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'cURL' })).toBeInTheDocument()
-    const sample = screen.getByRole('tabpanel')
-    expect(sample).toHaveTextContent('base_url="https://api.example.com/v1"')
-    expect(sample).toHaveTextContent('model="claude-sonnet-4"')
+    const vendors = within(screen.getByRole('group', { name: 'Pick a vendor' }))
+    expect(vendors.getByRole('button', { name: 'DeepSeek' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('base_url="https://api.example.com/v1",')).toBeInTheDocument()
+    expect(screen.getByText('model="deepseek-chat",')).toBeInTheDocument()
+
+    fireEvent.click(vendors.getByRole('button', { name: '通义千问' }))
+    expect(vendors.getByRole('button', { name: '通义千问' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('model="qwen-plus",')).toBeInTheDocument()
   })
 
-  it('keeps the feature sections, FAQ and footer attribution', async () => {
+  it('lists only vendors that serve models, with their model counts', async () => {
     await renderLandingPage()
 
-    expect(screen.getByRole('heading', { name: 'Route every request' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'See where the money goes' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Stay in control' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'How am I billed?' })).toBeInTheDocument()
+    const wall = within(screen.getByRole('region', { name: 'Vendors on this platform' }))
+    expect(wall.getByText('DeepSeek')).toBeInTheDocument()
+    expect(wall.getByText('2 models')).toBeInTheDocument()
+  })
+
+  it('shows the operator footer filing text sanitised, with the attribution link', async () => {
+    await renderLandingPage()
+
+    expect(screen.getByRole('link', { name: '京ICP备00000000号' })).toHaveAttribute('href', 'https://beian.miit.gov.cn/')
+    expect(document.querySelector('footer script')).toBeNull()
     expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/QuantumNous/new-api')
   })
 })

@@ -1,0 +1,7 @@
+{
+  "tool_name": "mcp__Claude_Browser__preview_eval",
+  "tool_input_preview": "{\"expression\":\"(async () => { location.href = '/pricing'; await new Promise(r=>setTimeout(r,1500)); })()\",\"serverId\":\"63056cfa-59bb-4705-a783-f66aa709894a\"}",
+  "error": "Eval failed: Inspected target navigated or closed",
+  "timestamp": "2026-10-20T05:09:32.453Z",
+  "retry_count": 1
+}
