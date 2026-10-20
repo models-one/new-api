@@ -5,6 +5,7 @@ on:
     branches:
       - mb_dev
       - new_UI
+      - cn_UI
   workflow_dispatch:
     inputs:
       tag:
