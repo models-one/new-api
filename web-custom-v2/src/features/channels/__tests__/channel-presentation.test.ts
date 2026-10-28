@@ -353,3 +353,37 @@ describe('reading a stored channel back', () => {
     expect(channelStatusReason({ ...storedChannel, other_info: '' })).toBeUndefined()
   })
 })
+
+describe('task plugin channel binding', () => {
+  it('requires a plugin on a Task Plugin channel', () => {
+    const errors = validateChannelForm(
+      form({ base_url: 'https://api.example.com', task_plugin_key: '', type: 61 }),
+      { isEdit: false },
+    )
+    expect(errors.task_plugin_key?.code).toBe('task-plugin-required')
+  })
+
+  it('writes task_plugin_key into setting only for type 61', () => {
+    const bound = JSON.parse(buildSettingJson(form({ task_plugin_key: ' kling ', type: 61 }), {}))
+    expect(bound.task_plugin_key).toBe('kling')
+    expect(bound.task_extend_plugin_keys).toBeUndefined()
+
+    // Switching the channel to another type drops a stale binding; empty keys are omitted.
+    const switched = buildSettingJson(form({ task_plugin_key: 'kling', type: 1 }), { task_plugin_key: 'kling' })
+    expect(parseJsonRecord(switched).task_plugin_key).toBeUndefined()
+  })
+
+  it('round-trips New API upstream plugins and folds a legacy single key in', () => {
+    const channel = {
+      ...storedChannel,
+      setting: JSON.stringify({ task_extend_plugin_keys: ['vidu'], task_plugin_key: 'kling' }),
+      type: 60,
+    }
+    const values = channelToForm(channel)
+    expect(values.task_extend_plugin_keys).toEqual(['kling', 'vidu'])
+
+    const setting = JSON.parse(buildSettingJson(values, parseJsonRecord(channel.setting)))
+    expect(setting.task_extend_plugin_keys).toEqual(['kling', 'vidu'])
+    expect(setting.task_plugin_key).toBeUndefined()
+  })
+})

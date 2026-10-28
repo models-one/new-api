@@ -439,6 +439,15 @@ const modelRegistryRoute = createRoute({
   ),
 })
 
+const taskPluginsRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/task-plugins',
+  component: lazyRouteComponent(
+    () => import('@/features/task-plugins/TaskPluginsPage'),
+    'TaskPluginsPage',
+  ),
+})
+
 const deploymentsRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: '/models/deployments',
@@ -655,6 +664,7 @@ const routeTree = rootRoute.addChildren([
     keysRedirectRoute,
     modelRegistryRoute,
     deploymentsRoute,
+    taskPluginsRoute,
     usageLogsIndexRedirectRoute,
     usageLogsCommonRedirectRoute,
     dashboardOverviewRedirectRoute,

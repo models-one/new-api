@@ -83,6 +83,7 @@ export const CHANNEL_TYPE_NAMES: Record<number, string> = {
   58: 'Advanced Custom',
   59: 'Sub2API',
   60: 'New API',
+  61: 'Task Plugin',
 }
 
 export function channelTypeName(type: number): string {
@@ -168,7 +169,7 @@ export const CREATE_BLOCKED_TYPES = new Set([58])
 
 /** The order the type picker offers, mirroring the legacy console's grouping. */
 const TYPE_DISPLAY_ORDER = [
-  1, 14, 33, 24, 43, 3, 41, 48, 60, 58, 42, 34, 20, 4, 40, 27, 25, 17, 26, 15, 46, 23, 18,
+  1, 14, 33, 24, 43, 3, 41, 48, 60, 61, 58, 42, 34, 20, 4, 40, 27, 25, 17, 26, 15, 46, 23, 18,
   45, 31, 35, 49, 19, 47, 37, 38, 39, 8, 57, 59, 22, 44, 2, 5, 36, 50, 51, 52, 53, 54, 55,
   56, 7, 10, 12, 13, 16, 21, 6, 9, 11,
 ]
@@ -450,7 +451,22 @@ export const CHANNEL_TYPE_SPECS: Record<number, ChannelTypeSpec> = {
       required: true,
     },
   },
+  61: {
+    baseUrl: {
+      description: 'The upstream address the bound task plugin sends requests to. Choosing a plugin fills in its default.',
+      label: 'Upstream base URL',
+      placeholder: 'https://api.example.com',
+      required: true,
+    },
+    keyHint: 'The upstream API key the task plugin authenticates with.',
+  },
 }
+
+/** `constant.ChannelTypeTaskPlugin`: the channel's protocol is supplied by a task plugin. */
+export const TASK_PLUGIN_CHANNEL_TYPE = 61
+
+/** `constant.ChannelTypeNewAPI`: may forward task-plugin requests to an upstream New API. */
+export const NEW_API_CHANNEL_TYPE = 60
 
 export function channelTypeSpec(type: number): ChannelTypeSpec {
   return CHANNEL_TYPE_SPECS[type] ?? {}
@@ -490,6 +506,10 @@ export type ChannelFormValues = {
   http_protocol: string
   /** 1–8; '' means unset (treated as 1). */
   http2_connection_shards: string
+  /** Task Plugin (61) only: the bound plugin's key. */
+  task_plugin_key: string
+  /** New API (60) only: task plugins this channel also forwards upstream. */
+  task_extend_plugin_keys: string[]
   /** `settings` — dto.ChannelOtherSettings */
   azure_responses_version: string
   vertex_key_type: string
@@ -546,6 +566,12 @@ function readString(record: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value : ''
 }
 
+function readStringList(record: Record<string, unknown>, key: string): string[] {
+  const value = record[key]
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string' && item.trim() !== '')
+}
+
 export function emptyChannelForm(): ChannelFormValues {
   return {
     allow_include_obfuscation: false,
@@ -583,6 +609,8 @@ export function emptyChannelForm(): ChannelFormValues {
     system_prompt: '',
     system_prompt_override: false,
     tag: '',
+    task_extend_plugin_keys: [],
+    task_plugin_key: '',
     test_model: '',
     thinking_to_content: false,
     type: 1,
@@ -650,6 +678,13 @@ export function channelToForm(channel: Channel): ChannelFormValues {
     system_prompt: readString(setting, 'system_prompt'),
     system_prompt_override: readBoolean(setting, 'system_prompt_override'),
     tag: channel.tag ?? '',
+    // A New API channel may still carry a single legacy task_plugin_key; it is
+    // folded into the list so saving keeps it instead of silently dropping it.
+    task_extend_plugin_keys:
+      channel.type === NEW_API_CHANNEL_TYPE
+        ? [...new Set([readString(setting, 'task_plugin_key'), ...readStringList(setting, 'task_extend_plugin_keys')].filter(Boolean))]
+        : [],
+    task_plugin_key: readString(setting, 'task_plugin_key'),
     test_model: channel.test_model ?? '',
     thinking_to_content: readBoolean(setting, 'thinking_to_content'),
     type: channel.type,
@@ -676,6 +711,7 @@ export type ChannelFormErrorCode =
   | 'weight-invalid'
   | 'shards-invalid'
   | 'shards-with-http1'
+  | 'task-plugin-required'
 
 export type ChannelFormError = {
   code: ChannelFormErrorCode
@@ -741,6 +777,10 @@ export function validateChannelForm(
 
   if (spec.other?.required === true && values.other.trim() === '') {
     errors.other = { code: 'other-required' }
+  }
+
+  if (values.type === TASK_PLUGIN_CHANNEL_TYPE && values.task_plugin_key.trim() === '') {
+    errors.task_plugin_key = { code: 'task-plugin-required' }
   }
 
   // `validateChannel`: Vertex AI requires `other` to be a JSON object carrying "default".
@@ -851,6 +891,10 @@ export function buildSettingJson(
   next.http_protocol = values.http_protocol
   const shards = values.http2_connection_shards.trim()
   next.http2_connection_shards = shards === '' ? 0 : Number(shards)
+  // A binding only means something on the type that reads it; switching type away
+  // drops it so a stale key can't resurface if the channel is switched back later.
+  next.task_plugin_key = values.type === TASK_PLUGIN_CHANNEL_TYPE ? values.task_plugin_key.trim() : ''
+  next.task_extend_plugin_keys = values.type === NEW_API_CHANNEL_TYPE ? values.task_extend_plugin_keys : []
   return serializeSettings(next)
 }
 
