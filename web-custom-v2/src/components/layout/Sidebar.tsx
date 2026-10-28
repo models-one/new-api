@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react'
 import ActivityIcon from 'lucide-react/dist/esm/icons/activity'
 import BarChart3Icon from 'lucide-react/dist/esm/icons/chart-no-axes-column-increasing'
 import CreditCardIcon from 'lucide-react/dist/esm/icons/credit-card'
+import PuzzleIcon from 'lucide-react/dist/esm/icons/puzzle'
 import FileClockIcon from 'lucide-react/dist/esm/icons/file-clock'
 import KeyRoundIcon from 'lucide-react/dist/esm/icons/key-round'
 import LayoutDashboardIcon from 'lucide-react/dist/esm/icons/layout-dashboard'
@@ -51,10 +52,15 @@ type NavigationItem = {
   /** Hidden below `common.RoleAdminUser`. The server refuses regardless; this only keeps
    *  a link out of sight that would land the user on a denial. */
   adminOnly?: boolean
+  /** Hidden below `common.RoleRootUser`, for pages behind `middleware.RootAuth()`. */
+  rootOnly?: boolean
 }
 
 /** `common.RoleAdminUser` (common/constants.go) — the floor `middleware.AdminAuth()` allows. */
 const ADMIN_ROLE = 10
+
+/** `common.RoleRootUser` — the floor `middleware.RootAuth()` allows. */
+const ROOT_ROLE = 100
 
 const primaryNavigation: NavigationItem[] = [
   { labelKey: 'Dashboard', to: '/dashboard', icon: LayoutDashboardIcon },
@@ -80,6 +86,7 @@ const workspaceNavigation: NavigationItem[] = [
 const administrationNavigation: NavigationItem[] = [
   { labelKey: 'Users', to: '/users', icon: UsersRoundIcon, adminOnly: true },
   { labelKey: 'Channels', to: '/channels', icon: PlugZapIcon, adminOnly: true },
+  { labelKey: 'Task plugins', to: '/task-plugins', icon: PuzzleIcon, adminOnly: true, rootOnly: true },
   { labelKey: 'Model registry', to: '/models/metadata', icon: BoxesIcon, adminOnly: true },
   { labelKey: 'GPU deployments', to: '/models/deployments', icon: CpuIcon, adminOnly: true },
   { labelKey: 'User analytics', to: '/dashboard/users', icon: ChartPieIcon, adminOnly: true },
@@ -172,7 +179,9 @@ export function Sidebar(props: SidebarProps) {
   const accountGroup = storedUser?.group ?? selfQuery.data?.group ?? ''
 
   const visibleAdministration = administrationNavigation.filter(
-    (item) => !item.adminOnly || (role !== undefined && role >= ADMIN_ROLE),
+    (item) =>
+      (!item.adminOnly || (role !== undefined && role >= ADMIN_ROLE)) &&
+      (!item.rootOnly || (role !== undefined && role >= ROOT_ROLE)),
   )
   const allItems = [...primaryNavigation, ...workspaceNavigation, ...visibleAdministration]
   const activePath = activeNavigationPath(pathname, allItems)

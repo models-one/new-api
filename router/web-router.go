@@ -99,6 +99,7 @@ func webIndexForPath(path string, legacyIndexPage []byte, customIndexPage []byte
 		"/users",
 		"/system-info",
 		"/channels",
+		"/task-plugins",
 		"/system-settings",
 		// Redirects to /settings, which is where this console keeps API keys.
 		"/keys",

@@ -48,7 +48,16 @@ import {
   type ChannelFormError,
   type ChannelFormErrors,
   type ChannelFormValues,
+  NEW_API_CHANNEL_TYPE,
+  TASK_PLUGIN_CHANNEL_TYPE,
 } from '@/features/channels/channel-presentation'
+import {
+  assessBaseUrlTrust,
+  channelPluginExtensions,
+  nextTaskPluginBaseUrl,
+  supportsNewAPIUpstream,
+  taskPluginOptionsQuery,
+} from '@/features/channels/task-plugin-binding'
 
 type ChannelDrawerProps = {
   open: boolean
@@ -182,6 +191,8 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
         return t('Enter a whole number from 1 to 8.')
       case 'shards-with-http1':
         return t('HTTP/1.1 allows only a single connection shard.')
+      case 'task-plugin-required':
+        return t('Choose the task plugin this channel runs.')
       default:
         return undefined
     }
@@ -190,6 +201,38 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
   const typeOptions: NativeSelectOption[] = channelTypeOptions()
     .filter((option) => isEdit || !CREATE_BLOCKED_TYPES.has(option.value))
     .map((option) => ({ label: option.label, value: String(option.value) }))
+
+  const taskPluginOptionsResult = useQuery({ ...taskPluginOptionsQuery(), enabled: props.open })
+  const taskPlugins = taskPluginOptionsResult.data ?? []
+  const selectedTaskPlugin = taskPlugins.find((plugin) => plugin.key === values.task_plugin_key)
+  const newApiTaskPlugins = taskPlugins.filter(supportsNewAPIUpstream)
+  const extendingTaskPlugins = channelPluginExtensions(values.type, taskPlugins, values.task_extend_plugin_keys)
+  const baseUrlTrust = values.type === TASK_PLUGIN_CHANNEL_TYPE ? assessBaseUrlTrust(values.base_url) : null
+  // Keep a binding that is no longer offered (plugin disabled or removed) visible,
+  // so opening the channel never silently reads as unbound.
+  const taskPluginSelectOptions: NativeSelectOption[] = [
+    { label: t('Choose a task plugin'), value: '' },
+    ...taskPlugins.map((plugin) => ({ label: `${plugin.name} (${plugin.key})`, value: plugin.key })),
+    ...(values.task_plugin_key !== '' && selectedTaskPlugin === undefined
+      ? [{ label: t('{{key}} (not enabled)', { key: values.task_plugin_key }), value: values.task_plugin_key }]
+      : []),
+  ]
+
+  function selectTaskPlugin(key: string) {
+    const plugin = taskPlugins.find((item) => item.key === key)
+    const baseUrl = nextTaskPluginBaseUrl(values.base_url, selectedTaskPlugin?.baseUrl, plugin?.baseUrl)
+    update({
+      task_plugin_key: key,
+      ...(baseUrl === null ? {} : { base_url: baseUrl }),
+      ...(plugin !== undefined && values.models.trim() === '' ? { models: plugin.models.join(',') } : {}),
+      ...(plugin !== undefined && values.name.trim() === '' ? { name: plugin.name } : {}),
+    })
+  }
+
+  function toggleExtendPlugin(key: string, checked: boolean) {
+    const keys = values.task_extend_plugin_keys.filter((item) => item !== key)
+    update({ task_extend_plugin_keys: checked ? [...keys, key] : keys })
+  }
 
   const groupNames = groupsQuery.data ?? []
   // A group can be removed from the setting while channels still route to it; keeping it
@@ -359,6 +402,50 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
               </p>
             )}
 
+            {values.type === TASK_PLUGIN_CHANNEL_TYPE ? (
+              <NativeSelect
+                description={
+                  taskPlugins.length === 0 && !taskPluginOptionsResult.isPending
+                    ? t('No enabled task plugin. Install and enable one on the Task plugins page first.')
+                    : t('The plugin supplies this channel\'s request protocol, models and billing.')
+                }
+                disabled={sensitiveLocked}
+                error={resolveError(errors.task_plugin_key)}
+                label={t('Task plugin')}
+                onChange={(event) => selectTaskPlugin(event.target.value)}
+                options={taskPluginSelectOptions}
+                required
+                value={values.task_plugin_key}
+              />
+            ) : null}
+
+            {values.type === NEW_API_CHANNEL_TYPE && newApiTaskPlugins.length > 0 ? (
+              <fieldset className="flex flex-col gap-3">
+                <legend className="mb-1 text-sm font-medium text-foreground">{t('Upstream task plugins')}</legend>
+                <p className="text-xs leading-5 text-muted">
+                  {t('Task plugins this channel also forwards to the upstream New API. Only plugins that declare a New API upstream are listed.')}
+                </p>
+                {newApiTaskPlugins.map((plugin) => (
+                  <Checkbox
+                    checked={values.task_extend_plugin_keys.includes(plugin.key)}
+                    description={plugin.key}
+                    disabled={sensitiveLocked}
+                    key={plugin.key}
+                    label={plugin.name}
+                    onCheckedChange={(checked) => toggleExtendPlugin(plugin.key, checked)}
+                  />
+                ))}
+              </fieldset>
+            ) : null}
+
+            {values.type !== NEW_API_CHANNEL_TYPE && extendingTaskPlugins.length > 0 ? (
+              <Alert tone="info">
+                {t('These task plugins also route through channels of this type: {{plugins}}.', {
+                  plugins: extendingTaskPlugins.map((plugin) => plugin.name).join(', '),
+                })}
+              </Alert>
+            ) : null}
+
             <Input
               description={t('Groups channels for the tag batch operations in the legacy console. Optional.')}
               label={t('Tag')}
@@ -451,6 +538,14 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
               required={spec.baseUrl?.required === true}
               value={values.base_url}
             />
+
+            {baseUrlTrust !== null && (baseUrlTrust.plainHttp || baseUrlTrust.privateHost) ? (
+              <Alert icon={<TriangleAlertIcon aria-hidden="true" />} tone="warning">
+                {baseUrlTrust.privateHost
+                  ? t('This address points at a private or local network. The channel key is sent there with every task request; make sure you trust it.')
+                  : t('This address uses plain HTTP, so the channel key travels unencrypted. Prefer HTTPS.')}
+              </Alert>
+            ) : null}
 
             {spec.other === undefined ? null : (
               <OtherField
