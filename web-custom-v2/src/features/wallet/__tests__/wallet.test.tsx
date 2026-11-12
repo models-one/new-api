@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import '@/i18n/config'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -15,6 +15,7 @@ vi.mock('@/lib/http-client', () => ({ api: { get, post } }))
 
 const { WalletPage } = await import('@/features/wallet/WalletPage')
 const { fetchTopUpQuote } = await import('@/features/wallet/topup-quote')
+const { requestTopUpCheckout, openTopUpCheckout } = await import('@/features/wallet/topup-checkout')
 const { enabledPayMethods } = await import('@/features/wallet/pay-methods')
 type TopUpInfo = Parameters<typeof enabledPayMethods>[0]
 const { default: topUpInfoFixture } = await import('@/features/wallet/__tests__/fixtures/topup-info.json')
@@ -66,7 +67,10 @@ beforeEach(() => {
   })
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('WalletPage', () => {
   it('shows the balance, lifetime spend and request count from /api/user/self', async () => {
@@ -190,6 +194,223 @@ describe('WalletPage with a provider enabled', () => {
     renderWallet()
 
     expect(await screen.findByRole('button', { name: 'Redeem' })).toBeDisabled()
+  })
+
+  it('only creates an Epay order after a valid quote and displays a payment rejection', async () => {
+    let finishQuote: ((value: { data: { message: string; data: string } }) => void) | undefined
+    let quoteRequests = 0
+    post.mockImplementation((url: string) => {
+      if (url === '/api/user/amount') {
+        quoteRequests += 1
+        return quoteRequests === 1
+          ? new Promise((resolve) => { finishQuote = resolve })
+          : Promise.resolve({ data: { message: 'success', data: '73.00' } })
+      }
+      if (url === '/api/user/pay') return Promise.resolve({ data: { message: 'error', data: 'Gateway unavailable' } })
+      throw new Error(`unmocked POST ${url}`)
+    })
+
+    renderWallet()
+    const button = await screen.findByRole('button', { name: 'Proceed to payment' })
+    expect(button).toBeDisabled()
+    expect(post).not.toHaveBeenCalledWith('/api/user/pay', expect.anything(), expect.anything())
+
+    finishQuote?.({ data: { message: 'success', data: '73.00' } })
+    await screen.findByText('73.00')
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      '/api/user/pay',
+      { amount: 10, payment_method: 'alipay' },
+      expect.anything(),
+    ))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Gateway unavailable')
+  })
+
+  it('does not create an order for a rejected quote', async () => {
+    post.mockResolvedValue({ data: { message: 'error', data: 'Too low' } })
+
+    renderWallet()
+    const button = await screen.findByRole('button', { name: 'Proceed to payment' })
+    await screen.findByText('Too low')
+    expect(button).toBeDisabled()
+    fireEvent.click(button)
+    expect(post).not.toHaveBeenCalledWith('/api/user/pay', expect.anything(), expect.anything())
+  })
+
+  it('disables checkout while a changed amount is being quoted', async () => {
+    let finishQuote: ((value: { data: { message: string; data: string } }) => void) | undefined
+    post.mockImplementation((url: string, body: { amount: number }) => {
+      if (url !== '/api/user/amount') throw new Error(`unexpected POST ${url}`)
+      if (body.amount === 10) return Promise.resolve({ data: { message: 'success', data: '73.00' } })
+      return new Promise((resolve) => { finishQuote = resolve })
+    })
+
+    renderWallet()
+    const button = await screen.findByRole('button', { name: 'Proceed to payment' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.change(screen.getByLabelText('Custom amount'), { target: { value: '20' } })
+
+    expect(button).toBeDisabled()
+    fireEvent.click(button)
+    expect(post).not.toHaveBeenCalledWith('/api/user/pay', expect.anything(), expect.anything())
+    finishQuote?.({ data: { message: 'success', data: '146.00' } })
+    await waitFor(() => expect(button).toBeEnabled())
+  })
+
+  it('keeps checkout disabled while an order request is pending', async () => {
+    let finishPay: ((value: { data: { message: string; data: string } }) => void) | undefined
+    post.mockImplementation((url: string) => {
+      if (url === '/api/user/amount') return Promise.resolve({ data: { message: 'success', data: '73.00' } })
+      if (url === '/api/user/pay') return new Promise((resolve) => { finishPay = resolve })
+      throw new Error(`unmocked POST ${url}`)
+    })
+
+    renderWallet()
+    const button = await screen.findByRole('button', { name: 'Proceed to payment' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    expect(button).toBeDisabled()
+    expect(screen.getByRole('radio', { name: '10' })).toBeDisabled()
+    expect(screen.getByLabelText('Custom amount')).toBeDisabled()
+    expect(screen.getByRole('radio', { name: 'Alipay' })).toBeDisabled()
+    fireEvent.click(button)
+    await waitFor(() => expect(post.mock.calls.filter(([url]) => url === '/api/user/pay')).toHaveLength(1))
+
+    finishPay?.({ data: { message: 'error', data: 'Try later' } })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Try later')
+  })
+
+  it('reports a failed provider handoff and unlocks checkout for retry', async () => {
+    post.mockImplementation((url: string) => {
+      if (url === '/api/user/amount') return Promise.resolve({ data: { message: 'success', data: '73.00' } })
+      if (url === '/api/user/pay') {
+        return Promise.resolve({
+          data: { message: 'success', url: 'https://pay.example/submit', data: { pid: '123' } },
+        })
+      }
+      throw new Error(`unmocked POST ${url}`)
+    })
+    vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {
+      throw new Error('Checkout blocked')
+    })
+
+    renderWallet()
+    const button = await screen.findByRole('button', { name: 'Proceed to payment' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Checkout blocked')
+    expect(button).toBeEnabled()
+  })
+
+  it('requires review of a changed payable amount before creating an order', async () => {
+    let quotes = 0
+    post.mockImplementation((url: string) => {
+      if (url !== '/api/user/amount') throw new Error(`unexpected POST ${url}`)
+      quotes += 1
+      return Promise.resolve({ data: { message: 'success', data: quotes === 1 ? '73.00' : '74.00' } })
+    })
+
+    renderWallet()
+    const button = await screen.findByRole('button', { name: 'Proceed to payment' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The price changed. Review the new amount before paying.')
+    expect(screen.getByText('74.00')).toBeInTheDocument()
+    expect(post).not.toHaveBeenCalledWith('/api/user/pay', expect.anything(), expect.anything())
+  })
+
+  it('creates a NOWPayments invoice for a Crypto method', async () => {
+    const cryptoInfo = {
+      ...enabledInfo,
+      enable_online_topup: false,
+      enable_nowpayments_topup: true,
+      pay_methods: [{ type: 'nowpayments', name: 'Crypto', min_topup: '10' }],
+    }
+    get.mockImplementation((url: string) => {
+      if (url === '/api/status') return Promise.resolve({ data: { success: true, data: statusFixture } })
+      if (url === '/api/user/self') return Promise.resolve({ data: { success: true, data: selfFixture } })
+      if (url === '/api/user/topup/info') return Promise.resolve({ data: { success: true, data: cryptoInfo } })
+      if (url === '/api/user/topup/self') return Promise.resolve({ data: { success: true, data: historyFixture } })
+      throw new Error(`unmocked GET ${url}`)
+    })
+    post.mockImplementation((url: string) => {
+      if (url === '/api/user/nowpayments/amount') return Promise.resolve({ data: { message: 'success', data: '10.00' } })
+      if (url === '/api/user/nowpayments/pay') return Promise.resolve({ data: { message: 'error', data: 'Invoice unavailable' } })
+      throw new Error(`unmocked POST ${url}`)
+    })
+
+    renderWallet()
+    const button = await screen.findByRole('button', { name: 'Proceed to payment' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      '/api/user/nowpayments/pay',
+      { amount: 10 },
+      expect.anything(),
+    ))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invoice unavailable')
+  })
+})
+
+describe('top-up checkout handoff', () => {
+  it('parses Epay form fields from a response without success and posts in the same tab', async () => {
+    post.mockResolvedValueOnce({
+      data: { message: 'success', url: 'https://pay.example/submit', data: { pid: '123', sign: 'abc' } },
+    })
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(function (this: HTMLFormElement) {
+      expect(this.action).toBe('https://pay.example/submit')
+      expect(this.method).toBe('POST')
+      expect(this.target).toBe('')
+      expect(new FormData(this).get('pid')).toBe('123')
+      expect(new FormData(this).get('sign')).toBe('abc')
+    })
+
+    const checkout = await requestTopUpCheckout('epay', 10, 'alipay')
+    expect(checkout).toEqual({ kind: 'form', url: 'https://pay.example/submit', params: { pid: '123', sign: 'abc' } })
+    openTopUpCheckout(checkout)
+    expect(submit).toHaveBeenCalledOnce()
+    submit.mockRestore()
+  })
+
+  it.each([
+    ['stripe', '/api/user/stripe/pay', 'pay_link'],
+    ['nowpayments', '/api/user/nowpayments/pay', 'invoice_url'],
+    ['waffo', '/api/user/waffo/pay', 'payment_url'],
+    ['waffo-pancake', '/api/user/waffo-pancake/pay', 'checkout_url'],
+  ] as const)('uses the %s checkout URL returned by %s', async (route, path, field) => {
+    post.mockResolvedValueOnce({ data: { message: 'success', data: { [field]: 'https://pay.example/order' } } })
+
+    const checkout = await requestTopUpCheckout(route, 10, route)
+    expect(post).toHaveBeenCalledWith(
+      path,
+      route === 'stripe' ? { amount: 10, payment_method: 'stripe' } : { amount: 10 },
+      expect.anything(),
+    )
+    expect(checkout).toEqual({ kind: 'redirect', url: 'https://pay.example/order' })
+
+    const navigate = vi.fn()
+    openTopUpCheckout(checkout, navigate)
+    expect(navigate).toHaveBeenCalledWith('https://pay.example/order')
+  })
+
+  it('rejects an unsafe checkout URL instead of opening it', async () => {
+    post.mockResolvedValueOnce({ data: { message: 'success', data: { invoice_url: 'javascript:alert(1)' } } })
+
+    await expect(requestTopUpCheckout('nowpayments', 10, 'nowpayments')).rejects.toThrow('Invalid checkout link')
+    const navigate = vi.fn()
+    expect(() => openTopUpCheckout({ kind: 'redirect', url: 'javascript:alert(1)' }, navigate)).toThrow('Invalid checkout link')
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('shows the server reason from an envelope-style payment rejection', async () => {
+    post.mockResolvedValueOnce({ data: { success: false, message: 'Top-up amount cannot exceed 10000', data: 10 } })
+
+    await expect(requestTopUpCheckout('stripe', 10001, 'stripe')).rejects.toThrow('Top-up amount cannot exceed 10000')
   })
 })
 

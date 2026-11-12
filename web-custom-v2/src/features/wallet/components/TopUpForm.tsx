@@ -1,14 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import CreditCardIcon from 'lucide-react/dist/esm/icons/credit-card'
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTableEmpty } from '@/components/data'
 import { NumberInput } from '@/components/form'
+import { toErrorMessage } from '@/components/overlay'
 import { Button, Skeleton } from '@/components/ui'
 import { enabledPayMethods } from '@/features/wallet/pay-methods'
+import { openTopUpCheckout, requestTopUpCheckout } from '@/features/wallet/topup-checkout'
 import { topUpQuoteQuery } from '@/features/wallet/topup-quote'
-import type { TopUpInfo } from '@/lib/api/topup'
+import type { QuoteRoute, TopUpInfo } from '@/lib/api/topup'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +36,9 @@ export function TopUpForm(props: { info: TopUpInfo }) {
   const [selectedType, setSelectedType] = useState<string | null>(null)
   const [presetAmount, setPresetAmount] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('')
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [checkingQuote, setCheckingQuote] = useState(false)
+  const checkoutLock = useRef(false)
 
   const selectedMethod = payMethods.find((entry) => entry.method.type === selectedType) ?? payMethods[0]
 
@@ -63,6 +68,29 @@ export function TopUpForm(props: { info: TopUpInfo }) {
     ...topUpQuoteQuery(selectedMethod?.route ?? 'epay', chosenAmount ?? 0),
     enabled: canQuote,
   })
+  const checkout = useMutation({
+    mutationFn: ({ route, amount, paymentMethod }: {
+      route: QuoteRoute
+      amount: number
+      paymentMethod: string
+    }) => requestTopUpCheckout(route, amount, paymentMethod),
+    onSuccess: (handoff) => {
+      setCheckoutError(null)
+      openTopUpCheckout(handoff)
+    },
+    onError: (failure: unknown) => {
+      checkoutLock.current = false
+      setCheckoutError(t(toErrorMessage(failure, t('Could not start payment'))))
+    },
+  })
+  const canCheckout = canQuote
+    && quoteQuery.isSuccess
+    && !quoteQuery.isFetching
+    && quoteQuery.data.kind === 'quote'
+    && quoteQuery.data.payable > 0
+    && !checkingQuote
+    && !checkout.isPending
+    && !checkoutLock.current
 
   if (payMethods.length === 0) {
     return (
@@ -117,10 +145,12 @@ export function TopUpForm(props: { info: TopUpInfo }) {
               <input
                 checked={activePreset === option}
                 className="sr-only"
+                disabled={checkingQuote || checkout.isPending || checkoutLock.current}
                 name="wallet-topup-amount"
                 onChange={() => {
                   setPresetAmount(option)
                   setCustomAmount('')
+                  setCheckoutError(null)
                 }}
                 type="radio"
                 value={option}
@@ -137,10 +167,14 @@ export function TopUpForm(props: { info: TopUpInfo }) {
             amount: minTopUp,
             method: selectedMethod?.method.name ?? '',
           })}
+          disabled={checkingQuote || checkout.isPending || checkoutLock.current}
           error={usesCustomAmount ? amountError : null}
           label={t('Custom amount')}
           min={minTopUp}
-          onChange={(event) => setCustomAmount(event.target.value)}
+          onChange={(event) => {
+            setCustomAmount(event.target.value)
+            setCheckoutError(null)
+          }}
           placeholder={t('Enter amount')}
           step={1}
           value={customAmount}
@@ -162,8 +196,12 @@ export function TopUpForm(props: { info: TopUpInfo }) {
               <input
                 checked={selectedMethod?.method.type === entry.method.type}
                 className="sr-only"
+                disabled={checkingQuote || checkout.isPending || checkoutLock.current}
                 name="wallet-payment-method"
-                onChange={() => setSelectedType(entry.method.type)}
+                onChange={() => {
+                  setSelectedType(entry.method.type)
+                  setCheckoutError(null)
+                }}
                 type="radio"
                 value={entry.method.type}
               />
@@ -181,10 +219,46 @@ export function TopUpForm(props: { info: TopUpInfo }) {
       </fieldset>
 
       <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
-        <p className="text-sm text-muted sm:mr-auto" id="wallet-checkout-note">
-          {t('Checkout handoff to the payment provider is not wired up yet, so the figure above is a price quote only.')}
-        </p>
-        <Button aria-describedby="wallet-checkout-note" disabled>
+        {checkoutError === null ? null : (
+          <p className="text-sm text-destructive sm:mr-auto" id="wallet-checkout-error" role="alert">
+            {checkoutError}
+          </p>
+        )}
+        <Button
+          aria-busy={checkingQuote || checkout.isPending}
+          aria-describedby={checkoutError === null ? undefined : 'wallet-checkout-error'}
+          disabled={!canCheckout}
+          onClick={() => {
+            if (!canCheckout || checkoutLock.current || chosenAmount === null || selectedMethod === undefined) return
+            if (quoteQuery.data?.kind !== 'quote') return
+            checkoutLock.current = true
+            setCheckingQuote(true)
+            setCheckoutError(null)
+            const displayedPayable = quoteQuery.data.payable
+            void (async () => {
+              let orderRequested = false
+              try {
+                const latest = await quoteQuery.refetch()
+                if (latest.isError || latest.data?.kind !== 'quote' || latest.data.payable <= 0) return
+                if (latest.data.payable !== displayedPayable) {
+                  setCheckoutError(t('The price changed. Review the new amount before paying.'))
+                  return
+                }
+                checkout.mutate({
+                  route: selectedMethod.route,
+                  amount: chosenAmount,
+                  paymentMethod: selectedMethod.method.type,
+                })
+                orderRequested = true
+              } catch (failure) {
+                setCheckoutError(t(toErrorMessage(failure, t('Could not reach the payment provider'))))
+              } finally {
+                if (!orderRequested) checkoutLock.current = false
+                setCheckingQuote(false)
+              }
+            })()
+          }}
+        >
           {t('Proceed to payment')}
         </Button>
       </div>
