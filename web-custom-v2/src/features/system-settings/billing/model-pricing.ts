@@ -5,6 +5,7 @@ import {
   type NumberMap,
   type StringMap,
 } from '@/features/system-settings/billing/option-json'
+import { getJson, patchJson } from '@/lib/api/client'
 
 /**
  * THE MODEL PRICING MODEL
@@ -356,4 +357,93 @@ function isBalanced(expr: string): boolean {
   }
 
   return depth === 0 && quote === undefined
+}
+
+// ---------------------------------------------------------------------------
+// Saving — PATCH /api/option/model_pricing (controller/model_pricing_config.go)
+// ---------------------------------------------------------------------------
+
+/** `billing_setting.PluginBillingExprOption`: per-plugin expressions, kept as they are. */
+const PLUGIN_BILLING_EXPR_OPTION_KEY = 'billing_setting.plugin_billing_expr'
+
+const PRICING_MAP_KEYS = [...RATIO_OPTION_KEYS, BILLING_MODE_OPTION_KEY, BILLING_EXPR_OPTION_KEY] as const
+
+/** One model's stored values, keyed by option name, as `model.PricingValues` holds them. */
+export type PricingValues = Record<string, unknown>
+
+/** The values each model has across the ten maps. A model absent from a map has no key. */
+export function pricingByModel(maps: ModelPricingMaps): Map<string, PricingValues> {
+  const parsed = parseMaps(maps)
+  const byModel = new Map<string, PricingValues>()
+  const put = (key: string, map: Record<string, unknown>) => {
+    for (const [name, value] of Object.entries(map)) {
+      const values = byModel.get(name) ?? {}
+      values[key] = value
+      byModel.set(name, values)
+    }
+  }
+  for (const key of RATIO_OPTION_KEYS) put(key, parsed.ratios[key])
+  put(BILLING_MODE_OPTION_KEY, parsed.modes)
+  put(BILLING_EXPR_OPTION_KEY, parsed.exprs)
+  return byModel
+}
+
+function sameValues(left: PricingValues | undefined, right: PricingValues | undefined): boolean {
+  const keys = new Set([...Object.keys(left ?? {}), ...Object.keys(right ?? {})])
+  for (const key of keys) {
+    if (JSON.stringify(left?.[key]) !== JSON.stringify(right?.[key])) return false
+  }
+  return true
+}
+
+/** The models whose values differ between the stored maps and the draft. */
+export function changedPricingModels(saved: ModelPricingMaps, draft: ModelPricingMaps): string[] {
+  const before = pricingByModel(saved)
+  const after = pricingByModel(draft)
+  const names = new Set([...before.keys(), ...after.keys()])
+  return [...names].filter((name) => !sameValues(before.get(name), after.get(name))).sort()
+}
+
+type PricingSnapshotEntry = { model_name: string; version: string; configured: PricingValues }
+
+/**
+ * Stores only the models the operator changed.
+ *
+ * `GET /api/option/` reports `billing_setting.billing_mode` and `billing_expr` with the
+ * built-in expressions merged in, so writing those maps back whole through
+ * `PUT /api/option/` would store every built-in price as an administrator override, and the
+ * model would stop following the built-in price when it is updated. The per-model endpoint
+ * replaces one model at a time, never persists a built-in, and refuses (409) a model whose
+ * stored pricing changed since it was read.
+ */
+export async function saveModelPricing(saved: ModelPricingMaps, draft: ModelPricingMaps): Promise<void> {
+  const names = changedPricingModels(saved, draft)
+  if (names.length === 0) return
+
+  const query = new URLSearchParams(names.map((name) => ['model', name]))
+  const snapshot = await getJson<{ entries: PricingSnapshotEntry[] }>(`/api/option/model_pricing?${query}`, {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  const current = new Map(snapshot.entries.map((entry) => [entry.model_name, entry]))
+  const drafted = pricingByModel(draft)
+
+  const changes = names.map((name) => {
+    const entry = current.get(name)
+    if (entry === undefined) throw new Error(`Pricing for ${name} could not be read. Reload and try again.`)
+    const pricing: PricingValues = { ...drafted.get(name) }
+    // This editor does not show per-plugin prices; carry the stored ones over unchanged.
+    const pluginPrices = entry.configured[PLUGIN_BILLING_EXPR_OPTION_KEY]
+    if (pluginPrices !== undefined) pricing[PLUGIN_BILLING_EXPR_OPTION_KEY] = pluginPrices
+    return { model_name: name, expected_version: entry.version, pricing }
+  })
+
+  await patchJson('/api/option/model_pricing', { changes }, { skipBusinessError: true, skipErrorHandler: true })
+}
+
+/** The ten pricing maps a draft carries, for callers holding a wider draft. */
+export function pickPricingMaps(values: Record<string, unknown>): ModelPricingMaps {
+  const maps = {} as Record<string, string>
+  for (const key of PRICING_MAP_KEYS) maps[key] = String(values[key] ?? '{}')
+  return maps as ModelPricingMaps
 }

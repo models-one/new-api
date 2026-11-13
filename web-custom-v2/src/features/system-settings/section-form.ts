@@ -102,6 +102,16 @@ export type UseOptionSectionFormOptions<TDraft extends OptionDraft> = {
    * The value shown in the control is untouched.
    */
   serialize?: Partial<Record<keyof TDraft & string, (value: OptionDraftValue) => string | number | boolean>>
+  /**
+   * Keys that must not be written one `PUT /api/option/` at a time. When any of them is
+   * dirty, `write` receives the whole draft and the saved state and stores all of them in
+   * one request; they then succeed or fail together. Other dirty keys still go through
+   * `PUT /api/option/`.
+   */
+  groupWrite?: {
+    keys: readonly (keyof TDraft & string)[]
+    write: (values: TDraft, saved: TDraft) => Promise<void>
+  }
 }
 
 type SaveEntry = {
@@ -157,7 +167,7 @@ export function collectOptionErrors<TDraft extends OptionDraft>(
 export function useOptionSectionForm<TDraft extends OptionDraft>(
   options: UseOptionSectionFormOptions<TDraft>,
 ): OptionSectionForm<TDraft> {
-  const { saved, validate, serialize } = options
+  const { saved, validate, serialize, groupWrite } = options
   const { t } = useTranslation()
   const invalidate = useInvalidateSystemOptions()
 
@@ -237,7 +247,21 @@ export function useOptionSectionForm<TDraft extends OptionDraft>(
       const savedKeys: string[] = []
       const failed: OptionSaveFailure[] = []
 
+      const grouped = new Set<string>(groupWrite?.keys ?? [])
+      const groupEntries = entries.filter((entry) => grouped.has(entry.key))
+      if (groupWrite !== undefined && groupEntries.length > 0) {
+        setSavingKey(groupEntries[0].key)
+        try {
+          await groupWrite.write(candidate, saved)
+          savedKeys.push(...groupEntries.map((entry) => entry.key))
+        } catch (error) {
+          const message = toErrorMessage(error)
+          failed.push(...groupEntries.map((entry) => ({ key: entry.key, message })))
+        }
+      }
+
       for (const entry of entries) {
+        if (grouped.has(entry.key)) continue
         setSavingKey(entry.key)
         const transform = serialize?.[entry.key]
         try {
@@ -281,7 +305,7 @@ export function useOptionSectionForm<TDraft extends OptionDraft>(
         toast.error(t('Nothing was saved.'))
       }
     },
-    [invalidate, numberMessage, serialize, t, validate, values],
+    [groupWrite, invalidate, numberMessage, saved, serialize, t, validate, values],
   )
 
   const save = useCallback(

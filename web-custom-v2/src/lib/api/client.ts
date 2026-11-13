@@ -29,6 +29,11 @@ export async function putJson<T>(url: string, body?: unknown, config?: ApiReques
   return unwrap(response.data)
 }
 
+export async function patchJson<T>(url: string, body?: unknown, config?: ApiRequestConfig): Promise<T> {
+  const response = await api.patch<ApiEnvelope<T>>(url, body, config)
+  return unwrap(response.data)
+}
+
 export async function deleteJson<T>(url: string, config?: ApiRequestConfig): Promise<T> {
   const response = await api.delete<ApiEnvelope<T>>(url, config)
   return unwrap(response.data)

@@ -11,9 +11,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const get = vi.fn()
 const post = vi.fn()
 const put = vi.fn()
+const patch = vi.fn()
 const del = vi.fn()
 
-vi.mock('@/lib/http-client', () => ({ api: { get, post, put, delete: del } }))
+vi.mock('@/lib/http-client', () => ({ api: { get, post, put, patch, delete: del } }))
 
 const { CheckinSection } = await import('@/features/system-settings/billing/CheckinSection')
 const { CurrencySection } = await import('@/features/system-settings/billing/CurrencySection')
@@ -176,6 +177,7 @@ beforeEach(() => {
 
   get.mockReset()
   put.mockReset()
+  patch.mockReset()
   post.mockReset()
   del.mockReset()
 
@@ -188,6 +190,26 @@ beforeEach(() => {
           success: true,
         },
       })
+    }
+    if (url.startsWith('/api/option/model_pricing?')) {
+      // Stored values only, as `model.GetModelPricingSnapshot` reports `configured`.
+      const names = new URLSearchParams(url.split('?')[1]).getAll('model')
+      const entries = names.map((name) => {
+        const configured: Record<string, unknown> = {}
+        for (const key of PRICING_KEYS) {
+          const map = JSON.parse(server.stored[key] ?? '{}') as Record<string, unknown>
+          if (name in map) configured[key] = map[name]
+        }
+        const pluginPrices = JSON.parse(server.stored['billing_setting.plugin_billing_expr'] ?? '{}') as Record<string, string>
+        const variants = Object.fromEntries(
+          Object.entries(pluginPrices)
+            .filter(([key]) => key.endsWith(`::${name}`))
+            .map(([key, expr]) => [key.split('::')[0], expr]),
+        )
+        if (Object.keys(variants).length > 0) configured['billing_setting.plugin_billing_expr'] = variants
+        return { model_name: name, version: `v-${name}`, configured }
+      })
+      return Promise.resolve({ data: { data: { entries }, message: '', success: true } })
     }
     if (url === '/api/status') {
       return Promise.resolve({
@@ -249,7 +271,32 @@ beforeEach(() => {
   })
 
   post.mockImplementation(() => Promise.resolve({ data: { message: '', success: true } }))
+
+  patch.mockImplementation((url: string, body: { changes: PricingChange[] }) => {
+    if (url !== '/api/option/model_pricing') throw new Error(`unmocked PATCH ${url}`)
+    for (const change of body.changes) {
+      for (const key of PRICING_KEYS) {
+        const map = JSON.parse(server.stored[key] ?? '{}') as Record<string, unknown>
+        delete map[change.model_name]
+        if (key in change.pricing) map[change.model_name] = change.pricing[key]
+        server.stored[key] = JSON.stringify(map)
+      }
+    }
+    return Promise.resolve({ data: { data: {}, message: '', success: true } })
+  })
 })
+
+const PRICING_KEYS = [
+  'ModelPrice', 'ModelRatio', 'CompletionRatio', 'CacheRatio', 'CreateCacheRatio',
+  'ImageRatio', 'AudioRatio', 'AudioCompletionRatio',
+  'billing_setting.billing_mode', 'billing_setting.billing_expr',
+]
+
+type PricingChange = { model_name: string; expected_version: string; pricing: Record<string, unknown> }
+
+function pricingChanges(): PricingChange[] {
+  return patch.mock.calls.flatMap((call) => (call[1] as { changes: PricingChange[] }).changes)
+}
 
 afterEach(cleanup)
 
@@ -585,7 +632,7 @@ describe('ModelPricingSection', () => {
     expect(screen.queryByText('model-01')).not.toBeInTheDocument()
   })
 
-  it('writes only the blob that changed, not all ten', async () => {
+  it('writes only the model that changed, through the per-model endpoint', async () => {
     renderSection(<ModelPricingSection />)
     fireEvent.click(await screen.findByText('Edit the raw pricing keys'))
     await settled('ModelRatio')
@@ -593,8 +640,44 @@ describe('ModelPricingSection', () => {
     fireEvent.change(screen.getByLabelText('ModelRatio'), { target: { value: '{"gpt-4-all":30}' } })
     await save()
 
-    await waitFor(() => expect(writes()).toHaveLength(1))
-    expect(writes()[0].key).toBe('ModelRatio')
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0]).toEqual({
+      model_name: 'gpt-4-all',
+      expected_version: 'v-gpt-4-all',
+      pricing: { ModelRatio: 30, CompletionRatio: 2 },
+    })
+    // The whole-map PUT is never used for pricing.
+    expect(writes()).toHaveLength(0)
+  })
+
+  it('keeps a model’s per-plugin prices, which this editor does not show', async () => {
+    server.stored['billing_setting.plugin_billing_expr'] = '{"acme::gpt-4-all":"p * 3"}'
+    renderSection(<ModelPricingSection />)
+    fireEvent.click(await screen.findByText('Edit the raw pricing keys'))
+    await settled('ModelRatio')
+
+    fireEvent.change(screen.getByLabelText('ModelRatio'), { target: { value: '{"gpt-4-all":30}' } })
+    await save()
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0].pricing['billing_setting.plugin_billing_expr']).toEqual({ acme: 'p * 3' })
+  })
+
+  it('never stores a built-in expression it was only shown', async () => {
+    // GET /api/option/ reports billing_expr with the built-in expressions merged in. A
+    // whole-map write would store them as administrator overrides; only the edited model
+    // may be written.
+    server.stored['billing_setting.billing_mode'] = '{"builtin-model":"tiered_expr"}'
+    server.stored['billing_setting.billing_expr'] = '{"builtin-model":"p * 2"}'
+    renderSection(<ModelPricingSection />)
+    fireEvent.click(await screen.findByText('Edit the raw pricing keys'))
+    await settled('ModelRatio')
+
+    fireEvent.change(screen.getByLabelText('ModelRatio'), { target: { value: '{"gpt-4-all":30}' } })
+    await save()
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges().map((change) => change.model_name)).toEqual(['gpt-4-all'])
   })
 
   it('gates the server-side ratio reset behind typing the key name', async () => {

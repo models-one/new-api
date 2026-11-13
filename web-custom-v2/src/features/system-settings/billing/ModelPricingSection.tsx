@@ -36,6 +36,8 @@ import {
   type ModelPricingMaps,
   type ModelPricingRow,
   type RatioOptionKey,
+  pickPricingMaps,
+  saveModelPricing,
 } from '@/features/system-settings/billing/model-pricing'
 import { checkJsonShape, isSameJson } from '@/features/system-settings/billing/option-json'
 import { SettingsSection } from '@/features/system-settings/components/SettingsSection'
@@ -159,6 +161,11 @@ export function ModelPricingSection() {
 
   const form = useOptionSectionForm<ModelPricingDraft>({
     saved,
+    // Each changed model is written on its own; see `saveModelPricing`.
+    groupWrite: {
+      keys: PRICING_JSON_KEYS,
+      write: (values, stored) => saveModelPricing(pickPricingMaps(stored), pickPricingMaps(values)),
+    },
     validate: (values) => {
       const errors: Partial<Record<keyof ModelPricingDraft, string>> = {}
 
