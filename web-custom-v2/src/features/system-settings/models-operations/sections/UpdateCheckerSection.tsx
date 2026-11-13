@@ -27,7 +27,7 @@ import { formatDateTime } from '@/lib/format'
  * never match one. That case is called out rather than reported as "an update is available".
  */
 
-const RELEASES_ENDPOINT = 'https://api.github.com/repos/Calcium-Ion/new-api/releases/latest'
+const RELEASES_ENDPOINT = 'https://api.github.com/repos/QuantumNous/new-api/releases/latest'
 const DEVELOPMENT_VERSION = 'v0.0.0'
 
 type ReleaseInfo = {

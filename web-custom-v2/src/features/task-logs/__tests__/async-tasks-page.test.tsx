@@ -69,7 +69,7 @@ function respond(options: {
       return { quota_per_unit: 500_000, enable_drawing: true, enable_task: enableTask }
     }
     if (url === '/api/user/self') return { id: 1, username: 'root', role }
-    if (url === '/api/task/self' || url === '/api/task/') {
+    if (url === '/api/task/self' || url === '/api/task') {
       calls.push({ url, params })
       if (failList) throw new Error('task listing exploded')
       return { page: 1, page_size: 20, total: items.length, items }
@@ -121,7 +121,7 @@ describe('endpoint selection by role', () => {
 
     await waitFor(() => expect(lastCall()?.url).toBe('/api/task/self'))
     fireEvent.click(await screen.findByRole('button', { name: 'All users' }))
-    await waitFor(() => expect(lastCall()?.url).toBe('/api/task/'))
+    await waitFor(() => expect(lastCall()?.url).toBe('/api/task'))
   })
 
   it('sends an admin back to their own tasks when the scope is switched back', async () => {
@@ -130,7 +130,7 @@ describe('endpoint selection by role', () => {
 
     await findLoadedTable()
     fireEvent.click(await screen.findByRole('button', { name: 'All users' }))
-    await waitFor(() => expect(lastCall().url).toBe('/api/task/'))
+    await waitFor(() => expect(lastCall().url).toBe('/api/task'))
 
     fireEvent.click(screen.getByRole('button', { name: 'My tasks' }))
     await waitFor(() => expect(lastCall().url).toBe('/api/task/self'))

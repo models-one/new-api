@@ -202,7 +202,7 @@ export function asyncTasksQuery(
   pageSize: number,
   scope: TaskScope,
 ) {
-  const url = scope === 'all' ? '/api/task/' : '/api/task/self'
+  const url = scope === 'all' ? '/api/task' : '/api/task/self'
   return queryOptions({
     queryKey: ['async-tasks', scope, filters, page, pageSize],
     queryFn: () =>

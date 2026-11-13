@@ -303,9 +303,9 @@ afterEach(cleanup)
 describe('QuotaSection and the payment-compliance gate', () => {
   it('reads the amounts off a payload in which every value is a string', async () => {
     renderSection(<QuotaSection />)
-    await settled(/Pre-consumed quota/)
+    await settled(/New account balance/)
 
-    expect(screen.getByLabelText(/Pre-consumed quota/)).toHaveValue(500)
+    expect(screen.getByLabelText(/New account balance/)).toHaveValue(0)
     expect(screen.getByRole('switch', { name: /Pre-consume quota for free models/ })).toHaveAttribute(
       'aria-checked',
       'true',
@@ -314,7 +314,7 @@ describe('QuotaSection and the payment-compliance gate', () => {
 
   it('writes a positive invitation reward while the compliance terms are accepted', async () => {
     renderSection(<QuotaSection />)
-    await settled(/Pre-consumed quota/)
+    await settled(/New account balance/)
 
     fireEvent.change(screen.getByLabelText(/Reward for the inviter/), { target: { value: '1000' } })
     await save()
@@ -331,7 +331,7 @@ describe('QuotaSection and the payment-compliance gate', () => {
     renderSection(<QuotaSection />)
 
     expect(await screen.findByText('Invitation rewards are locked')).toBeInTheDocument()
-    await settled(/Pre-consumed quota/)
+    await settled(/New account balance/)
 
     fireEvent.change(screen.getByLabelText(/Reward for the inviter/), { target: { value: '1000' } })
     await save()
@@ -369,7 +369,7 @@ describe('QuotaSection and the payment-compliance gate', () => {
     // A stale read, or a second operator. The optimistic value must not stand.
     server.refuse.QuotaForInviter = '请先确认支付合规条款'
     renderSection(<QuotaSection />)
-    await settled(/Pre-consumed quota/)
+    await settled(/New account balance/)
 
     fireEvent.change(screen.getByLabelText(/Reward for the inviter/), { target: { value: '1000' } })
     await save()
@@ -382,7 +382,7 @@ describe('QuotaSection and the payment-compliance gate', () => {
 
   it('rejects a top-up link that is not an absolute http address', async () => {
     renderSection(<QuotaSection />)
-    await settled(/Pre-consumed quota/)
+    await settled(/New account balance/)
 
     fireEvent.change(screen.getByLabelText(/Top-up link/), { target: { value: 'example.com/topup' } })
     await save()

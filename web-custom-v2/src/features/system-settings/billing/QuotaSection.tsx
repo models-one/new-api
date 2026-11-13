@@ -20,10 +20,9 @@ import { formatQuota } from '@/lib/format'
 /**
  * `/system-settings/billing/quota`
  *
- * Seven keys, every one confirmed present in `GET /api/option/` on the dev server:
+ * Six keys, every one confirmed present in `GET /api/option/` on the dev server:
  *
  *   QuotaForNewUser                            '0'
- *   PreConsumedQuota                           '500'
  *   QuotaForInviter                            '0'
  *   QuotaForInvitee                            '0'
  *   TopUpLink                                  ''
@@ -49,7 +48,6 @@ import { formatQuota } from '@/lib/format'
 
 type QuotaDraft = {
   QuotaForNewUser: number
-  PreConsumedQuota: number
   QuotaForInviter: number
   QuotaForInvitee: number
   TopUpLink: string
@@ -60,7 +58,6 @@ type QuotaDraft = {
 function toDraft(options: SystemOptionMap | undefined): QuotaDraft {
   return {
     'general_setting.docs_link': readOptionString(options, 'general_setting.docs_link'),
-    PreConsumedQuota: readOptionNumber(options, 'PreConsumedQuota', 0),
     QuotaForInvitee: readOptionNumber(options, 'QuotaForInvitee', 0),
     QuotaForInviter: readOptionNumber(options, 'QuotaForInviter', 0),
     QuotaForNewUser: readOptionNumber(options, 'QuotaForNewUser', 0),
@@ -103,7 +100,6 @@ export function QuotaSection() {
       )
 
       if (values.QuotaForNewUser < 0) errors.QuotaForNewUser = t('Enter zero or more.')
-      if (values.PreConsumedQuota < 0) errors.PreConsumedQuota = t('Enter zero or more.')
 
       if (values.QuotaForInviter < 0) errors.QuotaForInviter = t('Enter zero or more.')
       else if (values.QuotaForInviter > 0 && !compliance.confirmed) errors.QuotaForInviter = gateMessage
@@ -164,17 +160,6 @@ export function QuotaSection() {
           onValueChange={(value) => form.setField('QuotaForNewUser', value ?? Number.NaN)}
           step="any"
           value={form.values.QuotaForNewUser}
-        />
-
-        <NumberInput
-          description={t('Held from the balance when a request starts and settled when it finishes. Too low lets a runaway request overdraw; too high blocks small balances.')}
-          disabled={disabled}
-          error={form.errors.PreConsumedQuota}
-          label={t('Pre-consumed quota')}
-          min={0}
-          onValueChange={(value) => form.setField('PreConsumedQuota', value ?? Number.NaN)}
-          step="any"
-          value={form.values.PreConsumedQuota}
         />
 
         <NumberInput
