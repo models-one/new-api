@@ -37,15 +37,7 @@ const serverErrorCodeMessages: Record<string, () => string> = {
     t('You are signed in on too many devices. On one of them, go to Account → Security → Active sessions and choose “Sign out other sessions” — or reset your password, which signs out everything.'),
   AUTH_SESSION_ISSUANCE_LIMIT: () =>
     t('Too many sign-ins from here in a short time. Wait a few minutes and try again.'),
-  TELEGRAM_BIND_DISABLED: () => t('Telegram sign-in is switched off on this deployment.'),
-  TELEGRAM_BIND_INVALID_REQUEST: () => t('That Telegram authorization is invalid or has expired.'),
-  TELEGRAM_BIND_FLOW_INVALID: () => t('That Telegram link has expired or has already been used.'),
-  TELEGRAM_BIND_SESSION_INVALID: () =>
-    t('The sign-in that started this Telegram link is no longer valid. Start again.'),
   TELEGRAM_BIND_ALREADY_BOUND: () => t('That Telegram account is already linked to an account.'),
-  TELEGRAM_BIND_USER_DELETED: () => t('That account no longer exists.'),
-  TELEGRAM_BIND_USER_DISABLED: () => t('That account is disabled.'),
-  TELEGRAM_BIND_INTERNAL_ERROR: () => t('Telegram linking failed. Try again.'),
 }
 
 function codeMessage(payload: unknown): string | undefined {

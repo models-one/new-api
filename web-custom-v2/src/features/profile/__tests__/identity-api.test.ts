@@ -16,7 +16,6 @@ const {
   customOAuthBindingsQuery,
   deleteSelfAccount,
   performCheckin,
-  startTelegramBind,
   unbindCustomOAuth,
   updateDisplayName,
 } = await import('@/features/profile/identity-api')
@@ -105,17 +104,6 @@ describe('binding calls', () => {
     await bindWeChat('123456')
     expect(post.mock.calls[0][0]).toBe('/api/oauth/wechat/bind')
     expect(post.mock.calls[0][1]).toEqual({ code: '123456' })
-  })
-
-  it('starts the Telegram flow and returns the callback the widget needs', async () => {
-    post.mockReturnValue(ok({
-      callback_url: '/api/oauth/telegram/bind/flow-1',
-      expires_at: 1788020000,
-      flow_token: 'flow-1',
-    }))
-    const flow = await startTelegramBind()
-    expect(post.mock.calls[0][0]).toBe('/api/oauth/telegram/bind/start')
-    expect(flow.callback_url).toBe('/api/oauth/telegram/bind/flow-1')
   })
 
   it('reads custom bindings from the one route that lists them', async () => {

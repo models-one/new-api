@@ -10,7 +10,6 @@ export { AuthConfigGate } from '@/features/auth/components/AuthConfigGate'
 export { AuthTermsFooter, LegalConsent, PRIVACY_POLICY_HREF, USER_AGREEMENT_HREF } from '@/features/auth/components/LegalConsent'
 export { OAuthProviders } from '@/features/auth/components/OAuthProviders'
 export { ProviderIcon } from '@/features/auth/components/ProviderIcon'
-export { TelegramLoginDialog } from '@/features/auth/components/TelegramLoginDialog'
 export { WeChatQrDialog } from '@/features/auth/components/WeChatQrDialog'
 
 export {
@@ -77,7 +76,6 @@ export {
   prepareCredentialRequestOptions,
 } from '@/features/auth/passkey'
 
-export { pickTelegramAuthorization, type TelegramAuthorization } from '@/features/auth/telegram'
 
 export {
   beginPasskeyLogin,
@@ -85,7 +83,6 @@ export {
   executeLogout,
   finishPasskeyLogin,
   logout,
-  telegramLogin,
   wechatLoginByCode,
   type ApiResponse,
   type OAuthIntent,

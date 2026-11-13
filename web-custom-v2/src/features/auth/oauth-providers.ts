@@ -3,10 +3,9 @@ import type { AuthServerConfig, CustomOAuthProvider } from '@/features/auth/serv
 /**
  * How a provider is started.
  * - `redirect`  — POST /api/oauth/state, then leave the page for the provider.
- * - `telegram`  — open the Telegram login widget, then POST the authorization.
  * - `wechat`    — open the QR dialog and exchange a code the user types in.
  */
-export type OAuthProviderKind = 'redirect' | 'telegram' | 'wechat'
+export type OAuthProviderKind = 'redirect' | 'wechat'
 
 /** Decorative mark drawn on the button. Not a brand asset; see ProviderIcon. */
 export type OAuthProviderIcon = 'github' | 'discord' | 'linuxdo' | 'telegram' | 'wechat' | 'generic'
@@ -16,6 +15,8 @@ export type AuthorizationUrlInput = {
   state: string
   /** Origin the provider redirects back to, e.g. `https://console.example.com`. */
   origin: string
+  /** `authorization_url` from `POST /api/oauth/state`, for providers the server builds. */
+  serverUrl: string
 }
 
 export type OAuthProviderDescriptor = {
@@ -162,8 +163,19 @@ export function authProviderDescriptors(config: AuthServerConfig): OAuthProvider
     })
   }
 
-  if (config.telegramOAuthEnabled && config.telegramBotName !== '') {
-    descriptors.push({ id: 'telegram', provider: 'telegram', name: 'Telegram', kind: 'telegram', icon: 'telegram' })
+  // Telegram's OAuth uses PKCE, so the server builds the provider URL along with the state.
+  if (config.telegramOAuthEnabled && config.telegramOAuthConfigured) {
+    descriptors.push({
+      id: 'telegram',
+      provider: 'telegram',
+      name: 'Telegram',
+      kind: 'redirect',
+      icon: 'telegram',
+      buildAuthorizationUrl: ({ serverUrl }) => {
+        if (serverUrl === '') throw new Error('Failed to initialize OAuth')
+        return serverUrl
+      },
+    })
   }
 
   for (const provider of config.customOAuthProviders) {

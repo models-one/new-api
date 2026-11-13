@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { toast } from '@/components/overlay'
-import { createOAuthState } from '@/features/auth/api'
+import { createOAuthAuthorization } from '@/features/auth/api'
 import {
   OAUTH_BIND_CALLBACK_MESSAGE,
   OAUTH_BIND_RESULT_MESSAGE,
@@ -239,10 +239,12 @@ export function useOAuthBind(options: UseOAuthBindOptions): UseOAuthBindResult {
 
     void (async () => {
       try {
-        const state = await createOAuthState(descriptor.provider, 'bind')
+        const { state, authorizationUrl } = await createOAuthAuthorization(descriptor.provider, 'bind')
         if (pending.current !== attempt || popup.closed) return
         attempt.state = state
-        popup.location.replace(buildAuthorizationUrl({ state, origin: window.location.origin }))
+        popup.location.replace(
+          buildAuthorizationUrl({ state, origin: window.location.origin, serverUrl: authorizationUrl }),
+        )
       } catch (error: unknown) {
         const wasCurrent = pending.current === attempt
         clearPending(attempt)

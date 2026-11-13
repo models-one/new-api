@@ -145,8 +145,8 @@ describe('oauthReadinessGaps', () => {
     'oidc.authorization_endpoint': '',
     'oidc.client_id': '',
     'oidc.enabled': false,
-    TelegramBotName: '',
     TelegramOAuthEnabled: false,
+    'telegram.client_id': '',
   }
 
   it('reports nothing when every provider is off', () => {
@@ -159,13 +159,11 @@ describe('oauthReadinessGaps', () => {
     ])
   })
 
-  it('flags Telegram on the bot NAME, which the server never checks', () => {
-    // controller.UpdateOption gates TelegramOAuthEnabled on the bot TOKEN; the sign-in page
-    // needs the bot NAME. Setting one without the other is accepted and draws no button.
+  it('flags Telegram on its OAuth client id, like the other redirect providers', () => {
     expect(oauthReadinessGaps({ ...base, TelegramOAuthEnabled: true })).toEqual([
-      { provider: 'telegram', reason: 'bot-name' },
+      { provider: 'telegram', reason: 'client-id' },
     ])
-    expect(oauthReadinessGaps({ ...base, TelegramBotName: 'my_bot', TelegramOAuthEnabled: true })).toEqual([])
+    expect(oauthReadinessGaps({ ...base, 'telegram.client_id': '123456', TelegramOAuthEnabled: true })).toEqual([])
   })
 
   it('flags OIDC whose authorization endpoint is not absolute', () => {

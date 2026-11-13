@@ -1,4 +1,4 @@
-import { createOAuthState, logout, type OAuthIntent } from '@/features/auth/api'
+import { createOAuthAuthorization, logout, type OAuthIntent } from '@/features/auth/api'
 import { clearAuthenticatedClientState } from '@/lib/auth-session'
 import { queryClient } from '@/lib/query-client'
 
@@ -60,8 +60,8 @@ export async function startRedirectOAuth(
     ?? (typeof window === 'undefined' ? '' : window.location.origin)
 
   await (options.resetSession ?? resetAuthSession)()
-  const state = await createOAuthState(descriptor.provider, options.intent ?? 'login')
+  const { state, authorizationUrl } = await createOAuthAuthorization(descriptor.provider, options.intent ?? 'login')
 
-  const url = buildAuthorizationUrl({ state, origin })
+  const url = buildAuthorizationUrl({ state, origin, serverUrl: authorizationUrl })
   ;(options.navigate ?? navigateSameTab)(url)
 }

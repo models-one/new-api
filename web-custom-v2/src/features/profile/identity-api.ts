@@ -131,23 +131,6 @@ export function bindWeChat(code: string): Promise<null> {
   return postJson<null>('/api/oauth/wechat/bind', { code }, inlineErrors)
 }
 
-/**
- * `POST /api/oauth/telegram/bind/start` (controller.TelegramBindStart). Telegram does not
- * use the shared OAuth callback: the backend mints a flow token and a callback URL, the
- * Telegram widget redirects the popup straight to that URL, and the backend performs the
- * bind itself before redirecting to `/oauth/telegram?telegram_bind=…&flow_token=…`.
- *
- * Telegram is disabled on the dev server; shape taken from the handler.
- */
-export type TelegramBindFlow = {
-  flow_token: string
-  callback_url: string
-  expires_at: number
-}
-
-export function startTelegramBind(): Promise<TelegramBindFlow> {
-  return postJson<TelegramBindFlow>('/api/oauth/telegram/bind/start', undefined, inlineErrors)
-}
 
 /**
  * `GET /api/user/oauth/bindings` (controller/custom_oauth.go GetUserOAuthBindings).

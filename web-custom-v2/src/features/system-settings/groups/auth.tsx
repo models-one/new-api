@@ -15,7 +15,7 @@ import type { SettingsGroupDefinition } from '@/features/system-settings/groups/
  * READ THIS BEFORE BUILDING ANY OF IT. `controller.GetOptions` skips every key ending in
  * `Token`, `Secret`, `Key`, `secret` or `api_key`, so this group's credentials are absent
  * from the payload — not masked, absent. `GitHubClientSecret`, `TurnstileSiteKey`,
- * `TurnstileSecretKey`, `TelegramBotToken`, `WeChatServerToken`, `oidc.client_secret`,
+ * `TurnstileSecretKey`, `telegram.client_secret`, `WeChatServerToken`, `oidc.client_secret`,
  * `discord.client_secret` and `LinuxDOClientSecret` can be WRITTEN but never read back.
  * A write-only PasswordInput that says so is the only honest control.
  *

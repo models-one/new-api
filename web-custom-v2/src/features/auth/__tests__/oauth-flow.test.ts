@@ -42,6 +42,26 @@ afterEach(() => {
 })
 
 describe('startRedirectOAuth', () => {
+  it('sends Telegram to the authorization URL the server built with the state', async () => {
+    const telegramUrl = 'https://oauth.telegram.org/auth?client_id=1&state=state-token&code_challenge=abc'
+    mockEndpoints({ success: true, data: { flow_token: 'state-token', authorization_url: telegramUrl } })
+    const navigate = vi.fn()
+    const telegramDescriptor = authProviderDescriptors({
+      ...EMPTY_AUTH_SERVER_CONFIG,
+      telegramOAuthEnabled: true,
+      telegramOAuthConfigured: true,
+    })[0]
+
+    await startRedirectOAuth(telegramDescriptor, { navigate, origin: 'https://console.example.com' })
+
+    expect(post).toHaveBeenCalledWith(
+      '/api/oauth/state',
+      { provider: 'telegram', intent: 'login', aff: undefined },
+      expect.anything(),
+    )
+    expect(navigate).toHaveBeenCalledWith(telegramUrl)
+  })
+
   it('clears the session, mints a state token and hands the browser to the provider', async () => {
     mockEndpoints()
     const navigate = vi.fn()

@@ -24,7 +24,7 @@ const liveStatus = {
   register_enabled: true,
   self_use_mode_enabled: false,
   system_name: 'New API',
-  telegram_bot_name: '',
+  telegram_oauth_configured: false,
   telegram_oauth: false,
   turnstile_check: false,
   turnstile_site_key: '',

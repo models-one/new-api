@@ -9,7 +9,6 @@ import { ProviderIcon } from '@/features/auth'
 import { authProviderDescriptors } from '@/features/auth/oauth-providers'
 import { useAuthServerConfig } from '@/features/auth/server-config'
 import { EmailBindDialog } from '@/features/profile/components/EmailBindDialog'
-import { TelegramBindDialog } from '@/features/profile/components/TelegramBindDialog'
 import { WeChatBindDialog } from '@/features/profile/components/WeChatBindDialog'
 import { buildIdentityBindings, type IdentityBinding } from '@/features/profile/identity'
 import { customOAuthBindingsQuery, unbindCustomOAuth } from '@/features/profile/identity-api'
@@ -69,7 +68,6 @@ export function LoginIdentityPanel(props: LoginIdentityPanelProps) {
 
   const [emailOpen, setEmailOpen] = useState(false)
   const [wechatOpen, setWeChatOpen] = useState(false)
-  const [telegramOpen, setTelegramOpen] = useState(false)
   const [unbindTarget, setUnbindTarget] = useState<IdentityBinding | null>(null)
 
   const refreshAccount = async () => {
@@ -108,10 +106,6 @@ export function LoginIdentityPanel(props: LoginIdentityPanelProps) {
     }
     if (row.start === 'wechat') {
       setWeChatOpen(true)
-      return
-    }
-    if (row.start === 'telegram') {
-      setTelegramOpen(true)
       return
     }
     if (row.descriptor !== undefined) oauthBind.start(row.descriptor)
@@ -245,11 +239,6 @@ export function LoginIdentityPanel(props: LoginIdentityPanelProps) {
         onOpenChange={setWeChatOpen}
         open={wechatOpen}
         qrCodeUrl={config.wechatQrCodeUrl}
-      />
-      <TelegramBindDialog
-        botName={config.telegramBotName}
-        onOpenChange={setTelegramOpen}
-        open={telegramOpen}
       />
 
       <ConfirmDialog

@@ -26,10 +26,10 @@ export function roleKeyOf(role: number): RoleKey {
 }
 
 /**
- * How a binding is started. `email`, `wechat` and `telegram` each open their own dialog;
+ * How a binding is started. `email` and `wechat` each open their own dialog;
  * `redirect` opens the shared OAuth popup.
  */
-export type BindingStart = 'email' | 'wechat' | 'telegram' | 'redirect'
+export type BindingStart = 'email' | 'wechat' | 'redirect'
 
 export type IdentityBinding = {
   /** Stable React key, and the id the pending-state tracker uses. */

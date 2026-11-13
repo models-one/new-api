@@ -14,12 +14,12 @@
  *   discord   discordOAuthEnabled && discordClientId !== ''
  *   oidc      oidcEnabled && oidcClientId !== '' && absolute http(s) authorization endpoint
  *   linuxdo   linuxdoOAuthEnabled && linuxdoClientId !== ''
- *   telegram  telegramOAuthEnabled && telegramBotName !== ''   <- the NAME, not the token
+ *   telegram  telegramOAuthEnabled && telegram_oauth_configured (client id + secret stored)
  *   wechat    wechatLoginEnabled                                <- flag alone is enough
  *
- * Telegram is the interesting one: the SERVER refuses to enable it without a bot TOKEN,
- * while the sign-in page needs the bot NAME. Setting one without the other is accepted and
- * produces no button.
+ * Telegram signs in through Telegram's OAuth service (`oauth.telegram.org`), so like the
+ * others it needs a client id; the server also requires the client secret, which it never
+ * reads back, so only the id can be checked here.
  */
 
 export const OAUTH_PROVIDER_IDS = ['github', 'discord', 'oidc', 'telegram', 'linuxdo', 'wechat'] as const
@@ -60,7 +60,7 @@ export type OAuthReadinessInput = {
   'oidc.client_id': string
   'oidc.authorization_endpoint': string
   TelegramOAuthEnabled: boolean
-  TelegramBotName: string
+  'telegram.client_id': string
   LinuxDOOAuthEnabled: boolean
   LinuxDOClientId: string
 }
@@ -69,7 +69,7 @@ export type OAuthReadinessInput = {
 export type OAuthReadinessGap = {
   provider: OAuthProviderId
   /** Which piece is missing, so the section can pick the right sentence. */
-  reason: 'client-id' | 'authorization-endpoint' | 'bot-name'
+  reason: 'client-id' | 'authorization-endpoint'
 }
 
 /**
@@ -92,8 +92,8 @@ export function oauthReadinessGaps(values: OAuthReadinessInput): OAuthReadinessG
       gaps.push({ provider: 'oidc', reason: 'authorization-endpoint' })
     }
   }
-  if (values.TelegramOAuthEnabled && values.TelegramBotName.trim() === '') {
-    gaps.push({ provider: 'telegram', reason: 'bot-name' })
+  if (values.TelegramOAuthEnabled && values['telegram.client_id'].trim() === '') {
+    gaps.push({ provider: 'telegram', reason: 'client-id' })
   }
   if (values.LinuxDOOAuthEnabled && values.LinuxDOClientId.trim() === '') {
     gaps.push({ provider: 'linuxdo', reason: 'client-id' })

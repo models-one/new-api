@@ -1,7 +1,6 @@
 import axios from 'axios'
 
 import { readReferralCode } from '@/features/auth/referral'
-import type { TelegramAuthorization } from '@/features/auth/telegram'
 import { clearAuthenticatedClientState, refreshAuthentication, type RefreshOutcome } from '@/lib/auth-session'
 import { api } from '@/lib/http-client'
 import { queryClient } from '@/lib/query-client'
@@ -64,7 +63,7 @@ export async function logout(): Promise<ApiResponse> {
 }
 
 // ---------------------------------------------------------------------------
-// OAuth, WeChat, Telegram and passkey calls used by the authentication pages.
+// OAuth, WeChat and passkey calls used by the authentication pages.
 //
 // These deliberately opt out of the global toast (`skipBusinessError`,
 // `skipErrorHandler`) and return the raw envelope. Authentication surfaces need
@@ -88,9 +87,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * provider round trip.
  *
  * Verified against the dev server: the payload is `{ flow_token, expires_at }`.
- * The bare-string branch covers the older response shape.
+ * The bare-string branch covers the older response shape. Telegram also gets an
+ * `authorization_url`: its OAuth flow uses PKCE, so the server builds the URL.
  */
-export async function createOAuthState(provider: string, intent: OAuthIntent): Promise<string> {
+export type OAuthAuthorization = {
+  state: string
+  /** Server-built provider URL; empty for providers whose URL the console builds. */
+  authorizationUrl: string
+}
+
+export async function createOAuthAuthorization(provider: string, intent: OAuthIntent): Promise<OAuthAuthorization> {
   // The server rejects the whole request when `aff` is longer than 32 characters
   // (controller/oauth.go), so a junk referral code must not take sign-in down with it.
   const storedCode = intent === 'login' ? readReferralCode() : ''
@@ -104,31 +110,25 @@ export async function createOAuthState(provider: string, intent: OAuthIntent): P
 
   const body = response.data
   if (body?.success) {
-    if (typeof body.data === 'string' && body.data !== '') return body.data
+    if (typeof body.data === 'string' && body.data !== '') return { state: body.data, authorizationUrl: '' }
     if (isRecord(body.data) && typeof body.data.flow_token === 'string' && body.data.flow_token !== '') {
-      return body.data.flow_token
+      const authorizationUrl = typeof body.data.authorization_url === 'string' ? body.data.authorization_url : ''
+      return { state: body.data.flow_token, authorizationUrl }
     }
   }
 
   throw new Error(body?.message || 'Failed to initialize OAuth')
 }
 
+/** The flow token alone, for callers that build the provider URL themselves. */
+export async function createOAuthState(provider: string, intent: OAuthIntent): Promise<string> {
+  return (await createOAuthAuthorization(provider, intent)).state
+}
+
 /** Exchanges a WeChat official-account verification code for an auth bundle. */
 export async function wechatLoginByCode(code: string): Promise<ApiResponse> {
   const response = await api.get('/api/oauth/wechat', {
     params: { code },
-    disableDuplicate: true,
-    skipAuthRefresh: true,
-    skipBusinessError: true,
-    skipErrorHandler: true,
-  })
-  return response.data
-}
-
-/** Exchanges a signed Telegram widget authorization for an auth bundle. */
-export async function telegramLogin(authorization: TelegramAuthorization): Promise<ApiResponse> {
-  const response = await api.get('/api/oauth/telegram/login', {
-    params: authorization,
     disableDuplicate: true,
     skipAuthRefresh: true,
     skipBusinessError: true,

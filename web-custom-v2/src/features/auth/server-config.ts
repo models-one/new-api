@@ -57,7 +57,8 @@ export type AuthServerConfig = {
   linuxdoOAuthEnabled: boolean
   linuxdoClientId: string
   telegramOAuthEnabled: boolean
-  telegramBotName: string
+  /** `telegram_oauth_configured`: the client id and secret are stored, so the flow can start. */
+  telegramOAuthConfigured: boolean
   wechatLoginEnabled: boolean
   wechatQrCodeUrl: string
 
@@ -165,7 +166,7 @@ export function readAuthServerConfig(status: ServerStatus | null | undefined): A
     linuxdoOAuthEnabled: flag(source, 'linuxdo_oauth'),
     linuxdoClientId: text(source, 'linuxdo_client_id'),
     telegramOAuthEnabled: flag(source, 'telegram_oauth'),
-    telegramBotName: text(source, 'telegram_bot_name'),
+    telegramOAuthConfigured: flag(source, 'telegram_oauth_configured'),
     wechatLoginEnabled: flag(source, 'wechat_login'),
     // `controller/misc.go` emits exactly one QR key. The legacy console probed six
     // aliases; five of them never existed on this backend.

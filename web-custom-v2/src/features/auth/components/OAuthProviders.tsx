@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { ProviderIcon } from '@/features/auth/components/ProviderIcon'
-import { TelegramLoginDialog } from '@/features/auth/components/TelegramLoginDialog'
 import { WeChatQrDialog } from '@/features/auth/components/WeChatQrDialog'
 import { useOAuthLogin, type OAuthLoginMethod } from '@/features/auth/use-oauth-login'
 import { cn } from '@/lib/utils'
@@ -13,7 +12,7 @@ import type { AuthBundle } from '@/features/auth/types'
 
 type OAuthProvidersProps = {
   config: AuthServerConfig
-  /** Receives the bundle Telegram or WeChat returned; apply it and navigate. */
+  /** Receives the bundle WeChat returned; apply it and navigate. */
   onAuthenticated: (bundle: AuthBundle, method: OAuthLoginMethod) => void | Promise<void>
   /** Blocks every provider, e.g. while the password form is submitting. */
   disabled?: boolean
@@ -73,16 +72,6 @@ export function OAuthProviders(props: OAuthProvidersProps) {
           )
         })}
       </div>
-
-      {props.config.telegramOAuthEnabled && props.config.telegramBotName !== '' ? (
-        <TelegramLoginDialog
-          botName={oauth.telegram.botName}
-          onAuthorization={oauth.telegram.submit}
-          onOpenChange={oauth.telegram.setOpen}
-          open={oauth.telegram.open}
-          pending={oauth.telegram.pending}
-        />
-      ) : null}
 
       {props.config.wechatLoginEnabled ? (
         <WeChatQrDialog

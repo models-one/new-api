@@ -3,7 +3,7 @@
  *
  * These pages are only ever reached by a provider redirecting the browser to
  * them, so the parameters are whatever the provider put there — including keys
- * no route schema declares (`error_description`, `telegram_bind`). Reading the
+ * no route schema declares (`error_description`). Reading the
  * raw search string keeps every one of them intact and keeps the pages usable
  * without a validated search schema per provider.
  *
@@ -19,8 +19,6 @@ export type CallbackQuery = {
   redirect: string
   /** WeChat-style callbacks name their provider in the query rather than the path. */
   provider: string
-  /** Telegram bind results, produced by `GET /api/oauth/telegram/bind/:flow_token`. */
-  telegramBind: string
   flowToken: string
   errorCode: string
 }
@@ -38,7 +36,6 @@ export function readCallbackQuery(search: string): CallbackQuery {
     errorDescription: read(params, 'error_description'),
     redirect: read(params, 'redirect'),
     provider: read(params, 'provider'),
-    telegramBind: read(params, 'telegram_bind'),
     flowToken: read(params, 'flow_token'),
     errorCode: read(params, 'error_code'),
   }

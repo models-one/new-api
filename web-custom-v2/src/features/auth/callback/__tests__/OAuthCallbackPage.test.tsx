@@ -396,31 +396,3 @@ describe('bind mode', () => {
     )
   })
 })
-
-describe('telegram bind callback', () => {
-  it('forwards the backend verdict to the opener and closes', async () => {
-    const opener: FakeOpener = { closed: false, postMessage: vi.fn() }
-    setOpener(opener)
-    await renderCallback('/oauth/telegram?telegram_bind=success&flow_token=flow-token')
-
-    await waitFor(() => {
-      expect(opener.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ flow_token: 'flow-token', success: true }),
-        window.location.origin,
-      )
-    })
-    expect(window.close).toHaveBeenCalled()
-  })
-
-  it('stops on an explanation when the callback is missing its flow token', async () => {
-    const opener: FakeOpener = { closed: false, postMessage: vi.fn() }
-    setOpener(opener)
-    await renderCallback('/oauth/telegram?telegram_bind=error')
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Telegram sent back an incomplete result',
-    )
-    expect(opener.postMessage).not.toHaveBeenCalled()
-    expect(window.close).not.toHaveBeenCalled()
-  })
-})

@@ -11,8 +11,6 @@ import {
   OAUTH_BIND_RESPONSE_TIMEOUT_MS,
   buildBindCallbackMessage,
   isOAuthBindResult,
-  parseTelegramBindCallback,
-  postTelegramBindResult,
 } from '@/features/auth/callback/bind-window'
 import { CallbackScreen } from '@/features/auth/callback/CallbackScreen'
 import { providerIdentity } from '@/features/auth/callback/provider-identity'
@@ -30,7 +28,6 @@ type FailureReason =
   | 'opener_unavailable'
   | 'bind_timeout'
   | 'bind_rejected'
-  | 'telegram_incomplete'
 
 type Phase =
   | { kind: 'working' }
@@ -88,28 +85,6 @@ export function OAuthCallbackPage() {
 
     const query = readCallbackQuery(window.location.search)
     const opener: Window | null = window.opener ?? null
-
-    const telegramCallback = provider === 'telegram'
-      ? parseTelegramBindCallback({
-        telegram_bind: query.telegramBind,
-        flow_token: query.flowToken,
-        error_code: query.errorCode,
-      })
-      : null
-
-    if (telegramCallback !== null) {
-      if (postTelegramBindResult(telegramCallback, opener, window.location.origin)) {
-        setPhase({ kind: 'linked' })
-        window.close()
-        return undefined
-      }
-      setPhase({
-        kind: 'failed',
-        reason: telegramCallback.kind === 'invalid' ? 'telegram_incomplete' : 'opener_unavailable',
-        serverMessage: '',
-      })
-      return undefined
-    }
 
     if (mode === 'bind') {
       if (opener === null || opener.closed) {
@@ -295,7 +270,5 @@ function failureMessage(
       return phase.serverMessage === ''
         ? t('The provider account could not be linked.')
         : phase.serverMessage
-    case 'telegram_incomplete':
-      return t('Telegram sent back an incomplete result, so the link could not be confirmed.')
   }
 }

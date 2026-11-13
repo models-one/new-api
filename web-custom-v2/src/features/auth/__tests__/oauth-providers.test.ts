@@ -53,7 +53,7 @@ describe('authProviderDescriptors', () => {
       linuxdoOAuthEnabled: true,
       linuxdoClientId: 'ld',
       telegramOAuthEnabled: true,
-      telegramBotName: 'example_bot',
+      telegramOAuthConfigured: true,
       wechatLoginEnabled: true,
       customOAuthProviders: [{
         id: 1,
@@ -69,17 +69,17 @@ describe('authProviderDescriptors', () => {
     expect(ids).toEqual(['wechat', 'github', 'discord', 'oidc', 'linuxdo', 'telegram', 'custom:acme'])
   })
 
-  it('marks WeChat and Telegram as in-page flows and the rest as redirects', () => {
+  it('marks WeChat as the in-page flow and the rest, Telegram included, as redirects', () => {
     const providers = authProviderDescriptors(configWith({
       githubOAuthEnabled: true,
       githubClientId: 'gh',
       telegramOAuthEnabled: true,
-      telegramBotName: 'example_bot',
+      telegramOAuthConfigured: true,
       wechatLoginEnabled: true,
     }))
 
     const kinds = Object.fromEntries(providers.map((provider) => [provider.id, provider.kind]))
-    expect(kinds).toEqual({ wechat: 'wechat', github: 'redirect', telegram: 'telegram' })
+    expect(kinds).toEqual({ wechat: 'wechat', github: 'redirect', telegram: 'redirect' })
 
     const wechat = providers.find((provider) => provider.id === 'wechat')
     expect(wechat?.buildAuthorizationUrl).toBeUndefined()
@@ -90,7 +90,7 @@ describe('authorization URLs', () => {
   function urlFor(overrides: Partial<AuthServerConfig>, id: string): string {
     const provider = authProviderDescriptors(configWith(overrides)).find((entry) => entry.id === id)
     if (!provider?.buildAuthorizationUrl) throw new Error(`no redirect provider ${id}`)
-    return provider.buildAuthorizationUrl({ state: 'state-token', origin })
+    return provider.buildAuthorizationUrl({ state: 'state-token', origin, serverUrl: '' })
   }
 
   it('sends GitHub the email scope and the state token', () => {
@@ -148,5 +148,22 @@ describe('authorization URLs', () => {
     }, 'custom:bare'))
 
     expect(url.searchParams.has('scope')).toBe(false)
+  })
+})
+
+describe('Telegram', () => {
+  const enabled: Partial<AuthServerConfig> = { telegramOAuthEnabled: true, telegramOAuthConfigured: true }
+
+  it('draws no button until the server reports the client id and secret are stored', () => {
+    expect(idsFor({ telegramOAuthEnabled: true })).not.toContain('telegram')
+    expect(idsFor(enabled)).toContain('telegram')
+  })
+
+  it('goes to the URL the server built, because its OAuth flow carries a PKCE challenge', () => {
+    const telegram = authProviderDescriptors(configWith(enabled)).find((entry) => entry.id === 'telegram')
+    const serverUrl = 'https://oauth.telegram.org/auth?client_id=1&state=state-token&code_challenge=abc'
+
+    expect(telegram?.buildAuthorizationUrl?.({ state: 'state-token', origin, serverUrl })).toBe(serverUrl)
+    expect(() => telegram?.buildAuthorizationUrl?.({ state: 'state-token', origin, serverUrl: '' })).toThrow()
   })
 })

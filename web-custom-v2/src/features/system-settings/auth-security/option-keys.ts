@@ -9,7 +9,7 @@
  *   if isSensitiveKey { continue }
  *
  * so `GET /api/option/` never carries them at all. Verified live: `GitHubClientSecret`,
- * `TurnstileSiteKey`, `TurnstileSecretKey`, `TelegramBotToken`, `WeChatServerToken`,
+ * `TurnstileSiteKey`, `TurnstileSecretKey`, `telegram.client_secret`, `WeChatServerToken`,
  * `oidc.client_secret`, `discord.client_secret` and `LinuxDOClientSecret` are absent from
  * the 231-pair payload even though every one of them is a real, writable option.
  *
@@ -48,7 +48,7 @@ export const WRITE_ONLY_AUTH_KEYS = [
   'GitHubClientSecret',
   'discord.client_secret',
   'oidc.client_secret',
-  'TelegramBotToken',
+  'telegram.client_secret',
   'LinuxDOClientSecret',
   'WeChatServerToken',
   'TurnstileSiteKey',
@@ -67,11 +67,11 @@ export const WRITE_ONLY_AUTH_KEYS = [
  *   discord.client_id   < discord.enabled             ok
  *   oidc.client_id      < oidc.enabled                ok
  *   LinuxDOClientId     < LinuxDOOAuthEnabled         ok
- *   TelegramBotToken    < TelegramOAuthEnabled        ok
  *   WeChatAuthEnabled   < WeChatServerAddress         WRONG WAY ROUND
  *   TurnstileCheckEnabled < TurnstileSiteKey          WRONG WAY ROUND
+ *   TelegramOAuthEnabled < telegram.client_id         WRONG WAY ROUND (uppercase sorts first)
  *
- * The two wrong-way pairs are handled in their sections by refusing to arm the switch
+ * The wrong-way pairs are handled in their sections by refusing to arm the switch
  * while its companion field has unsaved edits, so the bad ordering can never be produced.
  *
  * `EmailDomainRestrictionEnabled` has the same shape on paper but the guard is dead:
@@ -85,7 +85,8 @@ export const ENABLE_DEPENDENCIES: Readonly<Record<string, string>> = {
   GitHubOAuthEnabled: 'GitHubClientId',
   LinuxDOOAuthEnabled: 'LinuxDOClientId',
   'oidc.enabled': 'oidc.client_id',
-  TelegramOAuthEnabled: 'TelegramBotToken',
+  // The server also needs `telegram.client_secret`, which it never reads back.
+  TelegramOAuthEnabled: 'telegram.client_id',
   TurnstileCheckEnabled: 'TurnstileSiteKey',
   WeChatAuthEnabled: 'WeChatServerAddress',
 }

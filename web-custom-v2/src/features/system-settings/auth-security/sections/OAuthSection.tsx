@@ -49,8 +49,8 @@ import { useOptionSectionForm } from '@/features/system-settings/section-form'
  *   oidc.token_endpoint           ''
  *   oidc.user_info_endpoint       ''
  *   TelegramOAuthEnabled          'false'
- *   TelegramBotName               ''
- *   TelegramBotToken              write-only
+ *   telegram.client_id            ''
+ *   telegram.client_secret        write-only
  *   LinuxDOOAuthEnabled           'false'
  *   LinuxDOClientId               ''      (not seeded by model.InitOptionMap; the row
  *                                          exists on this dev server, and every reader
@@ -71,13 +71,13 @@ import { useOptionSectionForm } from '@/features/system-settings/section-form'
  * ENABLE ORDERING. `useOptionSectionForm` writes dirty keys in sorted key order, and the
  * server refuses to enable a provider whose credential is still empty. For five of the six
  * providers the credential key sorts first, so filling it in and switching the provider on
- * in a single Save works. WeChat is the exception — `WeChatAuthEnabled` sorts before
- * `WeChatServerAddress` — so its switch is held disabled while the server address has
- * unsaved edits, which makes the bad order unreachable rather than merely survivable.
+ * in a single Save works. WeChat and Telegram are the exceptions — `WeChatAuthEnabled` sorts
+ * before `WeChatServerAddress`, and `TelegramOAuthEnabled` before `telegram.client_*` — so
+ * their switches are held disabled while those fields have unsaved edits, which makes the
+ * bad order unreachable rather than merely survivable.
  *
  * SIGN-IN READINESS. The server's guard and the sign-in page's requirements are not the
- * same set. Telegram is enabled on the strength of the bot TOKEN but the sign-in page
- * needs the bot NAME; OIDC is enabled on the client id but the page also needs an absolute
+ * same set. OIDC is enabled on the client id but the page also needs an absolute
  * authorization endpoint. `oauthReadinessGaps` reports the difference so an operator does
  * not end up with a provider that is on, accepted, and invisible.
  */
@@ -97,8 +97,8 @@ type OAuthDraft = {
   'oidc.token_endpoint': string
   'oidc.user_info_endpoint': string
   TelegramOAuthEnabled: boolean
-  TelegramBotName: string
-  TelegramBotToken: string
+  'telegram.client_id': string
+  'telegram.client_secret': string
   LinuxDOOAuthEnabled: boolean
   LinuxDOClientId: string
   LinuxDOClientSecret: string
@@ -132,9 +132,9 @@ function toDraft(options: SystemOptionMap | undefined): OAuthDraft {
     'oidc.token_endpoint': readOptionString(options, 'oidc.token_endpoint'),
     'oidc.user_info_endpoint': readOptionString(options, 'oidc.user_info_endpoint'),
     'oidc.well_known': readOptionString(options, 'oidc.well_known'),
-    TelegramBotName: readOptionString(options, 'TelegramBotName'),
-    TelegramBotToken: '',
     TelegramOAuthEnabled: readOptionBoolean(options, 'TelegramOAuthEnabled'),
+    'telegram.client_id': readOptionString(options, 'telegram.client_id'),
+    'telegram.client_secret': '',
     WeChatAccountQRCodeImageURL: readOptionString(options, 'WeChatAccountQRCodeImageURL'),
     WeChatAuthEnabled: readOptionBoolean(options, 'WeChatAuthEnabled'),
     WeChatServerAddress: readOptionString(options, 'WeChatServerAddress'),
@@ -161,7 +161,7 @@ const TAB_KEYS: Record<OAuthProviderId, readonly OAuthDraftKey[]> = {
     'oidc.token_endpoint',
     'oidc.user_info_endpoint',
   ],
-  telegram: ['TelegramOAuthEnabled', 'TelegramBotName', 'TelegramBotToken'],
+  telegram: ['TelegramOAuthEnabled', 'telegram.client_id', 'telegram.client_secret'],
   wechat: [
     'WeChatAuthEnabled',
     'WeChatServerAddress',
@@ -244,6 +244,13 @@ export function OAuthSection() {
         requiredCredential,
       )
       requireCredential(
+        values.TelegramOAuthEnabled,
+        values['telegram.client_id'],
+        'TelegramOAuthEnabled',
+        'telegram.client_id',
+        requiredCredential,
+      )
+      requireCredential(
         values.WeChatAuthEnabled,
         values.WeChatServerAddress,
         'WeChatAuthEnabled',
@@ -285,9 +292,6 @@ export function OAuthSection() {
 
   const gapSentence = (provider: OAuthProviderId, reason: string): string => {
     const name = PROVIDER_NAMES[provider]
-    if (reason === 'bot-name') {
-      return t('{{provider}} is on, but the sign-in page needs the bot name as well as the bot token. No button is drawn without it.', { provider: name })
-    }
     if (reason === 'authorization-endpoint') {
       return t('{{provider}} is on, but its authorization endpoint is not a full http:// or https:// address, so the sign-in page skips it.', { provider: name })
     }
@@ -327,6 +331,10 @@ export function OAuthSection() {
    * the address is stored removes the failure instead of reporting it.
    */
   const wechatSwitchBlocked = form.isFieldDirty('WeChatServerAddress')
+
+  /** Same ordering problem: `TelegramOAuthEnabled` sorts before `telegram.client_*`. */
+  const telegramSwitchBlocked =
+    form.isFieldDirty('telegram.client_id') || form.isFieldDirty('telegram.client_secret')
 
   const secretNote = t('Leave blank to keep the stored value. The server never sends a stored secret back, so this field cannot show one. Typing a value and clearing it again erases the stored secret.')
 
@@ -571,35 +579,47 @@ export function OAuthSection() {
         {/* -------------------------------------------------------------- Telegram */}
         <Tabs.Panel className="flex flex-col gap-5 pt-1" value="telegram">
           <CallbackGuide
-            description={t('Telegram uses a login widget rather than a redirect. Set the bot’s domain to this address with /setdomain in BotFather.')}
-            rows={[{ copyLabel: t('Copy the homepage URL'), label: t('Bot domain'), value: siteUrl }]}
+            description={t('In BotFather, open Login Widget, register this callback URL, and copy the Client ID and Client Secret. Existing Telegram bindings will continue to work after configuration.')}
+            rows={[
+              {
+                copyLabel: t('Copy the callback URL'),
+                label: t('Authorization callback URL'),
+                value: buildCallbackUrl(serverAddress, 'telegram', ''),
+              },
+            ]}
             siteUrlMissing={siteUrlMissing}
           />
 
           <SwitchRow
             checked={values.TelegramOAuthEnabled}
-            description={t('Let users sign in through the Telegram login widget.')}
-            disabled={disabled}
+            description={
+              telegramSwitchBlocked
+                ? t('Save the client ID and secret first. This setting is written before them, so enabling it in the same save would be refused.')
+                : t('Allow users to sign in with Telegram')
+            }
+            disabled={disabled || telegramSwitchBlocked}
             label={t('Enable Telegram sign-in')}
             onCheckedChange={(checked) => form.setField('TelegramOAuthEnabled', checked)}
           />
 
           <div className="grid gap-5 md:grid-cols-2">
             <Input
-              description={t('The bot’s username without the @. The sign-in page needs this to draw the widget; the server only checks the token.')}
+              description={t('Telegram OAuth Client ID from BotFather')}
               disabled={disabled}
-              label={t('Telegram bot name')}
-              onChange={(event) => form.setField('TelegramBotName', event.target.value)}
-              value={values.TelegramBotName}
+              error={form.errors['telegram.client_id']}
+              invalid={form.errors['telegram.client_id'] !== undefined}
+              label={t('Client ID')}
+              onChange={(event) => form.setField('telegram.client_id', event.target.value)}
+              value={values['telegram.client_id']}
             />
             <PasswordInput
               autoComplete="off"
               description={secretNote}
               disabled={disabled}
-              label={t('Telegram bot token')}
-              onChange={(event) => form.setField('TelegramBotToken', event.target.value)}
+              label={t('Client secret')}
+              onChange={(event) => form.setField('telegram.client_secret', event.target.value)}
               placeholder={t('Unchanged')}
-              value={values.TelegramBotToken}
+              value={values['telegram.client_secret']}
             />
           </div>
         </Tabs.Panel>

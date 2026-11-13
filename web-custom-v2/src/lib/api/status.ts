@@ -39,7 +39,7 @@ export type ServerStatus = {
   linuxdo_oauth: boolean
   linuxdo_client_id: string
   telegram_oauth: boolean
-  telegram_bot_name: string
+  telegram_oauth_configured: boolean
   wechat_login: boolean
   wechat_qrcode: string
   oidc_enabled: boolean
