@@ -47,11 +47,12 @@ import {
  * to catch it first and to show the normalised text that will actually be stored.
  */
 
-const CHANNEL_TEST_MODES = ['scheduled_all', 'passive_recovery'] as const
+/** `operation_setting.ChannelTestMode*`; the server reads anything else as `scheduled_all`. */
+const CHANNEL_TEST_MODES = ['scheduled_all', 'auto_ban_only', 'passive_recovery'] as const
 type ChannelTestMode = (typeof CHANNEL_TEST_MODES)[number]
 
-function toChannelTestMode(value: string): ChannelTestMode {
-  return value === 'passive_recovery' ? 'passive_recovery' : 'scheduled_all'
+export function toChannelTestMode(value: string): ChannelTestMode {
+  return (CHANNEL_TEST_MODES as readonly string[]).includes(value) ? (value as ChannelTestMode) : 'scheduled_all'
 }
 
 type RoutingDraft = {
@@ -148,6 +149,12 @@ export function RoutingReliabilitySection() {
   const disableRules = parseStatusCodeRules(values.AutomaticDisableStatusCodes)
   const retryRules = parseStatusCodeRules(values.AutomaticRetryStatusCodes)
   const testMode = toChannelTestMode(values['monitor_setting.channel_test_mode'])
+  const TEST_MODE_DESCRIPTIONS: Record<ChannelTestMode, string> = {
+    auto_ban_only: t('Periodically checks only channels with auto-disable enabled, excluding manually disabled channels.'),
+    passive_recovery: t('Only already auto-disabled channels are probed, to see whether they have recovered. Healthy channels are never touched.'),
+    scheduled_all: t('Every channel that was not disabled by hand is probed on each pass.'),
+  }
+  const testModeDescription = TEST_MODE_DESCRIPTIONS[testMode]
   const autoDisableOn = values.AutomaticDisableChannelEnabled
 
   const disableKeywordCount = values.AutomaticDisableKeywords.split('\n').filter(
@@ -239,11 +246,7 @@ export function RoutingReliabilitySection() {
         />
         <div className="grid gap-5 md:grid-cols-2">
           <NativeSelect
-            description={
-              testMode === 'passive_recovery'
-                ? t('Only already auto-disabled channels are probed, to see whether they have recovered. Healthy channels are never touched.')
-                : t('Every channel that was not disabled by hand is probed on each pass.')
-            }
+            description={testModeDescription}
             disabled={disabled}
             label={t('What the scheduled test covers')}
             onChange={(event) =>
@@ -251,6 +254,7 @@ export function RoutingReliabilitySection() {
             }
             options={[
               { label: t('Test every channel'), value: 'scheduled_all' },
+              { label: t('Actively check auto-disable-enabled channels'), value: 'auto_ban_only' },
               { label: t('Only re-check disabled channels'), value: 'passive_recovery' },
             ]}
             value={testMode}

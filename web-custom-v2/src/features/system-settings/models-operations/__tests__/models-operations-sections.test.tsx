@@ -281,6 +281,23 @@ describe('writing one key at a time', () => {
   })
 })
 
+describe('the scheduled channel test mode', () => {
+  it('shows and keeps “auto_ban_only” instead of reading it as “scheduled_all”', async () => {
+    server.stored['monitor_setting.channel_test_mode'] = 'auto_ban_only'
+    renderSection(<RoutingReliabilitySection />)
+
+    const mode = await screen.findByRole('combobox', { name: 'What the scheduled test covers' })
+    await waitFor(() => expect(mode).toHaveValue('auto_ban_only'))
+
+    // Saving an unrelated key must not rewrite the mode.
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Retry attempts' }), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(optionWrites()).toHaveLength(1))
+    expect(optionWrites()[0].key).toBe('RetryTimes')
+  })
+})
+
 describe('the log purge, which deletes billing history irreversibly', () => {
   it('never starts a purge from the page button alone', async () => {
     renderSection(<LogsSection />)
