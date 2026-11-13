@@ -34,6 +34,8 @@ export type AuthServerConfig = {
 
   registerEnabled: boolean
   passwordLoginEnabled: boolean
+  /** `PASSWORD_LOGIN_ENCRYPTION_ENABLED`: the login request must carry an encrypted password. */
+  passwordLoginEncryptionEnabled: boolean
   passwordRegisterEnabled: boolean
   emailVerificationEnabled: boolean
 
@@ -141,6 +143,7 @@ export function readAuthServerConfig(status: ServerStatus | null | undefined): A
 
     registerEnabled: flag(source, 'register_enabled'),
     passwordLoginEnabled: flag(source, 'password_login_enabled'),
+    passwordLoginEncryptionEnabled: flag(source, 'password_login_encryption_enabled'),
     passwordRegisterEnabled: flag(source, 'password_register_enabled'),
     emailVerificationEnabled: flag(source, 'email_verification'),
 

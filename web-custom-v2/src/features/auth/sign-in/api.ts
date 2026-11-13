@@ -2,6 +2,7 @@ import { isAuthBundle } from '@/lib/auth-session'
 import { api } from '@/lib/http-client'
 
 import type { ApiResponse } from '@/features/auth/api'
+import { clearPasswordEncryptionKey, encryptPassword } from '@/features/auth/sign-in/password-encryption'
 import type { AuthBundle } from '@/features/auth/types'
 
 /**
@@ -27,6 +28,11 @@ export type PasswordLoginInput = {
   password: string
   /** Cloudflare Turnstile token. Sent empty when the operator has the check off. */
   turnstile: string
+  /**
+   * `password_login_encryption_enabled` from `/api/status`. When set, the server refuses a
+   * plaintext password, so only the encrypted fields are sent.
+   */
+  encryptPassword: boolean
 }
 
 /**
@@ -36,9 +42,12 @@ export type PasswordLoginInput = {
  * floating toast, and a 401 here must not kick off the session-refresh machinery.
  */
 export async function passwordLogin(input: PasswordLoginInput): Promise<ApiResponse<unknown>> {
+  const passwordFields = input.encryptPassword
+    ? await encryptPassword(input.password)
+    : { password: input.password }
   const response = await api.post<ApiResponse<unknown>>(
     '/api/user/login',
-    { username: input.username, password: input.password },
+    { username: input.username, ...passwordFields },
     {
       params: { turnstile: input.turnstile },
       skipAuthRefresh: true,
@@ -46,6 +55,8 @@ export async function passwordLogin(input: PasswordLoginInput): Promise<ApiRespo
       skipErrorHandler: true,
     },
   )
+  // A refusal can mean the key was rotated between fetching and posting; refetch next time.
+  if (input.encryptPassword && !response.data.success) clearPasswordEncryptionKey()
   return response.data
 }
 

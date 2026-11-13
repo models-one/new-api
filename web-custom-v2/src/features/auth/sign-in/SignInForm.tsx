@@ -102,7 +102,12 @@ export function SignInForm(props: SignInFormProps) {
     setSubmitting(true)
     try {
       const outcome = readLoginOutcome(
-        await passwordLogin({ password, turnstile: turnstileToken, username: username.trim() }),
+        await passwordLogin({
+          encryptPassword: config.passwordLoginEncryptionEnabled,
+          password,
+          turnstile: turnstileToken,
+          username: username.trim(),
+        }),
       )
 
       if (outcome.kind === 'authenticated') {

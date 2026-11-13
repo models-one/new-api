@@ -35,7 +35,7 @@ beforeEach(() => {
 
 describe('passwordLogin', () => {
   it('sends the Turnstile token as a query parameter, not in the body', async () => {
-    await passwordLogin({ password: 'secret', turnstile: 'cf-token', username: 'root' })
+    await passwordLogin({ encryptPassword: false, password: 'secret', turnstile: 'cf-token', username: 'root' })
 
     expect(post).toHaveBeenCalledWith(
       '/api/user/login',
@@ -45,7 +45,7 @@ describe('passwordLogin', () => {
   })
 
   it('opts out of the global toast and refresh handlers so the form owns the failure', async () => {
-    await passwordLogin({ password: 'secret', turnstile: '', username: 'root' })
+    await passwordLogin({ encryptPassword: false, password: 'secret', turnstile: '', username: 'root' })
 
     expect(post).toHaveBeenCalledWith(
       '/api/user/login',
