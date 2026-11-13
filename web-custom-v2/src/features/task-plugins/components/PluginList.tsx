@@ -12,6 +12,7 @@ import { PLUGIN_KIND_LABELS, resolvePluginParts, type PluginKind } from '../lib/
 import { localizedText, runtimeStatusBadge, sourceBadge, UsageList } from '../presentation'
 import type { TaskPluginListItem, TaskPluginUsage } from '../types'
 import { PluginIcon } from './PluginIcon'
+import { toastPluginChange } from '../lib/plugin-change-toast'
 
 type PluginListProps = {
   plugins: TaskPluginListItem[]
@@ -54,9 +55,9 @@ export function PluginList(props: PluginListProps) {
       }
       toast.error(toErrorMessage(error, t('Could not update the plugin.')))
     },
-    onSuccess: (_, request) => {
+    onSuccess: (notice, request) => {
       setPendingDisable(null)
-      toast.success(request.enabled ? t('Plugin enabled.') : t('Plugin disabled.'))
+      toastPluginChange(request.enabled ? t('Plugin enabled.') : t('Plugin disabled.'), notice?.pricing_issues)
       void refresh()
     },
   })
@@ -71,9 +72,9 @@ export function PluginList(props: PluginListProps) {
       }
       toast.error(toErrorMessage(error, t('Could not delete the plugin.')))
     },
-    onSuccess: () => {
+    onSuccess: (notice) => {
       setPendingDelete(null)
-      toast.success(t('Plugin version deleted.'))
+      toastPluginChange(t('Plugin version deleted.'), notice?.pricing_issues)
       void refresh()
     },
   })

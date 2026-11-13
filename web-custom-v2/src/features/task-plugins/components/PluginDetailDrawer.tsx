@@ -22,6 +22,7 @@ import { localizedText, UsageList } from '../presentation'
 import type { BillingUsageSchema, TaskPluginDetail, TaskPluginRecord, TaskPluginUsage } from '../types'
 import { PluginEndpoints, PluginModelList } from './PluginFacts'
 import { PluginIcon } from './PluginIcon'
+import { toastPluginChange } from '../lib/plugin-change-toast'
 
 type PluginDetailDrawerProps = {
   pluginKey: string | null
@@ -230,8 +231,8 @@ function VersionList(props: {
   const activateMutation = useMutation({
     mutationFn: (version: string) => activateTaskPlugin(props.pluginKey, version),
     onError: (error) => toast.error(toErrorMessage(error, t('Could not activate the plugin version.'))),
-    onSuccess: () => {
-      toast.success(t('Plugin version activated.'))
+    onSuccess: (notice) => {
+      toastPluginChange(t('Plugin version activated.'), notice?.pricing_issues)
       void refresh()
     },
   })
@@ -245,9 +246,9 @@ function VersionList(props: {
       }
       toast.error(toErrorMessage(error, t('Could not delete the plugin.')))
     },
-    onSuccess: () => {
+    onSuccess: (notice) => {
       setPendingDelete(null)
-      toast.success(t('Plugin version deleted.'))
+      toastPluginChange(t('Plugin version deleted.'), notice?.pricing_issues)
       void refresh()
     },
   })

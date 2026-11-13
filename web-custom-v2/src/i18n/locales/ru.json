@@ -4322,6 +4322,11 @@
     "Your usage data could not be loaded": "Не удалось загрузить данные о вашем потреблении",
     "Your usage over time": "Ваше потребление во времени",
     "Zeroes the body cache counters — hits, active files and byte totals — on the responding node. Cached files themselves are left alone, but the history behind these numbers is gone.": "Обнуляет счётчики кэша тел запросов — попадания, активные файлы и суммы байтов — на отвечающем узле. Сами файлы кэша остаются, но история за этими числами теряется.",
-    "Zoom": "Масштабирование"
+    "Zoom": "Масштабирование",
+    "And {{count}} more models": "И ещё моделей: {{count}}",
+    "Prices of these models need attention:": "Цены этих моделей требуют внимания:",
+    "No price set": "Цена не задана",
+    "The plugin no longer offers this model": "Плагин больше не предоставляет эту модель",
+    "The price uses usage the plugin no longer provides": "Цена использует данные об использовании, которые плагин больше не передаёт"
   }
 }

@@ -33,6 +33,7 @@ import { localizedText } from '../presentation'
 import type { MarketplaceIndex, MarketplacePlugin, MarketplaceSource, TaskPluginListItem } from '../types'
 import { PluginCapabilities } from './PluginFacts'
 import { PluginIcon } from './PluginIcon'
+import { toastPluginChange } from '../lib/plugin-change-toast'
 
 type InstallTarget = { plugin: MarketplacePlugin; source: MarketplaceSource; installState: InstallState }
 
@@ -227,7 +228,10 @@ function MarketplaceInstallDialog(props: { target: InstallTarget | null; onOpenC
     onError: (error) => toast.error(toErrorMessage(error, t('Could not install the plugin.'))),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: taskPluginKeys.all }),
     onSuccess: (detail) => {
-      toast.success(t('Installed {{name}} v{{version}}', { name: detail.meta.name, version: detail.meta.version }))
+      toastPluginChange(
+        t('Installed {{name}} v{{version}}', { name: detail.meta.name, version: detail.meta.version }),
+        detail.pricing_issues,
+      )
       close(false)
     },
   })

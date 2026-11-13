@@ -140,7 +140,23 @@ export type TaskPluginDetail = {
   source: string
   layer: 'factory' | 'override'
   has_icon?: boolean
+  /** Set by an upload that puts the version into service. */
+  pricing_issues?: PricingIssue[]
 }
+
+/**
+ * `model.ModelPricingIssue`: a model the serving plugin cannot charge. Reported by the
+ * changes that put a plugin into or out of service.
+ */
+export type PricingIssue = {
+  model_name: string
+  plugin_key: string
+  plugin_name: string
+  reason: 'unconfigured' | 'incompatible' | 'stale'
+}
+
+/** What activate, status and delete answer with; `null` when nothing changed service. */
+export type PluginChangeNotice = { pricing_issues?: PricingIssue[] | null } | null
 
 export type ApiResponse<T> = {
   success: boolean

@@ -4322,6 +4322,11 @@
     "Your usage data could not be loaded": "Không thể tải dữ liệu mức dùng của bạn",
     "Your usage over time": "Mức dùng của bạn theo thời gian",
     "Zeroes the body cache counters — hits, active files and byte totals — on the responding node. Cached files themselves are left alone, but the history behind these numbers is gone.": "Đưa về 0 các bộ đếm bộ nhớ đệm thân yêu cầu — lượt trúng, tệp đang hoạt động và tổng số byte — trên nút phản hồi. Bản thân các tệp đệm vẫn giữ nguyên, nhưng lịch sử phía sau những con số này sẽ mất.",
-    "Zoom": "Thu phóng"
+    "Zoom": "Thu phóng",
+    "And {{count}} more models": "Và {{count}} mô hình khác",
+    "Prices of these models need attention:": "Giá của các mô hình sau cần xử lý:",
+    "No price set": "Chưa đặt giá",
+    "The plugin no longer offers this model": "Plugin không còn cung cấp mô hình này",
+    "The price uses usage the plugin no longer provides": "Giá dùng mức sử dụng mà plugin không còn cung cấp"
   }
 }

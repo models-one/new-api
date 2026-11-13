@@ -6,6 +6,7 @@ import { api, type ApiRequestConfig } from '@/lib/http-client'
 import type {
   ApiResponse,
   MarketplaceSource,
+  PluginChangeNotice,
   TaskPluginDetail,
   TaskPluginDryRunRequest,
   TaskPluginListItem,
@@ -115,8 +116,8 @@ export async function updateMarketplaceSources(sources: MarketplaceSource[]) {
 }
 
 export async function activateTaskPlugin(key: string, version: string) {
-  const response = await api.post<ApiResponse<null>>(`${pluginPath(key)}/activate`, { version }, mutationConfig)
-  requireSuccess(response.data)
+  const response = await api.post<ApiResponse<PluginChangeNotice>>(`${pluginPath(key)}/activate`, { version }, mutationConfig)
+  return requireSuccess(response.data)
 }
 
 export async function setTaskPluginStatus(
@@ -124,20 +125,20 @@ export async function setTaskPluginStatus(
   enabled: boolean,
   options?: { cascade?: boolean; force?: boolean }
 ) {
-  const response = await api.post<ApiResponse<null>>(
+  const response = await api.post<ApiResponse<PluginChangeNotice>>(
     `${pluginPath(key)}/status`,
     { enabled },
     { ...mutationConfig, params: options }
   )
-  requireSuccess(response.data)
+  return requireSuccess(response.data)
 }
 
 export async function deleteTaskPluginVersion(key: string, version: string, force = false) {
-  const response = await api.delete<ApiResponse<null>>(
+  const response = await api.delete<ApiResponse<PluginChangeNotice>>(
     `${pluginPath(key)}/versions/${encodeURIComponent(version)}`,
     { ...mutationConfig, params: force ? { force: true } : undefined }
   )
-  requireSuccess(response.data)
+  return requireSuccess(response.data)
 }
 
 export async function dryRunTaskPlugin(key: string, request: TaskPluginDryRunRequest) {

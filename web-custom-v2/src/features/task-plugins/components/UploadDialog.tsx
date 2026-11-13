@@ -22,6 +22,7 @@ import {
 import type { TaskPluginDetail } from '../types'
 import { PluginCapabilities } from './PluginFacts'
 import { PluginIcon } from './PluginIcon'
+import { toastPluginChange } from '../lib/plugin-change-toast'
 
 type UploadDialogProps = {
   open: boolean
@@ -60,16 +61,19 @@ export function UploadDialog(props: UploadDialogProps) {
     onSuccess: (detail) => {
       setResult(detail)
       void refresh()
-      toast.success(detail.plugin?.active === false ? t('Plugin saved; activate it to use it.') : t('Plugin uploaded.'))
+      toastPluginChange(
+        detail.plugin?.active === false ? t('Plugin saved; activate it to use it.') : t('Plugin uploaded.'),
+        detail.pricing_issues,
+      )
     },
   })
 
   const activateMutation = useMutation({
     mutationFn: (detail: TaskPluginDetail) => activateTaskPlugin(detail.meta.key, detail.meta.version),
     onError: (error) => toast.error(toErrorMessage(error, t('Could not activate the plugin version.'))),
-    onSuccess: () => {
+    onSuccess: (notice) => {
       void refresh()
-      toast.success(t('Plugin version activated.'))
+      toastPluginChange(t('Plugin version activated.'), notice?.pricing_issues)
     },
   })
 
