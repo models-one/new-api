@@ -21,9 +21,22 @@ export type TaskPluginOption = {
   upstreams?: string[] | null
   sortPriority?: number
   website?: string
+  /** `taskPluginParts`: which parts the plugin has. Absent on servers that predate them. */
+  task?: boolean
+  provider?: boolean
+  transform?: boolean
+  login?: boolean
 }
 
-/** `GET /api/task_plugin_options` → enabled plugins, empty when the runtime is off. */
+/**
+ * A plugin a channel can be bound to. Request processing alone is not one: those plugins are
+ * attached as request plugin instances, and the server rejects them as a channel's plugin.
+ */
+export function isChannelBindablePlugin(option: Pick<TaskPluginOption, 'task' | 'provider'>): boolean {
+  return option.task !== false || option.provider === true
+}
+
+/** `GET /api/task_plugin_options` → enabled plugins a channel can be bound to; empty when the runtime is off. */
 export function taskPluginOptionsQuery() {
   return queryOptions({
     queryKey: ['channels', 'task-plugin-options'] as const,
@@ -31,7 +44,7 @@ export function taskPluginOptionsQuery() {
       getJson<TaskPluginOption[] | null>('/api/task_plugin_options', {
         skipBusinessError: true,
         skipErrorHandler: true,
-      }).then((options) => options ?? []),
+      }).then((options) => (options ?? []).filter(isChannelBindablePlugin)),
     staleTime: 60 * 1000,
   })
 }
