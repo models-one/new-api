@@ -72,6 +72,8 @@ export type TaskPluginMeta = {
   models: string[] | null
   fetchMode: string
   routes?: TaskPluginRoute[]
+  /** Relay routes of the provider part; present when the plugin serves ordinary API requests. */
+  relay?: unknown[] | null
   protocols?: TaskPluginProtocolClaim[]
   usageSchema?: BillingUsageSchema
   usageProfiles?: {
@@ -112,6 +114,19 @@ export type TaskPluginListItem = {
   factory_meta?: TaskPluginMeta
   channel_count: number
   in_flight_count: number
+} & TaskPluginParts
+
+/**
+ * `controller.taskPluginParts`: which parts the plugin has. Older servers send none of
+ * these; `resolvePluginParts` supplies their fallbacks.
+ */
+export type TaskPluginParts = {
+  task?: boolean
+  provider?: boolean
+  transform?: boolean
+  transform_hooks?: string[]
+  login?: boolean
+  refresh?: boolean
 }
 
 export type TaskPluginUsage = {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import PlusIcon from 'lucide-react/dist/esm/icons/plus'
@@ -8,7 +8,7 @@ import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
 import { Tabs } from '@/components/disclosure'
 import { Switch } from '@/components/form'
 import { toast, toErrorMessage } from '@/components/overlay'
-import { Alert, Button, PageHeader, Panel } from '@/components/ui'
+import { Alert, Button, PageHeader, Panel, SegmentedControl } from '@/components/ui'
 
 import { setTaskPluginEnabledOption, taskPluginKeys, taskPluginRuntimeSwitchQuery, taskPluginsQuery } from './api'
 import { useTaskPluginsAccess } from './access'
@@ -16,6 +16,14 @@ import { MarketplacePanel } from './components/MarketplacePanel'
 import { PluginDetailDrawer } from './components/PluginDetailDrawer'
 import { PluginList } from './components/PluginList'
 import { UploadDialog } from './components/UploadDialog'
+import {
+  countPluginKinds,
+  defaultPluginKind,
+  PLUGIN_KIND_LABELS,
+  PLUGIN_KINDS,
+  resolvePluginParts,
+  type PluginKind,
+} from './lib/plugin-kinds'
 
 const NO_UPDATES = new Map<string, string>()
 
@@ -27,6 +35,7 @@ export function TaskPluginsPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploadKey, setUploadKey] = useState<string>()
   const [detailKey, setDetailKey] = useState<string | null>(null)
+  const [chosenKind, setChosenKind] = useState<PluginKind | null>(null)
 
   const pluginsQuery = useQuery({ ...taskPluginsQuery(), enabled: isRoot })
   const switchQuery = useQuery({ ...taskPluginRuntimeSwitchQuery(), enabled: isRoot })
@@ -41,8 +50,16 @@ export function TaskPluginsPage() {
     },
   })
 
-  const pageTitle = t('Task plugins')
-  const pageDescription = t('Add task providers (video, image, music) as JavaScript plugins and bind them to Task Plugin channels.')
+  const allPlugins = pluginsQuery.data
+  const kindCounts = useMemo(() => countPluginKinds((allPlugins ?? []).map(resolvePluginParts)), [allPlugins])
+  const kind = chosenKind ?? defaultPluginKind(kindCounts)
+  const kindPlugins = useMemo(
+    () => (allPlugins ?? []).filter((plugin) => resolvePluginParts(plugin)[kind]),
+    [allPlugins, kind],
+  )
+
+  const pageTitle = t('Plugins')
+  const pageDescription = t('JavaScript plugins that add async tasks, serve channels, or process requests on their way upstream.')
 
   if (access.state === 'checking') {
     return (
@@ -84,17 +101,18 @@ export function TaskPluginsPage() {
     )
   }
 
-  const plugins = pluginsQuery.data ?? []
+  const plugins = allPlugins ?? []
   const runtimeEnabled = switchQuery.data === true
 
   let installedContent = (
     <PluginList
+      kind={kind}
       onOpen={setDetailKey}
       onUploadVersion={(key) => {
         setUploadKey(key)
         setUploadOpen(true)
       }}
-      plugins={plugins}
+      plugins={kindPlugins}
       updates={NO_UPDATES}
     />
   )
@@ -105,9 +123,11 @@ export function TaskPluginsPage() {
   } else if (plugins.length === 0) {
     installedContent = (
       <Panel className="p-8 text-center text-sm text-muted">
-        {t('No task plugin installed yet. Upload one or install it from the marketplace.')}
+        {t('No plugin installed yet. Upload one or install it from the marketplace.')}
       </Panel>
     )
+  } else if (kindPlugins.length === 0) {
+    installedContent = <Panel className="p-8 text-center text-sm text-muted">{t('No plugins of this kind')}</Panel>
   }
 
   return (
@@ -131,18 +151,19 @@ export function TaskPluginsPage() {
 
       <Panel className="flex flex-wrap items-center justify-between gap-4 p-4">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">{t('Task plugin runtime')}</p>
+          <p className="text-sm font-semibold text-foreground">{t('Enable plugins')}</p>
           <p className="text-sm text-muted">
             {runtimeEnabled
               ? t('Enabled plugins are registered and serve their channels.')
-              : t('Off: no plugin is loaded and Task Plugin channels reject requests.')}
+              : t('Off: plugin tasks and Task Plugin channels reject requests.')}{' '}
+            {t('Request processing keeps running either way.')}
           </p>
         </div>
         <Switch
           checked={runtimeEnabled}
           disabled={switchQuery.isPending || switchMutation.isPending}
           hideLabel
-          label={t('Task plugin runtime')}
+          label={t('Enable plugins')}
           onCheckedChange={(enabled) => switchMutation.mutate(enabled)}
         />
       </Panel>
@@ -152,7 +173,16 @@ export function TaskPluginsPage() {
           <Tabs.Tab value="installed">{t('Installed ({{count}})', { count: plugins.length })}</Tabs.Tab>
           <Tabs.Tab value="marketplace">{t('Marketplace')}</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel className="pt-4" value="installed">
+        <Tabs.Panel className="flex flex-col gap-4 pt-4" value="installed">
+          {plugins.length === 0 ? null : (
+            <SegmentedControl
+              label={t('Plugin kind')}
+              onChange={setChosenKind}
+              options={PLUGIN_KINDS.map((id) => ({ count: kindCounts[id], id, label: t(PLUGIN_KIND_LABELS[id]) }))}
+              size="sm"
+              value={kind}
+            />
+          )}
           {installedContent}
         </Tabs.Panel>
         <Tabs.Panel className="pt-4" value="marketplace">

@@ -8,6 +8,7 @@ import { Switch } from '@/components/form'
 import { Badge, Button, Panel } from '@/components/ui'
 
 import { deleteTaskPluginVersion, setTaskPluginStatus, taskPluginKeys, TaskPluginUsageError } from '../api'
+import { PLUGIN_KIND_LABELS, resolvePluginParts, type PluginKind } from '../lib/plugin-kinds'
 import { localizedText, runtimeStatusBadge, sourceBadge, UsageList } from '../presentation'
 import type { TaskPluginListItem, TaskPluginUsage } from '../types'
 import { PluginIcon } from './PluginIcon'
@@ -16,12 +17,22 @@ type PluginListProps = {
   plugins: TaskPluginListItem[]
   /** Marketplace versions newer than the installed one, keyed by plugin key. */
   updates: Map<string, string>
+  /** The kind being listed; its own part badge is left out as redundant. */
+  kind?: PluginKind
   onOpen: (key: string) => void
   onUploadVersion: (key: string) => void
 }
 
 type PendingDisable = { plugin: TaskPluginListItem; usage: TaskPluginUsage }
 type PendingDelete = { plugin: TaskPluginListItem; usage?: TaskPluginUsage }
+
+/** Part tags, in the order the kinds are listed, plus sign-in in place of a key. */
+const PLUGIN_PART_BADGES = [
+  { id: 'task', label: PLUGIN_KIND_LABELS.task },
+  { id: 'provider', label: PLUGIN_KIND_LABELS.provider },
+  { id: 'login', label: 'Account login' },
+  { id: 'transform', label: PLUGIN_KIND_LABELS.transform },
+] as const
 
 export function PluginList(props: PluginListProps) {
   const { i18n, t } = useTranslation()
@@ -84,6 +95,7 @@ export function PluginList(props: PluginListProps) {
           const runtime = runtimeStatusBadge(t, plugin.runtime_status, plugin)
           const source = sourceBadge(t, plugin)
           const update = props.updates.get(meta.key)
+          const parts = resolvePluginParts(plugin)
           const description = localizedText(meta.description, i18n.language)
           const busy =
             (statusMutation.isPending && statusMutation.variables?.plugin.meta.key === meta.key) ||
@@ -145,8 +157,13 @@ export function PluginList(props: PluginListProps) {
                     {runtime.label}
                   </Badge>
                   <Badge tone={source.tone}>{source.label}</Badge>
+                  {PLUGIN_PART_BADGES.filter((part) => part.id !== props.kind && parts[part.id]).map((part) => (
+                    <Badge key={part.id} tone="info">
+                      {t(part.label)}
+                    </Badge>
+                  ))}
                   {update === undefined ? null : <Badge tone="warning">{t('Update available: v{{version}}', { version: update })}</Badge>}
-                  <Badge tone="muted">{t('{{count}} models', { count: meta.models?.length ?? 0 })}</Badge>
+                  {meta.models?.length ? <Badge tone="muted">{t('{{count}} models', { count: meta.models.length })}</Badge> : null}
                   {plugin.channel_count > 0 ? <Badge tone="muted">{t('{{count}} channels', { count: plugin.channel_count })}</Badge> : null}
                 </div>
 

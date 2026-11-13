@@ -86,7 +86,7 @@ const workspaceNavigation: NavigationItem[] = [
 const administrationNavigation: NavigationItem[] = [
   { labelKey: 'Users', to: '/users', icon: UsersRoundIcon, adminOnly: true },
   { labelKey: 'Channels', to: '/channels', icon: PlugZapIcon, adminOnly: true },
-  { labelKey: 'Task plugins', to: '/task-plugins', icon: PuzzleIcon, adminOnly: true, rootOnly: true },
+  { labelKey: 'Plugins', to: '/task-plugins', icon: PuzzleIcon, adminOnly: true, rootOnly: true },
   { labelKey: 'Model registry', to: '/models/metadata', icon: BoxesIcon, adminOnly: true },
   { labelKey: 'GPU deployments', to: '/models/deployments', icon: CpuIcon, adminOnly: true },
   { labelKey: 'User analytics', to: '/dashboard/users', icon: ChartPieIcon, adminOnly: true },
