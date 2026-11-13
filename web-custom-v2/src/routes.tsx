@@ -217,6 +217,16 @@ const oauthCallbackRoute = createRoute({
   ),
 })
 
+/** Where a provider plugin's vendor returns after sign-in (`service.PluginLoginRedirectURI`). */
+const pluginLoginCallbackRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/oauth/plugin/$key/callback',
+  component: lazyRouteComponent(
+    () => import('@/features/channels/plugin-login/PluginLoginCallbackPage'),
+    'PluginLoginCallbackPage',
+  ),
+})
+
 const consoleRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'console',
@@ -670,6 +680,7 @@ const routeTree = rootRoute.addChildren([
     dashboardOverviewRedirectRoute,
     dashboardModelsRedirectRoute,
     channelsRoute,
+    pluginLoginCallbackRoute,
     systemSettingsRoute,
     systemSettingsGroupRoute,
     systemSettingsSectionRoute,

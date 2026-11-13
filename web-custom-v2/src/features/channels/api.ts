@@ -455,3 +455,40 @@ export function fetchUpstreamModelsForDraft(input: {
     silent,
   )
 }
+
+// ---------------------------------------------------------------------------
+// Provider plugin login — POST /api/channel/plugin_login/callback (controller/provider_plugin.go)
+// ---------------------------------------------------------------------------
+
+/** The non-secret summary the server keeps for one credential line (`PluginCredentialView`). */
+export type PluginCredentialSummary = {
+  index: number
+  label?: string
+  account_id?: string
+  expires_at?: number
+  needs_login?: boolean
+}
+
+/** One login step as the server shows it to the browser (`PluginLoginStepView`). */
+export type PluginLoginStep =
+  | { type: 'redirect'; url: string }
+  | { type: 'paste'; url: string }
+  | { type: 'device'; user_code: string; verification_uri: string }
+  | { type: 'pending'; interval?: number }
+  | { type: 'fields'; fields: unknown[] }
+  | { type: 'done'; credential?: PluginCredentialSummary }
+
+/**
+ * Hands the vendor's redirect query to the server, which finishes the exchange and stores the
+ * credential itself. `params` carries every query parameter untouched — the vendor's names,
+ * not ours.
+ */
+export function submitPluginLoginCallback(
+  pluginKey: string,
+  params: Record<string, string>,
+): Promise<{ channel_id: number; step: PluginLoginStep }> {
+  return postJson('/api/channel/plugin_login/callback', { plugin: pluginKey, params }, {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+}
