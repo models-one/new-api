@@ -90,7 +90,6 @@ function mockServer(overrides: Overrides = {}) {
     }
     if (url === '/api/user/oauth/bindings') return Promise.resolve(envelope(overrides.bindings ?? []))
     if (url === '/api/user/checkin') return Promise.resolve(envelope(overrides.checkin))
-    if (url === '/api/user/token') return Promise.resolve(envelope('rlNdl8GnZoYzicHfGWeGxFLRmR2Zlgo='))
     return Promise.reject(new Error(`unexpected GET ${url}`))
   })
 }
@@ -389,31 +388,6 @@ describe('sign-in methods', () => {
 
     // The dev server has no SMTP; the refusal is shown as-is rather than reworded.
     expect(await screen.findByText('invalid SMTP account')).toBeInTheDocument()
-  })
-})
-
-describe('system access token', () => {
-  it('says nothing is on show, because the server never returns an existing token', async () => {
-    renderProfile()
-    expect(await screen.findByText(/The server never returns an existing token/)).toBeInTheDocument()
-  })
-
-  it('gates minting behind a confirmation and then shows the value masked', async () => {
-    renderProfile()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Generate a token' }))
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/Anything already using the old token/)).toBeInTheDocument()
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Generate token' }))
-
-    expect(await screen.findByRole('button', { name: 'Show access token' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Copy access token' })).toBeInTheDocument()
-    // The secret itself is not printed until the reveal control is used.
-    expect(screen.queryByText('rlNdl8GnZoYzicHfGWeGxFLRmR2Zlgo=')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show access token' }))
-    expect(await screen.findByText('rlNdl8GnZoYzicHfGWeGxFLRmR2Zlgo=')).toBeInTheDocument()
   })
 })
 

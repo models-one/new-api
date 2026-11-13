@@ -15,7 +15,6 @@ const {
   checkinStatusQuery,
   customOAuthBindingsQuery,
   deleteSelfAccount,
-  generateAccessToken,
   performCheckin,
   startTelegramBind,
   unbindCustomOAuth,
@@ -84,18 +83,6 @@ describe('deleteSelfAccount', () => {
   it('surfaces the root-account refusal instead of pretending it worked', async () => {
     del.mockReturnValue(refused('Cannot delete super administrator account'))
     await expect(deleteSelfAccount()).rejects.toThrow('Cannot delete super administrator account')
-  })
-})
-
-describe('generateAccessToken', () => {
-  it('mints through GET and opts out of the in-flight GET de-duplication', async () => {
-    get.mockReturnValue(ok('rlNdl8GnZoYzicHfGWeGxFLRmR2Zlgo='))
-    const token = await generateAccessToken()
-
-    const [url, config] = get.mock.calls[0]
-    expect(url).toBe('/api/user/token')
-    expect((config as { disableDuplicate?: boolean }).disableDuplicate).toBe(true)
-    expect(token).toBe('rlNdl8GnZoYzicHfGWeGxFLRmR2Zlgo=')
   })
 })
 

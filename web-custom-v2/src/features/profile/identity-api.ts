@@ -107,26 +107,6 @@ export const ROLE_ADMIN = 10
 export const ROLE_USER = 1
 
 // ---------------------------------------------------------------------------
-// System access token — GET /api/user/token (controller/user.go GenerateAccessToken)
-// ---------------------------------------------------------------------------
-
-/**
- * Mints a NEW access token and stores it on the user, replacing whatever was there. The
- * previous token stops working the moment this resolves — the handler overwrites
- * `user.AccessToken` unconditionally, there is no "read the current one" route.
- *
- * `data` is the token as a bare string. Verified live twice in a row: two calls returned
- * two different keys, and `GET /api/user/self` never echoes the value back, so the string
- * this promise resolves with is the only chance the user has to copy it.
- *
- * `disableDuplicate` switches off the client's in-flight GET de-duplication: two clicks
- * must mint two tokens rather than silently share one promise.
- */
-export function generateAccessToken(): Promise<string> {
-  return getJson<string>('/api/user/token', { ...inlineErrors, disableDuplicate: true })
-}
-
-// ---------------------------------------------------------------------------
 // Login identity bindings
 // ---------------------------------------------------------------------------
 

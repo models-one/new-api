@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { Panel, Skeleton } from '@/components/ui'
-import { AccessTokenPanel } from '@/features/profile/components/AccessTokenPanel'
 import { AccountPanel } from '@/features/profile/components/AccountPanel'
 import { CheckInPanel } from '@/features/profile/components/CheckInPanel'
 import { LoginIdentityPanel } from '@/features/profile/components/LoginIdentityPanel'
@@ -51,8 +50,6 @@ export function ProfileIdentity() {
           <LoginIdentityPanel user={user} />
         </>
       )}
-
-      <AccessTokenPanel />
 
       {checkinEnabled ? <CheckInPanel /> : null}
     </div>
