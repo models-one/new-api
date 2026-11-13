@@ -198,7 +198,25 @@ export type MarketplacePluginIcon = {
   sha256?: string
 }
 
-export type MarketplacePlugin = {
+export type MarketplacePluginAuthor = {
+  login: string
+  url?: string
+}
+
+/** A community plugin file the marketplace took down, named by its digest. */
+export type MarketplaceRevokedEntry = {
+  sha256: string
+  key?: string
+  reason?: string | Record<string, string>
+}
+
+export type MarketplacePlugin = Pick<TaskPluginParts, 'task' | 'provider' | 'transform'> & {
+  /** Community fields: the author's GitHub account, repository, plugin code and recent installs. */
+  author?: MarketplacePluginAuthor
+  repo?: string
+  code?: string
+  installs30d?: number
+  recommended?: boolean
   protocols?: TaskPluginProtocolClaim[]
   sortPriority?: number
   website?: string
@@ -218,6 +236,7 @@ export type MarketplaceIndex = {
   indexVersion: number
   name: string
   plugins: MarketplacePlugin[]
+  revoked?: MarketplaceRevokedEntry[]
 }
 
 /** A missing source property is distinct from an empty value or an unreadable expression. */

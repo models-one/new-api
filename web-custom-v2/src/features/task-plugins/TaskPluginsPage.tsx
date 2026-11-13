@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import PlusIcon from 'lucide-react/dist/esm/icons/plus'
 import ShieldAlertIcon from 'lucide-react/dist/esm/icons/shield-alert'
@@ -10,7 +10,13 @@ import { Switch } from '@/components/form'
 import { toast, toErrorMessage } from '@/components/overlay'
 import { Alert, Button, PageHeader, Panel, SegmentedControl } from '@/components/ui'
 
-import { setTaskPluginEnabledOption, taskPluginKeys, taskPluginRuntimeSwitchQuery, taskPluginsQuery } from './api'
+import {
+  marketplaceSourcesQuery,
+  setTaskPluginEnabledOption,
+  taskPluginKeys,
+  taskPluginRuntimeSwitchQuery,
+  taskPluginsQuery,
+} from './api'
 import { useTaskPluginsAccess } from './access'
 import { MarketplacePanel } from './components/MarketplacePanel'
 import { PluginDetailDrawer } from './components/PluginDetailDrawer'
@@ -24,8 +30,15 @@ import {
   resolvePluginParts,
   type PluginKind,
 } from './lib/plugin-kinds'
+import {
+  fetchMarketplaceIndex,
+  marketplaceIndexQueryKey,
+  marketplaceSourceKind,
+  marketplaceUpdates,
+} from './lib/marketplace'
 
-const NO_UPDATES = new Map<string, string>()
+// Index files change rarely; the list page should not refetch them on every visit.
+const INDEX_STALE_MS = 10 * 60_000
 
 export function TaskPluginsPage() {
   const { t } = useTranslation()
@@ -51,6 +64,29 @@ export function TaskPluginsPage() {
   })
 
   const allPlugins = pluginsQuery.data
+
+  // Installed plugins are compared with the official lists for newer versions.
+  // The community list is read only when something was uploaded, since only an
+  // uploaded plugin can be community code or appear on its takedown list.
+  const hasInstalled = (allPlugins?.length ?? 0) > 0
+  const hasUploaded = (allPlugins ?? []).some((plugin) => plugin.source !== 'factory' && plugin.source_hash)
+  const sourcesQuery = useQuery({ ...marketplaceSourcesQuery(), enabled: isRoot && hasInstalled })
+  const checkedSources = (sourcesQuery.data ?? []).filter((source) => {
+    const sourceKind = marketplaceSourceKind(source.index_url)
+    return sourceKind === 'official' || (sourceKind === 'community' && hasUploaded)
+  })
+  const indexQueries = useQueries({
+    queries: checkedSources.map((source) => ({
+      queryFn: () => fetchMarketplaceIndex(source.index_url),
+      queryKey: marketplaceIndexQueryKey(source.index_url),
+      retry: false,
+      staleTime: INDEX_STALE_MS,
+    })),
+  })
+  const indexes = indexQueries.flatMap((query) => (query.data ? [query.data] : []))
+  const communityPosition = checkedSources.findIndex((source) => marketplaceSourceKind(source.index_url) === 'community')
+  const communityIndex = communityPosition < 0 ? undefined : indexQueries[communityPosition]?.data
+  const updates = marketplaceUpdates(indexes, allPlugins ?? [])
   const kindCounts = useMemo(() => countPluginKinds((allPlugins ?? []).map(resolvePluginParts)), [allPlugins])
   const kind = chosenKind ?? defaultPluginKind(kindCounts)
   const kindPlugins = useMemo(
@@ -112,8 +148,9 @@ export function TaskPluginsPage() {
         setUploadKey(key)
         setUploadOpen(true)
       }}
+      communityIndex={communityIndex}
       plugins={kindPlugins}
-      updates={NO_UPDATES}
+      updates={updates}
     />
   )
   if (pluginsQuery.isError) {

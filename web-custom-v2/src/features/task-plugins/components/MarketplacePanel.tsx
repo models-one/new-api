@@ -5,6 +5,9 @@ import RefreshCwIcon from 'lucide-react/dist/esm/icons/refresh-cw'
 import SettingsIcon from 'lucide-react/dist/esm/icons/settings'
 import ShieldAlertIcon from 'lucide-react/dist/esm/icons/shield-alert'
 import ShieldCheckIcon from 'lucide-react/dist/esm/icons/shield-check'
+import UsersIcon from 'lucide-react/dist/esm/icons/users'
+
+import { formatNumber } from '@/lib/format'
 
 import { Input, NativeSelect } from '@/components/form'
 import { Dialog, toast, toErrorMessage } from '@/components/overlay'
@@ -20,22 +23,31 @@ import {
 import {
   DEFAULT_MARKETPLACE_INDEX_URL,
   deriveInstallState,
+  fetchMarketplaceIndex,
   findMarketplaceVersion,
   indexHasIntegrityHashes,
-  isDefaultMarketplaceSource,
-  parseMarketplaceIndex,
+  marketplaceIndexQueryKey,
+  marketplaceSourceKind,
   resolvePluginSourceUrl,
   type InstallState,
+  type MarketplaceSourceKind,
 } from '../lib/marketplace'
 import { fetchPluginIconDataUri } from '../lib/plugin-icon-file'
 import { computeSourceSha256, fetchPluginSourceText, PluginSourceFetchError } from '../lib/plugin-url'
 import { localizedText } from '../presentation'
 import type { MarketplaceIndex, MarketplacePlugin, MarketplaceSource, TaskPluginListItem } from '../types'
+import { CommunityPluginReach } from './CommunityPluginReach'
 import { PluginCapabilities } from './PluginFacts'
 import { PluginIcon } from './PluginIcon'
 import { toastPluginChange } from '../lib/plugin-change-toast'
 
 type InstallTarget = { plugin: MarketplacePlugin; source: MarketplaceSource; installState: InstallState }
+
+const SOURCE_KIND_LABELS: Record<MarketplaceSourceKind, string> = {
+  official: 'Official',
+  community: 'Community',
+  third_party: 'Third-party',
+}
 
 export function MarketplacePanel(props: { installed: TaskPluginListItem[] }) {
   const { i18n, t } = useTranslation()
@@ -48,20 +60,17 @@ export function MarketplacePanel(props: { installed: TaskPluginListItem[] }) {
 
   const indexQuery = useQuery({
     enabled: selectedSource !== undefined,
-    queryFn: async (): Promise<MarketplaceIndex> => {
+    queryFn: (): Promise<MarketplaceIndex> => {
       if (!selectedSource) throw new Error('marketplace source is not selected')
-      // Revalidate so the hashes checked at install time are the host's current
-      // ones rather than a copy cached before a republish.
-      const response = await fetch(selectedSource.index_url, { cache: 'no-cache' })
-      if (!response.ok) throw new Error(t('The marketplace index returned HTTP {{status}}.', { status: response.status }))
-      return parseMarketplaceIndex(await response.json())
+      return fetchMarketplaceIndex(selectedSource.index_url)
     },
-    queryKey: ['task-plugins', 'marketplace-index', selectedSource?.index_url] as const,
+    queryKey: marketplaceIndexQueryKey(selectedSource?.index_url),
     retry: false,
   })
 
   const index = indexQuery.data
   const verified = index ? indexHasIntegrityHashes(index) : false
+  const sourceKind = selectedSource ? marketplaceSourceKind(selectedSource.index_url) : undefined
 
   let indexContent = <p className="text-sm text-muted">{t('Loading…')}</p>
   if (sourcesQuery.isError) {
@@ -95,11 +104,14 @@ export function MarketplacePanel(props: { installed: TaskPluginListItem[] }) {
                   <p className="truncate font-mono text-xs text-muted">
                     {plugin.key} · v{plugin.latest}
                   </p>
+                  <MarketplaceAuthorLine plugin={plugin} />
                 </div>
                 <InstallButton onClick={() => selectedSource && setTarget({ installState, plugin, source: selectedSource })} state={installState} />
               </div>
               {description === '' ? null : <p className="line-clamp-2 text-sm text-muted">{description}</p>}
               <div className="mt-auto flex flex-wrap gap-1.5">
+                {/* Only the built-in lists decide what is recommended. */}
+                {plugin.recommended && sourceKind !== 'third_party' ? <Badge tone="primary">{t('Recommended')}</Badge> : null}
                 <InstallStateBadge state={installState} />
                 {plugin.models?.length ? <Badge tone="muted">{t('{{count}} models', { count: plugin.models.length })}</Badge> : null}
               </div>
@@ -118,7 +130,10 @@ export function MarketplacePanel(props: { installed: TaskPluginListItem[] }) {
           className="min-w-64 flex-1"
           label={t('Marketplace source')}
           onChange={(event) => setSourceUrl(event.target.value)}
-          options={sources.map((source) => ({ label: source.name, value: source.index_url }))}
+          options={sources.map((source) => ({
+            label: `${source.name} · ${t(SOURCE_KIND_LABELS[marketplaceSourceKind(source.index_url)])}`,
+            value: source.index_url,
+          }))}
           value={selectedSource?.index_url ?? ''}
         />
         <Button disabled={indexQuery.isFetching || selectedSource === undefined} onClick={() => void indexQuery.refetch()} variant="outline">
@@ -131,9 +146,14 @@ export function MarketplacePanel(props: { installed: TaskPluginListItem[] }) {
         </Button>
       </div>
 
-      {selectedSource && !isDefaultMarketplaceSource(selectedSource.index_url) ? (
+      {sourceKind === 'third_party' ? (
         <Alert icon={<ShieldAlertIcon aria-hidden="true" />} tone="warning">
           {t('This is a third-party source. Its plugins run code on this server; install only from sources you trust.')}
+        </Alert>
+      ) : null}
+      {sourceKind === 'community' ? (
+        <Alert icon={<UsersIcon aria-hidden="true" />} tone="warning">
+          {t('Community plugins are published and maintained by their authors. Check the source before you install.')}
         </Alert>
       ) : null}
 
@@ -151,13 +171,51 @@ export function MarketplacePanel(props: { installed: TaskPluginListItem[] }) {
   )
 }
 
+/** The author, repository and recent installs of a community plugin. */
+function MarketplaceAuthorLine(props: { plugin: MarketplacePlugin }) {
+  const { t } = useTranslation()
+  const { author, installs30d, repo } = props.plugin
+  if (!author && !repo && installs30d === undefined) return null
+  const linkClass = 'text-primary underline-offset-2 hover:underline'
+  return (
+    <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-3 text-xs text-muted">
+      {author && author.url ? (
+        <a className={linkClass} href={author.url} rel="noopener noreferrer" target="_blank">
+          @{author.login}
+        </a>
+      ) : null}
+      {author && !author.url ? <span>@{author.login}</span> : null}
+      {repo ? (
+        <a className={linkClass} href={repo} rel="noopener noreferrer" target="_blank">
+          {t('Repository')}
+        </a>
+      ) : null}
+      {installs30d === undefined ? null : (
+        <span>{t('{{installs}} installs in 30 days', { installs: formatNumber(installs30d) })}</span>
+      )}
+    </p>
+  )
+}
+
 function InstallStateBadge(props: { state: InstallState }) {
   const { t } = useTranslation()
   switch (props.state.status) {
     case 'up_to_date':
       return <Badge tone="success">{t('Installed v{{version}}', { version: props.state.installedVersion })}</Badge>
     case 'upgradable':
-      return <Badge tone="warning">{t('Installed v{{version}}', { version: props.state.installedVersion })}</Badge>
+      return (
+        <Badge
+          aria-label={t('Upgrade available: v{{installed}} to v{{latest}}', {
+            installed: props.state.installedVersion,
+            latest: props.state.latestVersion,
+          })}
+          tone="warning"
+        >
+          <span className="font-mono">
+            v{props.state.installedVersion} → v{props.state.latestVersion}
+          </span>
+        </Badge>
+      )
     case 'diverged':
       return <Badge tone="info">{t('Custom v{{version}} installed', { version: props.state.installedVersion })}</Badge>
     default:
@@ -221,6 +279,7 @@ function MarketplaceInstallDialog(props: { target: InstallTarget | null; onOpenC
         remark: `${target.source.name} v${selectedVersion}`,
         source: sourceQuery.data.text,
         sourceSha256: entry.sha256,
+        marketplaceIndexUrl: target.source.index_url,
       })
       if (detail.plugin && !detail.plugin.active) await activateTaskPlugin(detail.meta.key, detail.meta.version)
       return detail
@@ -321,6 +380,10 @@ function MarketplaceInstallDialog(props: { target: InstallTarget | null; onOpenC
           ) : null}
 
           {integrityAlert}
+
+          {marketplaceSourceKind(target.source.index_url) === 'official' ? null : (
+            <CommunityPluginReach plugin={target.plugin} source={sourceQuery.data?.text} version={entry} />
+          )}
 
           {fetchErrorMessage === '' ? null : <Alert tone="destructive">{fetchErrorMessage}</Alert>}
 

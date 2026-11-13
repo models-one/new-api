@@ -1,4 +1,4 @@
-import type { TaskPluginListItem, TaskPluginParts } from '../types'
+import type { TaskPluginMeta, TaskPluginParts } from '../types'
 
 /**
  * The lists the plugins page splits plugins into, one per part (docs/plugin-api/v1.md):
@@ -22,7 +22,7 @@ export type ResolvedPluginParts = Required<Omit<TaskPluginParts, 'transform_hook
  * task part, a missing `provider` follows `meta.relay`, and a missing credential hook or
  * request processing part counts as absent.
  */
-export function resolvePluginParts(item: Pick<TaskPluginListItem, keyof TaskPluginParts | 'meta'>): ResolvedPluginParts {
+export function resolvePluginParts(item: TaskPluginParts & { meta: Pick<TaskPluginMeta, 'relay'> }): ResolvedPluginParts {
   return {
     task: item.task ?? true,
     provider: item.provider ?? Boolean(item.meta.relay?.length),

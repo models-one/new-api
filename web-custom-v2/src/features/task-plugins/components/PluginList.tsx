@@ -8,16 +8,20 @@ import { Switch } from '@/components/form'
 import { Badge, Button, Panel } from '@/components/ui'
 
 import { deleteTaskPluginVersion, setTaskPluginStatus, taskPluginKeys, TaskPluginUsageError } from '../api'
+import { findRevokedEntry } from '../lib/marketplace'
 import { PLUGIN_KIND_LABELS, resolvePluginParts, type PluginKind } from '../lib/plugin-kinds'
 import { localizedText, runtimeStatusBadge, sourceBadge, UsageList } from '../presentation'
-import type { TaskPluginListItem, TaskPluginUsage } from '../types'
+import type { MarketplaceIndex, TaskPluginListItem, TaskPluginUsage } from '../types'
 import { PluginIcon } from './PluginIcon'
+import { RevokedPluginWarning } from './RevokedPluginWarning'
 import { toastPluginChange } from '../lib/plugin-change-toast'
 
 type PluginListProps = {
   plugins: TaskPluginListItem[]
   /** Marketplace versions newer than the installed one, keyed by plugin key. */
   updates: Map<string, string>
+  /** The community list, whose takedowns are matched against installed code. */
+  communityIndex?: MarketplaceIndex
   /** The kind being listed; its own part badge is left out as redundant. */
   kind?: PluginKind
   onOpen: (key: string) => void
@@ -152,6 +156,8 @@ export function PluginList(props: PluginListProps) {
                 </div>
 
                 {description === '' ? null : <p className="line-clamp-2 text-sm text-muted">{description}</p>}
+
+                <RevokedPluginWarning entry={findRevokedEntry(props.communityIndex, plugin.source_hash)} />
 
                 <div className="mt-auto flex flex-wrap items-center gap-1.5">
                   <Badge title={runtime.hint} tone={runtime.tone}>
