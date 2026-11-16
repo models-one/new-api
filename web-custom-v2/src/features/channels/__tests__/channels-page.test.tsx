@@ -633,6 +633,38 @@ describe('the editor', () => {
     expect(JSON.parse(String(body.settings)).plugin_config).toEqual({ region: 'us', retries: 2, timeout: 30 })
   })
 
+  it('creates a login plugin channel without a key, then starts its login', async () => {
+    server.taskPluginOptions = [{ baseUrl: 'https://api.acme.example', key: 'acme_login', login: true, models: ['acme-1'], name: 'Acme', provider: true, task: false }]
+    post.mockImplementation((url: string) => {
+      if (url === '/api/channel/') return envelope({ id: 42, ids: [42] })
+      if (url === '/api/channel/42/plugin_login') {
+        return envelope({ flow: 'f1', step: { type: 'device', user_code: 'WXYZ-0001', verification_uri: 'https://vendor.example/device' } })
+      }
+      throw new Error(`unmocked POST ${url}`)
+    })
+    renderPage()
+    await channelTable()
+
+    fireEvent.click(screen.getByRole('button', { name: 'New channel' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    fireEvent.change(dialog.getByLabelText(/^Name/), { target: { value: 'acme' } })
+    fireEvent.change(dialog.getByLabelText(/^Provider type/), { target: { value: '61' } })
+    await dialog.findByRole('option', { name: 'Acme (acme_login)' })
+    fireEvent.change(dialog.getByLabelText(/^Task plugin/), { target: { value: 'acme_login' } })
+    fireEvent.click(await dialog.findByRole('tab', { name: 'Credentials' }))
+
+    expect(dialog.getByText('This channel signs in with a provider account. Save the channel, then log in.')).toBeInTheDocument()
+    expect(dialog.queryByLabelText(/^Key/)).not.toBeInTheDocument()
+    expect(dialog.queryByRole('radio', { name: /Batch/ })).not.toBeInTheDocument()
+
+    fireEvent.click(dialog.getByRole('button', { name: 'Save and log in' }))
+
+    expect(await screen.findByText('WXYZ-0001')).toBeInTheDocument()
+    const body = post.mock.calls[0][1] as { channel: Record<string, unknown> }
+    expect(body.channel.key).toBe('')
+    expect(post).toHaveBeenCalledWith('/api/channel/42/plugin_login', { key_index: null }, expect.anything())
+  })
+
   it('refuses to create without a key, which validateChannel would reject anyway', async () => {
     renderPage()
     await channelTable()

@@ -767,7 +767,7 @@ function validateIntegerField(
 
 export function validateChannelForm(
   values: ChannelFormValues,
-  options: { isEdit: boolean },
+  options: { isEdit: boolean; keyless?: boolean },
 ): ChannelFormErrors {
   const errors: ChannelFormErrors = {}
   const spec = channelTypeSpec(values.type)
@@ -776,7 +776,8 @@ export function validateChannelForm(
 
   // `validateChannel(channel, isAdd=true)` refuses an empty key outright. On update the
   // key is optional and an empty one deliberately keeps the stored secret.
-  if (!options.isEdit && values.key.trim() === '') errors.key = { code: 'key-required' }
+  // A plugin with its own login takes its credentials from that login instead.
+  if (!options.isEdit && options.keyless !== true && values.key.trim() === '') errors.key = { code: 'key-required' }
 
   if (values.models.trim() === '') errors.models = { code: 'models-required' }
   if (values.groups.length === 0) errors.groups = { code: 'groups-required' }

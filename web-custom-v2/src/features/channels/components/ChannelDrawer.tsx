@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import DownloadCloudIcon from 'lucide-react/dist/esm/icons/download-cloud'
 import KeyRoundIcon from 'lucide-react/dist/esm/icons/key-round'
 import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
@@ -41,6 +41,7 @@ import {
   CREATE_BLOCKED_TYPES,
   defaultBaseUrl,
   emptyChannelForm,
+  parseJsonRecord,
   splitList,
   SUPPORTS_MODEL_FETCH_TYPES,
   validateChannelForm,
@@ -58,6 +59,8 @@ import {
   supportsNewAPIUpstream,
   taskPluginOptionsQuery,
 } from '@/features/channels/task-plugin-binding'
+import { PluginCredentialPanel, pluginCredentialsQueryKey } from '@/features/channels/plugin-login/PluginCredentialPanel'
+import { PluginLoginDialog, type PluginLoginTarget } from '@/features/channels/plugin-login/PluginLoginDialog'
 import { PluginConfigForm } from '@/features/task-plugins/components/PluginConfigForm'
 import {
   fromRequestPluginConfigDraft,
@@ -94,6 +97,9 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
   // saved exactly as they were stored.
   const [pluginConfigDraft, setPluginConfigDraft] = useState<RequestPluginConfigDraft | null>(null)
   const [pluginConfigSubmitted, setPluginConfigSubmitted] = useState(false)
+  // Outlives the drawer: "Save and log in" closes it, then logs in.
+  const [loginTarget, setLoginTarget] = useState<PluginLoginTarget | null>(null)
+  const queryClient = useQueryClient()
 
   const currentQuery = useQuery({
     queryKey: ['channels', 'detail', props.channelId],
@@ -156,17 +162,24 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
       if (isEdit && current !== undefined) return updateChannel(buildUpdatePayload(form, current))
       return createChannel(buildCreatePayload(form))
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success(isEdit ? t('Channel updated') : t('Channel created'))
       props.onChanged()
       props.onOpenChange(false)
+      // `AddChannel` answers with the new id; the login needs the saved channel.
+      const createdId = (result as { id?: unknown } | null | undefined)?.id
+      if (!isEdit && pluginLogin && typeof createdId === 'number') {
+        setLoginTarget({ channelId: createdId, keyIndex: null, pluginName: selectedTaskPlugin?.name ?? values.task_plugin_key })
+      }
     },
     onError: (error: unknown) => setSubmitError(toErrorMessage(error)),
   })
 
   const handleSubmit = () => {
     setSubmitError(null)
-    const nextErrors = validateChannelForm(values, { isEdit })
+    // A login plugin never takes a typed key, even one left over from another provider.
+    const submitted = pluginLogin ? { ...values, key: '' } : values
+    const nextErrors = validateChannelForm(submitted, { isEdit, keyless: pluginLogin })
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) {
       setSubmitError(t('Some fields still need attention. The highlighted ones were not sent.'))
@@ -181,10 +194,10 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
         setSubmitError(t('Some fields still need attention. The highlighted ones were not sent.'))
         return
       }
-      mutation.mutate({ ...values, plugin_config: parsed.config })
+      mutation.mutate({ ...submitted, plugin_config: parsed.config })
       return
     }
-    mutation.mutate(values)
+    mutation.mutate(submitted)
   }
 
   /** Turns a validator code into the sentence the field shows. */
@@ -249,6 +262,17 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
     }
     return { draft, errors: fromRequestPluginConfigDraft(pluginConfigSchema, draft).errors }
   }, [pluginConfigDraft, pluginConfigSchema, storedPluginConfig])
+  // Credentials of a plugin with its own login come from that login, so a credential
+  // panel replaces the key input.
+  const pluginLogin = values.type === TASK_PLUGIN_CHANNEL_TYPE && selectedTaskPlugin?.login === true
+  // Login acts on the saved channel, so a plugin picked in this edit waits for the save.
+  const loginChannelId =
+    isEdit &&
+    current !== undefined &&
+    current.type === TASK_PLUGIN_CHANNEL_TYPE &&
+    parseJsonRecord(current.setting).task_plugin_key === values.task_plugin_key
+      ? current.id
+      : null
   const pluginKeyHint =
     values.type === TASK_PLUGIN_CHANNEL_TYPE ? localizedText(selectedTaskPlugin?.keyHint, i18n.language) : ''
   const newApiTaskPlugins = taskPlugins.filter(supportsNewAPIUpstream)
@@ -274,6 +298,8 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
     }
     update({
       ...(key === values.task_plugin_key ? {} : { plugin_config: {} }),
+      // Batch mode makes one channel per key line, and a login plugin has none.
+      ...(plugin?.login === true && values.mode === 'batch' ? { mode: 'single' as const } : {}),
       task_plugin_key: key,
       ...(baseUrl === null ? {} : { base_url: baseUrl }),
       ...(plugin !== undefined && values.models.trim() === '' ? { models: plugin.models.join(',') } : {}),
@@ -546,7 +572,7 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
                 disabled={sensitiveLocked}
                 label={t('Creation mode')}
                 onValueChange={(mode) => update({ mode })}
-                options={modeOptions}
+                options={pluginLogin ? modeOptions.filter((option) => option.value !== 'batch') : modeOptions}
                 value={values.mode}
               />
             )}
@@ -574,7 +600,24 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
               />
             ) : null}
 
-            {keyField}
+            {pluginLogin ? (
+              <PluginCredentialPanel
+                channelId={loginChannelId}
+                disabled={sensitiveLocked}
+                multiKey={current?.channel_info.is_multi_key === true}
+                onLogin={(keyIndex, add) => {
+                  if (loginChannelId === null) return
+                  setLoginTarget({
+                    add,
+                    channelId: loginChannelId,
+                    keyIndex,
+                    pluginName: selectedTaskPlugin?.name ?? values.task_plugin_key,
+                  })
+                }}
+              />
+            ) : (
+              keyField
+            )}
 
             {isEdit && current !== undefined && current.channel_info.is_multi_key ? (
               <Alert tone="info">
@@ -973,6 +1016,9 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
     )
   })()
 
+  let submitLabel = isEdit ? t('Save changes') : t('Create channel')
+  if (!isEdit && pluginLogin) submitLabel = t('Save and log in')
+
   const footer = (
     <>
       <Button disabled={mutation.isPending} onClick={() => props.onOpenChange(false)} variant="quiet">
@@ -985,41 +1031,54 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
         type="submit"
         variant="primary"
       >
-        {isEdit ? t('Save changes') : t('Create channel')}
+        {submitLabel}
       </Button>
     </>
   )
 
   return (
-    <Drawer
-      description={
-        isEdit
-          ? t('Credentials, routing and the per-provider fields this type needs.')
-          : t('A provider type decides which fields this form asks for. The key is written once and never read back.')
-      }
-      footer={footer}
-      onOpenChange={props.onOpenChange}
-      open={props.open}
-      size="xl"
-      title={isEdit ? t('Edit channel') : t('New channel')}
-    >
-      <div className="flex flex-col gap-6">
-        {canSubmit ? null : (
-          <Alert icon={<TriangleAlertIcon aria-hidden="true" />} tone="warning">
-            {isEdit
-              ? t('Your account cannot save changes to a channel.')
-              : t('Creating a channel needs the channel:sensitive_write grant, which your account does not hold.')}
-          </Alert>
-        )}
-        {isEdit && current !== undefined ? (
-          <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
-            <Badge className="mono" size="sm" tone="muted">{`#${current.id}`}</Badge>
-            <span>{t('Created {{date}}', { date: formatDateTime(current.created_time) })}</span>
-          </p>
-        ) : null}
-        {body}
-      </div>
-    </Drawer>
+    <>
+      <Drawer
+        description={
+          isEdit
+            ? t('Credentials, routing and the per-provider fields this type needs.')
+            : t('A provider type decides which fields this form asks for. The key is written once and never read back.')
+        }
+        footer={footer}
+        onOpenChange={props.onOpenChange}
+        open={props.open}
+        size="xl"
+        title={isEdit ? t('Edit channel') : t('New channel')}
+      >
+        <div className="flex flex-col gap-6">
+          {canSubmit ? null : (
+            <Alert icon={<TriangleAlertIcon aria-hidden="true" />} tone="warning">
+              {isEdit
+                ? t('Your account cannot save changes to a channel.')
+                : t('Creating a channel needs the channel:sensitive_write grant, which your account does not hold.')}
+            </Alert>
+          )}
+          {isEdit && current !== undefined ? (
+            <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
+              <Badge className="mono" size="sm" tone="muted">{`#${current.id}`}</Badge>
+              <span>{t('Created {{date}}', { date: formatDateTime(current.created_time) })}</span>
+            </p>
+          ) : null}
+          {body}
+        </div>
+      </Drawer>
+      {loginTarget === null ? null : (
+        <PluginLoginDialog
+          onClose={() => setLoginTarget(null)}
+          onDone={() => {
+            // A login can enable the channel, so the list refreshes too.
+            void queryClient.invalidateQueries({ queryKey: pluginCredentialsQueryKey(loginTarget.channelId) })
+            props.onChanged()
+          }}
+          target={loginTarget}
+        />
+      )}
+    </>
   )
 }
 

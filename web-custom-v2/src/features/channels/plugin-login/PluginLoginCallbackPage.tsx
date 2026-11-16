@@ -10,8 +10,8 @@ import { taskPluginOptionsQuery } from '@/features/channels/task-plugin-binding'
 import { PluginIcon } from '@/features/task-plugins/components/PluginIcon'
 import { formatDateTime } from '@/lib/format'
 
-/** The login dialog in the console tab listens here for how the callback went. */
-export const PLUGIN_LOGIN_BROADCAST_CHANNEL = 'new-api-plugin-login'
+import { PLUGIN_LOGIN_BROADCAST_CHANNEL } from './plugin-login'
+
 
 type Result =
   | { status: 'pending' }

@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query'
 
 import { deleteJson, getJson, postJson, putJson } from '@/lib/api/client'
 import { api, type ApiRequestConfig } from '@/lib/http-client'
+import type { LocalizedTextValue } from '@/features/task-plugins/types'
 
 /**
  * Every channel endpoint renders its own error surface, so the global axios
@@ -469,14 +470,59 @@ export type PluginCredentialSummary = {
   needs_login?: boolean
 }
 
+/** One input a `fields` login step asks for. Values are credentials. */
+export type PluginLoginField = {
+  name: string
+  label?: LocalizedTextValue | null
+  type: 'text' | 'password' | 'textarea'
+  required?: boolean
+  placeholder?: LocalizedTextValue | null
+  description?: LocalizedTextValue | null
+}
+
 /** One login step as the server shows it to the browser (`PluginLoginStepView`). */
 export type PluginLoginStep =
   | { type: 'redirect'; url: string }
-  | { type: 'paste'; url: string }
-  | { type: 'device'; user_code: string; verification_uri: string }
+  | { type: 'paste'; url: string; hint?: LocalizedTextValue | null }
+  | {
+      type: 'device'
+      user_code: string
+      verification_uri: string
+      verification_uri_complete?: string
+      interval?: number
+      /** Unix seconds. */
+      expires_at?: number
+    }
   | { type: 'pending'; interval?: number }
-  | { type: 'fields'; fields: unknown[] }
+  | { type: 'fields'; fields: PluginLoginField[] }
   | { type: 'done'; credential?: PluginCredentialSummary }
+
+export type PluginLoginInput = { callback_url: string } | { fields: Record<string, string> } | { poll: true }
+
+/**
+ * `POST /api/channel/:id/plugin_login`. `keyIndex` null adds a credential; an index logs in
+ * again on that line. `add` keeps the account of a single-key channel and adds the new one
+ * next to it.
+ */
+export function startPluginLogin(
+  channelId: number,
+  keyIndex: number | null,
+  add = false,
+): Promise<{ flow: string; step: PluginLoginStep }> {
+  return postJson(`/api/channel/${channelId}/plugin_login`, add ? { add: true } : { key_index: keyIndex }, silent)
+}
+
+/** `POST /api/channel/:id/plugin_login/continue` — the next step of a flow the server holds. */
+export async function continuePluginLogin(channelId: number, flow: string, input: PluginLoginInput): Promise<PluginLoginStep> {
+  const data = await postJson<{ step: PluginLoginStep }>(`/api/channel/${channelId}/plugin_login/continue`, { flow, input }, silent)
+  return data.step
+}
+
+/** `GET /api/channel/:id/plugin_credentials` — account summaries only, never a secret. */
+export async function fetchPluginCredentials(channelId: number): Promise<PluginCredentialSummary[]> {
+  const data = await getJson<{ items: PluginCredentialSummary[] | null }>(`/api/channel/${channelId}/plugin_credentials`, silent)
+  return data.items ?? []
+}
 
 /**
  * Hands the vendor's redirect query to the server, which finishes the exchange and stores the
