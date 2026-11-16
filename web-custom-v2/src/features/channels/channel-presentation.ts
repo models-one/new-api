@@ -510,6 +510,8 @@ export type ChannelFormValues = {
   task_plugin_key: string
   /** New API (60) only: task plugins this channel also forwards upstream. */
   task_extend_plugin_keys: string[]
+  /** Request processing instances this channel adds, by id, in run order. */
+  request_plugins: string[]
   /** Task Plugin (61) only: the settings the bound plugin's `channelConfig` declares. */
   plugin_config: Record<string, unknown>
   /** `settings` — dto.ChannelOtherSettings */
@@ -614,6 +616,7 @@ export function emptyChannelForm(): ChannelFormValues {
     priority: '0',
     proxy: '',
     remark: '',
+    request_plugins: [],
     status_code_mapping: '',
     system_prompt: '',
     system_prompt_override: false,
@@ -689,6 +692,7 @@ export function channelToForm(channel: Channel): ChannelFormValues {
     tag: channel.tag ?? '',
     // A New API channel may still carry a single legacy task_plugin_key; it is
     // folded into the list so saving keeps it instead of silently dropping it.
+    request_plugins: readStringList(setting, 'request_plugins'),
     task_extend_plugin_keys:
       channel.type === NEW_API_CHANNEL_TYPE
         ? [...new Set([readString(setting, 'task_plugin_key'), ...readStringList(setting, 'task_extend_plugin_keys')].filter(Boolean))]
@@ -906,6 +910,7 @@ export function buildSettingJson(
   // drops it so a stale key can't resurface if the channel is switched back later.
   next.task_plugin_key = values.type === TASK_PLUGIN_CHANNEL_TYPE ? values.task_plugin_key.trim() : ''
   next.task_extend_plugin_keys = values.type === NEW_API_CHANNEL_TYPE ? values.task_extend_plugin_keys : []
+  next.request_plugins = values.request_plugins
   return serializeSettings(next)
 }
 

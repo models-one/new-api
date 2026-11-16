@@ -59,6 +59,7 @@ import {
   supportsNewAPIUpstream,
   taskPluginOptionsQuery,
 } from '@/features/channels/task-plugin-binding'
+import { ChannelRequestPluginsField } from '@/features/channels/components/ChannelRequestPluginsField'
 import { PluginCredentialPanel, pluginCredentialsQueryKey } from '@/features/channels/plugin-login/PluginCredentialPanel'
 import { PluginLoginDialog, type PluginLoginTarget } from '@/features/channels/plugin-login/PluginLoginDialog'
 import { PluginConfigForm } from '@/features/task-plugins/components/PluginConfigForm'
@@ -876,6 +877,12 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
               description={t('Lets the gateway disable this channel by itself after repeated upstream failures.')}
               label={t('Auto-disable on repeated failures')}
               onCheckedChange={(checked) => update({ auto_ban: checked })}
+            />
+
+            <ChannelRequestPluginsField
+              disabled={sensitiveLocked || mutation.isPending}
+              onChange={(request_plugins) => update({ request_plugins })}
+              value={values.request_plugins}
             />
 
             <Textarea

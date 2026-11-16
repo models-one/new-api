@@ -106,6 +106,7 @@ type ServerState = {
   listFails?: boolean
   selfFails?: boolean
   taskPluginOptions?: unknown[]
+  requestPluginInstances?: unknown[]
 }
 
 let server: ServerState
@@ -164,6 +165,7 @@ beforeEach(() => {
     if (url === '/api/group/') return envelope(server.groups)
     if (url === '/api/channel/models_enabled') return envelope(['gpt-4o-mini'])
     if (url === '/api/task_plugin_options') return envelope(server.taskPluginOptions ?? [])
+    if (url === '/api/request_plugin/instances') return envelope({ instances: server.requestPluginInstances ?? [] })
     if (url === '/api/channel/' || url === '/api/channel/search') {
       if (server.listFails) return Promise.reject(new Error('the channel list is unavailable'))
       return envelope({
@@ -631,6 +633,32 @@ describe('the editor', () => {
     await waitFor(() => expect(put).toHaveBeenCalled())
     const body = put.mock.calls[0][1] as Record<string, unknown>
     expect(JSON.parse(String(body.settings)).plugin_config).toEqual({ region: 'us', retries: 2, timeout: 30 })
+  })
+
+  it('adds a request processing instance to a channel, in the order it runs', async () => {
+    const boundRow: Channel = { ...openAiRow, setting: JSON.stringify({ request_plugins: ['redact'] }) }
+    server.items = [boundRow]
+    server.total = 1
+    server.requestPluginInstances = [
+      { config: {}, enabled: true, global: false, groups: [], id: 'redact', models: [], name: 'Redact PII', plugin: 'pii' },
+      { config: {}, enabled: true, global: false, groups: [], id: 'shrink', models: [], name: 'Shrink images', plugin: 'img' },
+    ]
+    put.mockResolvedValue({ data: { data: boundRow, message: '', success: true } })
+    renderPage()
+
+    const cells = await channelRow('probe-openai')
+    fireEvent.click(cells.getByRole('button', { name: 'Edit probe-openai' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    fireEvent.click(await dialog.findByRole('tab', { name: 'Advanced' }))
+
+    expect(await dialog.findByText('Redact PII')).toBeInTheDocument()
+    fireEvent.change(dialog.getByLabelText('Add an instance'), { target: { value: 'shrink' } })
+    fireEvent.click(dialog.getByRole('button', { name: 'Move Shrink images up' }))
+    fireEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(put).toHaveBeenCalled())
+    const body = put.mock.calls[0][1] as Record<string, unknown>
+    expect(JSON.parse(String(body.setting)).request_plugins).toEqual(['shrink', 'redact'])
   })
 
   it('creates a login plugin channel without a key, then starts its login', async () => {

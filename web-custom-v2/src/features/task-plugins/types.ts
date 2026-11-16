@@ -308,3 +308,96 @@ export type RequestPluginConfigSchema = {
   properties: Record<string, RequestPluginConfigField>
   required?: string[]
 }
+
+/**
+ * One configured use of a request processing plugin (`request_plugin_setting.Instance`).
+ * `global` and `groups` are its own scope; channels bind instances by id. `models` limits
+ * it to the models clients ask for; empty means every model.
+ */
+export type RequestPluginInstance = {
+  id: string
+  name: string
+  plugin: string
+  enabled: boolean
+  global: boolean
+  groups: string[]
+  models: string[]
+  config: Record<string, unknown>
+}
+
+/**
+ * A request a plugin offers for trying it out. The body is text only: the string
+ * "[sample-image]" as an item of a content or parts list stands for the console's own
+ * sample image.
+ */
+export type RequestPluginSample = {
+  name: LocalizedTextValue
+  /** The base language of its text, such as "en" or "zh"; absent fits any. */
+  lang?: string
+  format: 'openai' | 'openai_responses' | 'claude' | 'gemini'
+  body: Record<string, unknown>
+  /** An answer from the model, for plugins that check replies. */
+  reply?: string
+}
+
+export type RequestPluginDryRunRequest = {
+  format: string
+  path?: string
+  model: string
+  group?: string
+  channel_id?: number
+  body: unknown
+  /** An unsaved instance to run alone instead of the saved ones. */
+  instance?: RequestPluginInstance
+  /** An answer from the model for the reply checks to read. */
+  reply?: string
+}
+
+export type RequestPluginDryRunStep = {
+  instance: string
+  name: string
+  plugin: string
+  stage: string
+  action: string
+  effects: number
+  findings?: Array<{ rule: string; category?: string; count: number }> | null
+  duration_ms: number
+  error?: string
+}
+
+/**
+ * What one request processing plugin did to a request, as the log owner sees it. Only the
+ * members the dry run summarises are typed here.
+ */
+export type RequestPluginRecordEntry = {
+  plugin: string
+  name?: LocalizedTextValue
+  stage: string
+  changes?: unknown[]
+  more_changes?: number
+  headers?: { set?: string[]; remove?: string[] }
+  reasoning_effort?: string
+  media?: Array<{ index: number; from: { mime: string; bytes: number }; to: { mime: string; bytes: number } }>
+  findings?: Array<{ category: string; count: number }>
+  notice?: LocalizedTextValue
+  rejected?: { code: string }
+  /** How many parts of the answer a reply check masked. */
+  masked?: number
+  /** The plugin could not read the request body or the answer, so it did not run. */
+  unchecked?: boolean
+}
+
+export type RequestPluginDryRunResult = {
+  rejected: { code: string; message: string; instance: string } | null
+  failed: { instance: string; error: string } | null
+  steps: RequestPluginDryRunStep[] | null
+  body: unknown
+  headers?: { set?: Record<string, string> | null; remove?: string[] | null }
+  reasoning_effort?: string
+  /** The effort the request had before any plugin ran; empty when none. */
+  reasoning_effort_before?: string
+  /** The reply checks' result, when the run had a reply; `text` is masked. */
+  reply?: { text: string; stopped: { instance: string; code: string; message: string } | null } | null
+  /** What the log owner would see about this request; the last item may be a cut count. */
+  record?: Array<RequestPluginRecordEntry | { truncated: number }> | null
+}

@@ -458,6 +458,15 @@ const taskPluginsRoute = createRoute({
   ),
 })
 
+const requestProcessingRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/request-processing',
+  component: lazyRouteComponent(
+    () => import('@/features/request-processing/RequestProcessingPage'),
+    'RequestProcessingPage',
+  ),
+})
+
 const deploymentsRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: '/models/deployments',
@@ -675,6 +684,7 @@ const routeTree = rootRoute.addChildren([
     modelRegistryRoute,
     deploymentsRoute,
     taskPluginsRoute,
+    requestProcessingRoute,
     usageLogsIndexRedirectRoute,
     usageLogsCommonRedirectRoute,
     dashboardOverviewRedirectRoute,

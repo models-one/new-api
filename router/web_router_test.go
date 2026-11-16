@@ -39,6 +39,8 @@ func TestWebIndexForPathUsesCustomIndexForCustomRoutes(t *testing.T) {
 		"/users",
 		"/system-info",
 		"/channels",
+		"/task-plugins",
+		"/request-processing",
 		"/system-settings",
 		"/system-settings/billing/payment",
 		"/keys",

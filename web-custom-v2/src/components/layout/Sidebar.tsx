@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react'
 import ActivityIcon from 'lucide-react/dist/esm/icons/activity'
 import BarChart3Icon from 'lucide-react/dist/esm/icons/chart-no-axes-column-increasing'
 import CreditCardIcon from 'lucide-react/dist/esm/icons/credit-card'
+import FilterIcon from 'lucide-react/dist/esm/icons/filter'
 import PuzzleIcon from 'lucide-react/dist/esm/icons/puzzle'
 import FileClockIcon from 'lucide-react/dist/esm/icons/file-clock'
 import KeyRoundIcon from 'lucide-react/dist/esm/icons/key-round'
@@ -87,6 +88,7 @@ const administrationNavigation: NavigationItem[] = [
   { labelKey: 'Users', to: '/users', icon: UsersRoundIcon, adminOnly: true },
   { labelKey: 'Channels', to: '/channels', icon: PlugZapIcon, adminOnly: true },
   { labelKey: 'Plugins', to: '/task-plugins', icon: PuzzleIcon, adminOnly: true, rootOnly: true },
+  { labelKey: 'Request processing', to: '/request-processing', icon: FilterIcon, adminOnly: true, rootOnly: true },
   { labelKey: 'Model registry', to: '/models/metadata', icon: BoxesIcon, adminOnly: true },
   { labelKey: 'GPU deployments', to: '/models/deployments', icon: CpuIcon, adminOnly: true },
   { labelKey: 'User analytics', to: '/dashboard/users', icon: ChartPieIcon, adminOnly: true },

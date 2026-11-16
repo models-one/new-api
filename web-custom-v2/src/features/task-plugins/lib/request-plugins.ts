@@ -484,3 +484,60 @@ function parseConfigText(
   }
   return { value: number }
 }
+
+/** Formats a request can be tried in, with the client path each one uses. */
+export const REQUEST_PLUGIN_DRY_RUN_FORMATS = [
+  { value: 'openai', label: 'OpenAI Chat Completions', model: 'gpt-4.1-mini' },
+  {
+    value: 'openai_responses',
+    label: 'OpenAI Responses',
+    model: 'gpt-4.1-mini',
+  },
+  { value: 'claude', label: 'Claude Messages', model: 'claude-sonnet-4-5' },
+  { value: 'gemini', label: 'Gemini', model: 'gemini-2.5-flash' },
+] as const
+
+export function requestPluginDryRunPath(format: string, model: string) {
+  if (format === 'openai_responses') return '/v1/responses'
+  if (format === 'claude') return '/v1/messages'
+  if (format === 'gemini') return `/v1beta/models/${model}:generateContent`
+  return '/v1/chat/completions'
+}
+
+const EXAMPLE_PROMPT =
+  'My email is alice@example.com. Summarize the attached sales notes in three bullet points.'
+
+/** A realistic request in each format, for the dry run body. */
+export function requestPluginDryRunExample(format: string, model: string) {
+  if (format === 'openai_responses') {
+    return {
+      model,
+      instructions: 'You are a concise assistant.',
+      input: [{ role: 'user', content: EXAMPLE_PROMPT }],
+      reasoning: { effort: 'low' },
+    }
+  }
+  if (format === 'claude') {
+    return {
+      model,
+      max_tokens: 1024,
+      system: 'You are a concise assistant.',
+      messages: [{ role: 'user', content: EXAMPLE_PROMPT }],
+    }
+  }
+  if (format === 'gemini') {
+    return {
+      systemInstruction: { parts: [{ text: 'You are a concise assistant.' }] },
+      contents: [{ role: 'user', parts: [{ text: EXAMPLE_PROMPT }] }],
+      generationConfig: { maxOutputTokens: 1024 },
+    }
+  }
+  return {
+    model,
+    messages: [
+      { role: 'system', content: 'You are a concise assistant.' },
+      { role: 'user', content: EXAMPLE_PROMPT },
+    ],
+    stream: false,
+  }
+}

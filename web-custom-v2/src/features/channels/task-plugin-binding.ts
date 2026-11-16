@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 
 import { getJson } from '@/lib/api/client'
-import type { LocalizedTextValue, RequestPluginConfigSchema } from '@/features/task-plugins/types'
+import type { LocalizedTextValue, RequestPluginConfigSchema, RequestPluginSample } from '@/features/task-plugins/types'
 
 import {
   CHANNEL_TYPE_NAMES,
@@ -27,6 +27,14 @@ export type TaskPluginOption = {
   provider?: boolean
   transform?: boolean
   login?: boolean
+  /** The stage hooks a request processing plugin exports, in the order a request meets them. */
+  transform_hooks?: string[] | null
+  /** A failure of the plugin is skipped instead of refusing the request. */
+  optional?: boolean
+  /** The schema of a request processing instance's config. */
+  configSchema?: RequestPluginConfigSchema | null
+  /** Requests the plugin offers for trying it out. */
+  samples?: RequestPluginSample[] | null
   /** The settings a channel of the plugin takes, kept in `settings.plugin_config`. */
   channelConfig?: RequestPluginConfigSchema | null
   /** The format of a channel key line, shown on the key field. */
