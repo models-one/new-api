@@ -394,17 +394,23 @@ function MarketplaceInstallDialog(props: { target: InstallTarget | null; onOpenC
         t('Installed {{name}} v{{version}}', { name: detail.meta.name, version: detail.meta.version }),
         detail.pricing_issues,
       )
-      close(false)
+      dismiss()
     },
   })
 
+  function dismiss() {
+    setVersion(undefined)
+    installMutation.reset()
+    props.onOpenChange(false)
+  }
+
+  // Closing by hand waits for a running install. A finished install calls `dismiss`
+  // itself: at that moment this render still sees the install as pending, so going
+  // through this guard would leave the dialog open after a successful install.
   function close(open: boolean) {
-    if (!open && installMutation.isPending) return
-    if (!open) {
-      setVersion(undefined)
-      installMutation.reset()
-    }
-    props.onOpenChange(open)
+    if (open) return
+    if (installMutation.isPending) return
+    dismiss()
   }
 
   const fetchError = sourceQuery.error

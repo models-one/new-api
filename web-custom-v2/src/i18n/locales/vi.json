@@ -2492,6 +2492,7 @@
     "No user recorded any {{measure}} in this range.": "Không người dùng nào ghi nhận {{measure}} trong khoảng này.",
     "No user recorded any traffic in this range, so the server returned no rows.": "Không người dùng nào có lưu lượng trong khoảng này nên máy chủ không trả về dòng nào.",
     "No vendor": "Không có nhà cung cấp",
+    "No version history": "Chưa có lịch sử phiên bản",
     "No web chat client is configured": "Chưa cấu hình ứng dụng trò chuyện dạng web",
     "Node": "Nút",
     "NODE_NAME is not set on this node, so its name falls back to the hostname. A host whose name changes between restarts leaves an orphaned row behind each time.": "Nút này chưa đặt NODE_NAME nên tên lấy theo tên máy chủ. Máy có tên thay đổi sau mỗi lần khởi động lại sẽ để lại một bản ghi mồ côi mỗi lần.",

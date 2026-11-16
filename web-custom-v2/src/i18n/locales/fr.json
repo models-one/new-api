@@ -2492,6 +2492,7 @@
     "No user recorded any {{measure}} in this range.": "Aucun utilisateur n'a enregistré de {{measure}} sur cette plage.",
     "No user recorded any traffic in this range, so the server returned no rows.": "Aucun utilisateur n'a enregistré de trafic sur cette plage : le serveur n'a donc renvoyé aucune ligne.",
     "No vendor": "Aucun fournisseur",
+    "No version history": "Aucun historique des versions",
     "No web chat client is configured": "Aucun client de chat web n'est configuré",
     "Node": "Nœud",
     "NODE_NAME is not set on this node, so its name falls back to the hostname. A host whose name changes between restarts leaves an orphaned row behind each time.": "NODE_NAME n'est pas défini sur ce nœud : son nom retombe donc sur le nom d'hôte. Un hôte dont le nom change à chaque redémarrage laisse une ligne orpheline à chaque fois.",

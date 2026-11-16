@@ -2492,6 +2492,7 @@
     "No user recorded any {{measure}} in this range.": "此範圍內沒有使用者記錄到{{measure}}。",
     "No user recorded any traffic in this range, so the server returned no rows.": "此範圍內沒有使用者產生流量，因此伺服器沒有回傳任何記錄。",
     "No vendor": "無供應商",
+    "No version history": "暫無版本歷史",
     "No web chat client is configured": "未設定網頁版聊天用戶端",
     "Node": "節點",
     "NODE_NAME is not set on this node, so its name falls back to the hostname. A host whose name changes between restarts leaves an orphaned row behind each time.": "該節點未設定 NODE_NAME，因此名稱回退為主機名。若主機名在每次重啟後都變化，就會不斷留下無人認領的心跳記錄。",

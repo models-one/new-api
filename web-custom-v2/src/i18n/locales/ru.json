@@ -2492,6 +2492,7 @@
     "No user recorded any {{measure}} in this range.": "За этот период ни один пользователь не зафиксировал показатель «{{measure}}».",
     "No user recorded any traffic in this range, so the server returned no rows.": "За этот период ни один пользователь не создал трафика, поэтому сервер не вернул ни одной строки.",
     "No vendor": "Без поставщика",
+    "No version history": "История версий отсутствует",
     "No web chat client is configured": "Веб-версия чат-клиента не настроена",
     "Node": "Узел",
     "NODE_NAME is not set on this node, so its name falls back to the hostname. A host whose name changes between restarts leaves an orphaned row behind each time.": "На этом узле не задан NODE_NAME, поэтому имя берётся из имени хоста. Если имя хоста меняется при каждом перезапуске, каждый раз остаётся «осиротевшая» запись.",

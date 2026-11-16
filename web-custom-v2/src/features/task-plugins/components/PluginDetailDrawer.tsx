@@ -255,6 +255,9 @@ function VersionList(props: {
     },
   })
 
+  // A built-in plugin is served from the gateway itself and has no stored versions.
+  if (props.versions.length === 0) return <p className="py-8 text-center text-sm text-muted">{t('No version history')}</p>
+
   return (
     <>
       <ul className="divide-y divide-border rounded-lg border border-border">

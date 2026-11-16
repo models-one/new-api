@@ -2492,6 +2492,7 @@
     "No user recorded any {{measure}} in this range.": "この期間に{{measure}}を記録したユーザーはいません。",
     "No user recorded any traffic in this range, so the server returned no rows.": "この期間にトラフィックを記録したユーザーがいないため、サーバーは行を返していません。",
     "No vendor": "ベンダーなし",
+    "No version history": "バージョン履歴はありません",
     "No web chat client is configured": "Web 版のチャットクライアントが設定されていません",
     "Node": "ノード",
     "NODE_NAME is not set on this node, so its name falls back to the hostname. A host whose name changes between restarts leaves an orphaned row behind each time.": "このノードでは NODE_NAME が設定されていないため、名前はホスト名にフォールバックしています。再起動のたびにホスト名が変わる環境では、そのたびに孤立した行が残ります。",

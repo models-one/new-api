@@ -138,9 +138,17 @@ describe('the installed plugin list', () => {
 
 describe('installing from the marketplace', () => {
   it('names the source it installs from, and shows a community plugin what it can reach', async () => {
-    post.mockResolvedValue({
-      data: { success: true, data: { meta: { key: 'alice_tool', name: 'alice_tool', version: '2.0.0' }, plugin: { active: true } } },
-    })
+    // Answered after a tick, as a real server does: the dialog renders the install as
+    // pending before the answer arrives.
+    post.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () => resolve({ data: { success: true, data: { meta: { key: 'alice_tool', name: 'alice_tool', version: '2.0.0' }, plugin: { active: true } } } }),
+            20,
+          )
+        }),
+    )
     renderWithQuery(<MarketplacePanel installed={[]} />)
 
     await screen.findByRole('option', { name: 'Community · Community' })
@@ -164,5 +172,7 @@ describe('installing from the marketplace', () => {
         expect.anything(),
       ),
     )
+    // The dialog closes once the install has gone through.
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Install and enable' })).not.toBeInTheDocument())
   })
 })

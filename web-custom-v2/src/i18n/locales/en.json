@@ -2492,6 +2492,7 @@
     "No user recorded any {{measure}} in this range.": "No user recorded any {{measure}} in this range.",
     "No user recorded any traffic in this range, so the server returned no rows.": "No user recorded any traffic in this range, so the server returned no rows.",
     "No vendor": "No vendor",
+    "No version history": "No version history",
     "No web chat client is configured": "No web chat client is configured",
     "Node": "Node",
     "NODE_NAME is not set on this node, so its name falls back to the hostname. A host whose name changes between restarts leaves an orphaned row behind each time.": "NODE_NAME is not set on this node, so its name falls back to the hostname. A host whose name changes between restarts leaves an orphaned row behind each time.",

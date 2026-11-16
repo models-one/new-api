@@ -2492,6 +2492,7 @@
     "No user recorded any {{measure}} in this range.": "此范围内没有用户记录到{{measure}}。",
     "No user recorded any traffic in this range, so the server returned no rows.": "此范围内没有用户产生流量，因此服务器没有返回任何记录。",
     "No vendor": "无供应商",
+    "No version history": "暂无版本历史",
     "No web chat client is configured": "未配置网页版聊天客户端",
     "Node": "节点",
     "NODE_NAME is not set on this node, so its name falls back to the hostname. A host whose name changes between restarts leaves an orphaned row behind each time.": "该节点未设置 NODE_NAME，因此名称回退为主机名。若主机名在每次重启后都变化，就会不断留下无人认领的心跳记录。",
