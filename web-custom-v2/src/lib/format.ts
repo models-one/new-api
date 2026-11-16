@@ -40,6 +40,19 @@ export function formatCompactNumber(value: number): string {
   return String(Math.round(value))
 }
 
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
+
+/** A byte count in decimal units, for example 1.2 MB. */
+export function formatBytes(bytes: number): string {
+  let value = bytes
+  let unit = 0
+  while (Math.abs(value) >= 1000 && unit < BYTE_UNITS.length - 1) {
+    value /= 1000
+    unit += 1
+  }
+  return `${Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value)} ${BYTE_UNITS[unit]}`
+}
+
 export function formatNumber(value: number): string {
   return Number.isFinite(value) ? Math.round(value).toLocaleString('en-US') : '0'
 }

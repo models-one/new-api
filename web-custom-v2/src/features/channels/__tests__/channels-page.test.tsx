@@ -105,6 +105,7 @@ type ServerState = {
   groups: string[]
   listFails?: boolean
   selfFails?: boolean
+  taskPluginOptions?: unknown[]
 }
 
 let server: ServerState
@@ -162,6 +163,7 @@ beforeEach(() => {
     }
     if (url === '/api/group/') return envelope(server.groups)
     if (url === '/api/channel/models_enabled') return envelope(['gpt-4o-mini'])
+    if (url === '/api/task_plugin_options') return envelope(server.taskPluginOptions ?? [])
     if (url === '/api/channel/' || url === '/api/channel/search') {
       if (server.listFails) return Promise.reject(new Error('the channel list is unavailable'))
       return envelope({
@@ -569,6 +571,66 @@ describe('the editor', () => {
     expect(channel.models).toBe('gpt-4o-mini')
     expect(channel.group).toBe('default')
     expect(Object.keys(channel)).not.toContain('status')
+  })
+
+  it('edits the settings a provider plugin declares and keeps the ones left alone', async () => {
+    const pluginRow: Channel = {
+      ...openAiRow,
+      id: 9,
+      name: 'probe-plugin',
+      setting: JSON.stringify({ task_plugin_key: 'acme_vendor' }),
+      settings: JSON.stringify({ plugin_config: { region: 'eu', timeout: 30 } }),
+      type: 61,
+    }
+    server.items = [pluginRow]
+    server.total = 1
+    server.taskPluginOptions = [
+      {
+        channelConfig: {
+          properties: {
+            region: { title: { en: 'Region' }, type: 'string' },
+            retries: { maximum: 5, minimum: 0, title: { en: 'Retries' }, type: 'integer' },
+            timeout: { title: 'Timeout', type: 'integer', unit: 'second' },
+          },
+          type: 'object',
+        },
+        checkKey: true,
+        key: 'acme_vendor',
+        keyHint: { en: 'AccessKey|SecretKey' },
+        models: ['acme-1'],
+        name: 'Acme',
+        provider: true,
+        task: false,
+      },
+    ]
+    put.mockResolvedValue({ data: { data: pluginRow, message: '', success: true } })
+    renderPage()
+
+    const cells = await channelRow('probe-plugin')
+    fireEvent.click(cells.getByRole('button', { name: 'Edit probe-plugin' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    fireEvent.click(await dialog.findByRole('tab', { name: 'Credentials' }))
+
+    expect(await dialog.findByText(/Format: AccessKey\|SecretKey/)).toHaveTextContent(
+      'The plugin checks a typed-in key when the channel is saved.',
+    )
+    const region = await dialog.findByRole('textbox', { name: 'Region' })
+    expect(region).toHaveValue('eu')
+
+    // A value outside the declared range never reaches the server.
+    const retries = dialog.getByRole('spinbutton', { name: 'Retries' })
+    fireEvent.change(retries, { target: { value: '9' } })
+    fireEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+    expect(await dialog.findByText('Enter at most 5')).toBeInTheDocument()
+    expect(put).not.toHaveBeenCalled()
+
+    fireEvent.change(retries, { target: { value: '2' } })
+    fireEvent.change(region, { target: { value: 'us' } })
+    fireEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(put).toHaveBeenCalled())
+    const body = put.mock.calls[0][1] as Record<string, unknown>
+    expect(JSON.parse(String(body.settings)).plugin_config).toEqual({ region: 'us', retries: 2, timeout: 30 })
   })
 
   it('refuses to create without a key, which validateChannel would reject anyway', async () => {

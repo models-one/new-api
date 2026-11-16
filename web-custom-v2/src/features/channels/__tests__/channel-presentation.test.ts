@@ -373,6 +373,20 @@ describe('task plugin channel binding', () => {
     expect(parseJsonRecord(switched).task_plugin_key).toBeUndefined()
   })
 
+  it('keeps the bound plugin settings on a Task Plugin channel and drops them on another type', () => {
+    const channel = {
+      ...storedChannel,
+      setting: JSON.stringify({ task_plugin_key: 'acme_vendor' }),
+      settings: JSON.stringify({ plugin_config: { region: 'eu' } }),
+      type: 61,
+    }
+    const values = channelToForm(channel)
+    expect(values.plugin_config).toEqual({ region: 'eu' })
+    const stored = parseJsonRecord(channel.settings)
+    expect(JSON.parse(buildOtherSettingsJson(values, stored)).plugin_config).toEqual({ region: 'eu' })
+    expect(parseJsonRecord(buildOtherSettingsJson({ ...values, type: 1 }, stored)).plugin_config).toBeUndefined()
+  })
+
   it('round-trips New API upstream plugins and folds a legacy single key in', () => {
     const channel = {
       ...storedChannel,

@@ -510,6 +510,8 @@ export type ChannelFormValues = {
   task_plugin_key: string
   /** New API (60) only: task plugins this channel also forwards upstream. */
   task_extend_plugin_keys: string[]
+  /** Task Plugin (61) only: the settings the bound plugin's `channelConfig` declares. */
+  plugin_config: Record<string, unknown>
   /** `settings` — dto.ChannelOtherSettings */
   azure_responses_version: string
   vertex_key_type: string
@@ -566,6 +568,12 @@ function readString(record: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value : ''
 }
 
+function readRecord(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = record[key]
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as Record<string, unknown>
+}
+
 function readStringList(record: Record<string, unknown>, key: string): string[] {
   const value = record[key]
   if (!Array.isArray(value)) return []
@@ -602,6 +610,7 @@ export function emptyChannelForm(): ChannelFormValues {
     other: '',
     param_override: '',
     pass_through_body_enabled: false,
+    plugin_config: {},
     priority: '0',
     proxy: '',
     remark: '',
@@ -684,6 +693,7 @@ export function channelToForm(channel: Channel): ChannelFormValues {
       channel.type === NEW_API_CHANNEL_TYPE
         ? [...new Set([readString(setting, 'task_plugin_key'), ...readStringList(setting, 'task_extend_plugin_keys')].filter(Boolean))]
         : [],
+    plugin_config: readRecord(other, 'plugin_config'),
     task_plugin_key: readString(setting, 'task_plugin_key'),
     test_model: channel.test_model ?? '',
     thinking_to_content: readBoolean(setting, 'thinking_to_content'),
@@ -923,6 +933,14 @@ export function buildOtherSettingsJson(
   if (extras.has('vertex_key_type')) next.vertex_key_type = values.vertex_key_type
   if (extras.has('aws_key_type')) next.aws_key_type = values.aws_key_type
   if (extras.has('openrouter_enterprise')) next.openrouter_enterprise = values.openrouter_enterprise
+
+  // The settings belong to the plugin bound on a Task Plugin channel; another type
+  // has none, and an empty set means every setting uses the plugin's default.
+  if (values.type === TASK_PLUGIN_CHANNEL_TYPE && Object.keys(values.plugin_config).length > 0) {
+    next.plugin_config = values.plugin_config
+  } else {
+    delete next.plugin_config
+  }
 
   return serializeSettings(next)
 }

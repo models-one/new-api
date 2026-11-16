@@ -263,3 +263,48 @@ export type PluginMetaPreview = {
     >
   }
 }
+
+/** Text a plugin gives in one language, or per language tag. */
+export type LocalizedTextValue = string | Record<string, string>
+
+/** One field of `meta.configSchema`, the subset the gateway validates. */
+export type RequestPluginConfigField = {
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object'
+  title: LocalizedTextValue
+  description?: LocalizedTextValue
+  default?: unknown
+  examples?: unknown[]
+  enum?: (string | number)[]
+  enumTitles?: LocalizedTextValue[]
+  minimum?: number
+  maximum?: number
+  /** Display unit of a number; byte values are entered in B, KB or MB. */
+  unit?: 'byte' | 'pixel' | 'character' | 'second'
+  /**
+   * The field shows only while every listed sibling holds one of its
+   * values. A hidden field keeps its value.
+   */
+  visibleWhen?: Record<string, (string | number | boolean)[]>
+  minLength?: number
+  maxLength?: number
+  pattern?: string
+  /** keywords is a keyword list, one per line, edited like textarea. */
+  format?: 'textarea' | 'keywords' | 'regex' | 'json' | 'url' | 'password'
+  items?: RequestPluginConfigField
+  minItems?: number
+  maxItems?: number
+  uniqueItems?: boolean
+  properties?: Record<string, RequestPluginConfigField>
+  required?: string[]
+  /**
+   * A value per model: an object without `properties` whose keys are model
+   * names and whose values all follow this scalar field.
+   */
+  additionalProperties?: RequestPluginConfigField
+}
+
+export type RequestPluginConfigSchema = {
+  type: 'object'
+  properties: Record<string, RequestPluginConfigField>
+  required?: string[]
+}

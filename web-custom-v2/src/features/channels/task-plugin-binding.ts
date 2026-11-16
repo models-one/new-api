@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 
 import { getJson } from '@/lib/api/client'
+import type { LocalizedTextValue, RequestPluginConfigSchema } from '@/features/task-plugins/types'
 
 import {
   CHANNEL_TYPE_NAMES,
@@ -26,6 +27,14 @@ export type TaskPluginOption = {
   provider?: boolean
   transform?: boolean
   login?: boolean
+  /** The settings a channel of the plugin takes, kept in `settings.plugin_config`. */
+  channelConfig?: RequestPluginConfigSchema | null
+  /** The format of a channel key line, shown on the key field. */
+  keyHint?: LocalizedTextValue | null
+  /** The plugin checks typed-in keys when the channel is saved. */
+  checkKey?: boolean
+  /** The plugin can query the channel balance. */
+  balance?: boolean
 }
 
 /**

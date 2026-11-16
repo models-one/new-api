@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import DownloadCloudIcon from 'lucide-react/dist/esm/icons/download-cloud'
 import KeyRoundIcon from 'lucide-react/dist/esm/icons/key-round'
 import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { formatDateTime } from '@/lib/format'
@@ -58,6 +58,13 @@ import {
   supportsNewAPIUpstream,
   taskPluginOptionsQuery,
 } from '@/features/channels/task-plugin-binding'
+import { PluginConfigForm } from '@/features/task-plugins/components/PluginConfigForm'
+import {
+  fromRequestPluginConfigDraft,
+  toRequestPluginConfigDraft,
+  type RequestPluginConfigDraft,
+} from '@/features/task-plugins/lib/request-plugins'
+import { localizedText } from '@/features/task-plugins/presentation'
 
 type ChannelDrawerProps = {
   open: boolean
@@ -76,13 +83,17 @@ type ChannelDrawerProps = {
 const FORM_ID = 'channel-drawer-form'
 
 export function ChannelDrawer(props: ChannelDrawerProps) {
-  const { t } = useTranslation()
+  const { i18n, t } = useTranslation()
   const isEdit = props.channelId !== undefined
 
   const [values, setValues] = useState<ChannelFormValues>(() => emptyChannelForm())
   const [errors, setErrors] = useState<ChannelFormErrors>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [tab, setTab] = useState('basics')
+  // The plugin settings as typed; null until one is edited, so untouched settings are
+  // saved exactly as they were stored.
+  const [pluginConfigDraft, setPluginConfigDraft] = useState<RequestPluginConfigDraft | null>(null)
+  const [pluginConfigSubmitted, setPluginConfigSubmitted] = useState(false)
 
   const currentQuery = useQuery({
     queryKey: ['channels', 'detail', props.channelId],
@@ -101,12 +112,15 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
     setErrors({})
     setSubmitError(null)
     setTab('basics')
+    setPluginConfigDraft(null)
+    setPluginConfigSubmitted(false)
     if (!isEdit) setValues(emptyChannelForm())
   }, [isEdit, props.open])
 
   useEffect(() => {
     if (current === undefined) return
     setValues(channelToForm(current))
+    setPluginConfigDraft(null)
   }, [current])
 
   const spec = channelTypeSpec(values.type)
@@ -158,6 +172,18 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
       setSubmitError(t('Some fields still need attention. The highlighted ones were not sent.'))
       return
     }
+    // Edited plugin settings are saved as values; untouched ones stay as they were stored.
+    if (pluginConfigSchema !== undefined && pluginConfigDraft !== null) {
+      const parsed = fromRequestPluginConfigDraft(pluginConfigSchema, pluginConfigDraft)
+      if (Object.keys(parsed.errors).length > 0) {
+        setPluginConfigSubmitted(true)
+        setTab('credentials')
+        setSubmitError(t('Some fields still need attention. The highlighted ones were not sent.'))
+        return
+      }
+      mutation.mutate({ ...values, plugin_config: parsed.config })
+      return
+    }
     mutation.mutate(values)
   }
 
@@ -205,6 +231,26 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
   const taskPluginOptionsResult = useQuery({ ...taskPluginOptionsQuery(), enabled: props.open })
   const taskPlugins = taskPluginOptionsResult.data ?? []
   const selectedTaskPlugin = taskPlugins.find((plugin) => plugin.key === values.task_plugin_key)
+  const pluginConfigSchema =
+    values.type === TASK_PLUGIN_CHANNEL_TYPE && Object.keys(selectedTaskPlugin?.channelConfig?.properties ?? {}).length > 0
+      ? selectedTaskPlugin?.channelConfig ?? undefined
+      : undefined
+  const storedPluginConfig = values.plugin_config
+  const pluginConfigView = useMemo(() => {
+    if (pluginConfigSchema === undefined) return undefined
+    let draft = pluginConfigDraft
+    if (draft === null) {
+      // A switch cannot show "not set", so an unset one shows its default.
+      const defaults: Record<string, unknown> = {}
+      for (const [name, field] of Object.entries(pluginConfigSchema.properties)) {
+        if (field.type === 'boolean' && field.default !== undefined) defaults[name] = field.default
+      }
+      draft = toRequestPluginConfigDraft(pluginConfigSchema, { ...defaults, ...storedPluginConfig })
+    }
+    return { draft, errors: fromRequestPluginConfigDraft(pluginConfigSchema, draft).errors }
+  }, [pluginConfigDraft, pluginConfigSchema, storedPluginConfig])
+  const pluginKeyHint =
+    values.type === TASK_PLUGIN_CHANNEL_TYPE ? localizedText(selectedTaskPlugin?.keyHint, i18n.language) : ''
   const newApiTaskPlugins = taskPlugins.filter(supportsNewAPIUpstream)
   const extendingTaskPlugins = channelPluginExtensions(values.type, taskPlugins, values.task_extend_plugin_keys)
   const baseUrlTrust = values.type === TASK_PLUGIN_CHANNEL_TYPE ? assessBaseUrlTrust(values.base_url) : null
@@ -221,7 +267,13 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
   function selectTaskPlugin(key: string) {
     const plugin = taskPlugins.find((item) => item.key === key)
     const baseUrl = nextTaskPluginBaseUrl(values.base_url, selectedTaskPlugin?.baseUrl, plugin?.baseUrl)
+    // Settings belong to the plugin that declared them.
+    if (key !== values.task_plugin_key) {
+      setPluginConfigDraft(null)
+      setPluginConfigSubmitted(false)
+    }
     update({
+      ...(key === values.task_plugin_key ? {} : { plugin_config: {} }),
       task_plugin_key: key,
       ...(baseUrl === null ? {} : { base_url: baseUrl }),
       ...(plugin !== undefined && values.models.trim() === '' ? { models: plugin.models.join(',') } : {}),
@@ -262,12 +314,23 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
     && props.canOperate
     && (isEdit ? true : props.canWriteSensitive && values.key.trim() !== '')
 
+  // A plugin's own key format replaces the type's generic one.
+  let typeKeyHint = spec.keyHint === undefined ? '' : t(spec.keyHint)
+  if (pluginKeyHint !== '') typeKeyHint = t('Format: {{hint}}', { hint: pluginKeyHint })
+  const keyCheckNote =
+    values.type === TASK_PLUGIN_CHANNEL_TYPE && selectedTaskPlugin?.checkKey === true
+      ? t('The plugin checks a typed-in key when the channel is saved.')
+      : ''
   const keyDescription = (() => {
+    let text = typeKeyHint
     if (isEdit) {
-      return t('Leave blank to keep the stored key. The server never returns a key, so this field starts empty on every edit — typing one replaces the stored value outright.')
+      text = t('Leave blank to keep the stored key. The server never returns a key, so this field starts empty on every edit — typing one replaces the stored value outright.')
+      if (pluginKeyHint !== '') text = `${text} ${typeKeyHint}`
+    } else if (values.mode !== 'single') {
+      text = t('One key per line. {{hint}}', { hint: typeKeyHint })
     }
-    if (values.mode === 'single') return spec.keyHint === undefined ? undefined : t(spec.keyHint)
-    return t('One key per line. {{hint}}', { hint: spec.keyHint === undefined ? '' : t(spec.keyHint) })
+    const combined = [text, keyCheckNote].filter(Boolean).join(' ')
+    return combined === '' ? undefined : combined
   })()
 
   const keyField = keyIsMultiline
@@ -627,6 +690,31 @@ export function ChannelDrawer(props: ChannelDrawerProps) {
                 label={t('OpenRouter enterprise account')}
                 onCheckedChange={(checked) => update({ openrouter_enterprise: checked })}
               />
+            ) : null}
+
+            {pluginConfigSchema !== undefined && pluginConfigView !== undefined ? (
+              <section aria-labelledby="channel-plugin-settings" className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <h3 className="text-sm font-semibold text-foreground" id="channel-plugin-settings">
+                    {t('Plugin settings')}
+                  </h3>
+                  <p className="text-xs leading-5 text-muted">
+                    {t('Declared by {{name}}. A setting left empty uses the plugin default.', {
+                      name: selectedTaskPlugin?.name ?? values.task_plugin_key,
+                    })}
+                  </p>
+                </div>
+                <PluginConfigForm
+                  disabled={sensitiveLocked || mutation.isPending}
+                  draft={pluginConfigView.draft}
+                  errors={pluginConfigView.errors}
+                  idPrefix="channel-plugin-config"
+                  models={splitList(values.models)}
+                  onChange={setPluginConfigDraft}
+                  schema={pluginConfigSchema}
+                  showAllErrors={pluginConfigSubmitted}
+                />
+              </section>
             ) : null}
           </Tabs.Panel>
 
