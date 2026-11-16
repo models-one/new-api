@@ -54,6 +54,14 @@ export type TaskPluginRoute = {
   models?: string[]
 }
 
+/** One client API path a provider plugin forwards (`jsplugin.RelayRoute`). */
+export type TaskPluginRelayRoute = {
+  incoming_path: string
+  upstream_path: string
+  converter?: string
+  models?: string[]
+}
+
 export type TaskPluginMeta = {
   sortPriority?: number
   website?: string
@@ -73,7 +81,9 @@ export type TaskPluginMeta = {
   fetchMode: string
   routes?: TaskPluginRoute[]
   /** Relay routes of the provider part; present when the plugin serves ordinary API requests. */
-  relay?: unknown[] | null
+  relay?: TaskPluginRelayRoute[] | null
+  /** The schema of a request processing instance's config. */
+  configSchema?: RequestPluginConfigSchema | null
   protocols?: TaskPluginProtocolClaim[]
   usageSchema?: BillingUsageSchema
   usageProfiles?: {
@@ -134,12 +144,15 @@ export type TaskPluginUsage = {
   in_flight_count: number
 }
 
-export type TaskPluginDetail = {
+export type TaskPluginDetail = TaskPluginParts & {
+  /** The stored version; absent for a built-in plugin served from the gateway itself. */
   plugin?: TaskPluginRecord
   meta: TaskPluginMeta
   source: string
   layer: 'factory' | 'override'
   has_icon?: boolean
+  /** Declared routes the gateway serves only under /{key}, as "METHOD /path". */
+  skipped_routes?: string[] | null
   /** Set by an upload that puts the version into service. */
   pricing_issues?: PricingIssue[]
 }
@@ -190,6 +203,23 @@ export type MarketplaceIndexVersion = {
   allowedHosts?: string[]
   baseUrl?: string
   auth?: string
+  /** The version's usage guide, README.md. */
+  readme?: MarketplaceDocument
+  /** The version's release notes, CHANGELOG.md. */
+  changelog?: MarketplaceDocument
+}
+
+/** A file listed beside a version, resolved against the index like `path`. */
+export type MarketplaceDocumentFile = {
+  path: string
+  sha256?: string
+  /** A page where readers can see the file, such as the file on GitHub. */
+  sourceUrl?: string
+}
+
+/** An English file and its translations, keyed by canonical language tag. */
+export type MarketplaceDocument = MarketplaceDocumentFile & {
+  translations?: Record<string, MarketplaceDocumentFile>
 }
 
 export type MarketplacePluginIcon = {

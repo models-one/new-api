@@ -13,6 +13,7 @@ import { PLUGIN_KIND_LABELS, resolvePluginParts, type PluginKind } from '../lib/
 import { localizedText, runtimeStatusBadge, sourceBadge, UsageList } from '../presentation'
 import type { MarketplaceIndex, TaskPluginListItem, TaskPluginUsage } from '../types'
 import { PluginIcon } from './PluginIcon'
+import { PluginWebsiteLink } from './PluginWebsiteLink'
 import { RevokedPluginWarning } from './RevokedPluginWarning'
 import { toastPluginChange } from '../lib/plugin-change-toast'
 
@@ -122,6 +123,7 @@ export function PluginList(props: PluginListProps) {
                     <p className="truncate font-mono text-xs text-muted">
                       {meta.key} · v{meta.version}
                     </p>
+                    <PluginWebsiteLink website={meta.website} />
                   </div>
                   <Switch
                     checked={plugin.enabled}

@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { renderModelMarkdown } from '@/features/playground/markdown'
+import { renderDocumentMarkdown, renderModelMarkdown } from '@/features/playground/markdown'
 import { parseThinkTags, splitReply } from '@/features/playground/think-tags'
 
 /**
@@ -94,6 +94,32 @@ describe('renderModelMarkdown', () => {
     const html = renderModelMarkdown('<iframe src="https://evil.example"></iframe>')
 
     expect(html).not.toContain('<iframe')
+  })
+})
+
+describe('renderDocumentMarkdown', () => {
+  const page = 'https://github.com/acme/plugins/blob/main/guard/README.md'
+
+  it("resolves a relative link against the document's own page and hardens it", () => {
+    const link = parse(renderDocumentMarkdown('See [the setup notes](docs/setup.md).', page)).querySelector('a')
+
+    expect(link?.getAttribute('href')).toBe('https://github.com/acme/plugins/blob/main/guard/docs/setup.md')
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer nofollow')
+    expect(link?.getAttribute('target')).toBe('_blank')
+  })
+
+  it('leaves a link that is not http, https or mailto without a target', () => {
+    const link = parse(renderDocumentMarkdown('[run](javascript:alert(1)) [file](ftp://host/x)', page)).querySelectorAll('a')
+
+    for (const item of link) expect(item.hasAttribute('href')).toBe(false)
+  })
+
+  it('treats a wrapped line as one paragraph and still drops images and raw HTML', () => {
+    const parsed = parse(renderDocumentMarkdown('one\ntwo\n\n![pixel](https://evil.example/p.png)\n\n<script>x()</script>', page))
+
+    expect(parsed.querySelector('br')).toBeNull()
+    expect(parsed.querySelector('img')).toBeNull()
+    expect(parsed.querySelector('script')).toBeNull()
   })
 })
 

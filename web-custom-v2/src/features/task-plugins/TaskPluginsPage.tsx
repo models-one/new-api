@@ -17,6 +17,8 @@ import {
   taskPluginRuntimeSwitchQuery,
   taskPluginsQuery,
 } from './api'
+import { NodeSyncIndicator } from '@/features/system-info/NodeSyncIndicator'
+
 import { useTaskPluginsAccess } from './access'
 import { MarketplacePanel } from './components/MarketplacePanel'
 import { PluginDetailDrawer } from './components/PluginDetailDrawer'
@@ -171,16 +173,23 @@ export function TaskPluginsPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         action={
-          <Button
-            onClick={() => {
-              setUploadKey(undefined)
-              setUploadOpen(true)
-            }}
-            variant="primary"
-          >
-            <PlusIcon aria-hidden="true" />
-            {t('Upload plugin')}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <NodeSyncIndicator
+              enabled={isRoot}
+              itemNames={Object.fromEntries(plugins.map((plugin) => [plugin.meta.key, plugin.meta.name]))}
+              topics={['plugins', 'options']}
+            />
+            <Button
+              onClick={() => {
+                setUploadKey(undefined)
+                setUploadOpen(true)
+              }}
+              variant="primary"
+            >
+              <PlusIcon aria-hidden="true" />
+              {t('Upload plugin')}
+            </Button>
+          </div>
         }
         description={pageDescription}
         title={pageTitle}

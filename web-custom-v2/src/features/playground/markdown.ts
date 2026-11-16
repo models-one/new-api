@@ -99,13 +99,46 @@ const markdown = new Marked({
   },
 })
 
-function hardenLinks(html: string): string {
+/**
+ * The same renderer for a document someone wrote as a file, such as a plugin's usage
+ * guide: there a single newline is only a wrapped line, not a break.
+ */
+const documentMarkdown = new Marked({
+  async: false,
+  breaks: false,
+  gfm: true,
+  renderer: {
+    html: ({ text }) => escapeHtml(text),
+  },
+})
+
+/**
+ * Where a document link leads once resolved against the page it was written on. Only
+ * http, https and mailto targets survive; anything else loses its `href`.
+ */
+function resolveDocumentLink(href: string, baseUrl: string): string | null {
+  try {
+    const url = new URL(href, baseUrl)
+    return ['http:', 'https:', 'mailto:'].includes(url.protocol) ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function hardenLinks(html: string, baseUrl?: string): string {
   const template = document.createElement('template')
   template.innerHTML = html
 
   for (const link of template.content.querySelectorAll('a')) {
     link.setAttribute('rel', 'noopener noreferrer nofollow')
     link.setAttribute('target', '_blank')
+    // A target the sanitizer already removed stays removed.
+    const href = link.getAttribute('href')
+    if (baseUrl === undefined || href === null) continue
+    // Relative links in a document point at its own repository, not at this console.
+    const target = resolveDocumentLink(href, baseUrl)
+    if (target === null) link.removeAttribute('href')
+    else link.setAttribute('href', target)
   }
 
   return template.innerHTML
@@ -125,6 +158,21 @@ export function renderModelMarkdown(source: string): string {
   if (typeof rendered !== 'string') return ''
 
   return hardenLinks(DOMPurify.sanitize(rendered, sanitizeConfig))
+}
+
+/**
+ * Renders a Markdown document fetched from elsewhere (a plugin's README or changelog)
+ * under the same policy as model output: no raw HTML, no images, hardened links.
+ * Relative links resolve against `baseUrl`, the page the document was written on.
+ */
+export function renderDocumentMarkdown(source: string, baseUrl: string): string {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return ''
+  if (source === '') return ''
+
+  const rendered = documentMarkdown.parse(source)
+  if (typeof rendered !== 'string') return ''
+
+  return hardenLinks(DOMPurify.sanitize(rendered, sanitizeConfig), baseUrl)
 }
 
 /**

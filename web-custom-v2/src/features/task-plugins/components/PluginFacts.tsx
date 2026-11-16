@@ -66,6 +66,10 @@ export function PluginEndpoints(props: {
   protocols?: TaskPluginMeta['protocols']
   routes?: TaskPluginRoute[]
   note?: ReactNode
+  /** With `skippedRoutes`: the key whose /{key} address still serves a skipped route. */
+  pluginKey?: string
+  /** Declared routes the gateway serves only under /{key}, as "METHOD /path". */
+  skippedRoutes?: string[] | null
 }) {
   const { t } = useTranslation()
   const claims = props.protocols ?? []
@@ -110,14 +114,21 @@ export function PluginEndpoints(props: {
         <div className="flex flex-col gap-1 rounded-md bg-sunken p-3">
           <p className="text-xs text-muted">{t('Plugin-defined interfaces')}</p>
           <ul className="divide-y divide-border">
-            {routes.map((route) => (
-              <EndpointRow key={`${route.method} ${route.path}`} method={route.method} path={route.path}>
-                <span className="font-mono">{route.type}</span>
-                {route.type === 'submit' ? t('Submit request') : null}
-                {route.type === 'query' ? t('Retrieve result') : null}
-                {route.type === 'dynamic' ? t('Dynamic operation') : null}
-              </EndpointRow>
-            ))}
+            {routes.map((route) => {
+              // Another plugin already serves this path, so only the plugin's own
+              // /{key} address reaches this one. That is the address worth copying.
+              const skipped = props.pluginKey !== undefined && props.skippedRoutes?.includes(`${route.method} ${route.path}`) === true
+              return (
+                <EndpointRow key={`${route.method} ${route.path}`} method={route.method} path={skipped ? `/${props.pluginKey}${route.path}` : route.path}>
+                  <span className="font-mono">{route.type}</span>
+                  {route.type === 'submit' ? t('Submit request') : null}
+                  {route.type === 'query' ? t('Retrieve result') : null}
+                  {route.type === 'dynamic' ? t('Dynamic operation') : null}
+                  {route.models?.length ? <span>{t('Model scope: {{models}}', { models: route.models.join(', ') })}</span> : null}
+                  {skipped ? <Badge tone="warning">{t('Only served at the /{{key}} address', { key: props.pluginKey })}</Badge> : null}
+                </EndpointRow>
+              )
+            })}
           </ul>
         </div>
       )}

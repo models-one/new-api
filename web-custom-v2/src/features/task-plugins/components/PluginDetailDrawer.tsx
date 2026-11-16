@@ -7,7 +7,6 @@ import { Tabs } from '@/components/disclosure'
 import { NativeSelect, Textarea } from '@/components/form'
 import { ConfirmDialog, Drawer, toast, toErrorMessage } from '@/components/overlay'
 import { Alert, Badge, Button, CopyButton } from '@/components/ui'
-import { channelTypeName } from '@/features/channels/channel-presentation'
 
 import {
   activateTaskPlugin,
@@ -18,11 +17,13 @@ import {
   TaskPluginUsageError,
   taskPluginVersionsQuery,
 } from '../api'
+import { toastPluginChange } from '../lib/plugin-change-toast'
+import { PLUGIN_KIND_LABELS, resolvePluginParts, type ResolvedPluginParts } from '../lib/plugin-kinds'
 import { localizedText, UsageList } from '../presentation'
 import type { BillingUsageSchema, TaskPluginDetail, TaskPluginRecord, TaskPluginUsage } from '../types'
-import { PluginEndpoints, PluginModelList } from './PluginFacts'
+import { PluginModelList } from './PluginFacts'
 import { PluginIcon } from './PluginIcon'
-import { toastPluginChange } from '../lib/plugin-change-toast'
+import { PluginOverview } from './PluginOverview'
 
 type PluginDetailDrawerProps = {
   pluginKey: string | null
@@ -38,7 +39,9 @@ export function PluginDetailDrawer(props: PluginDetailDrawerProps) {
   const versionsQuery = useQuery({ ...taskPluginVersionsQuery(key), enabled: open })
   const activeVersion = versionsQuery.data?.find((record) => record.active)?.version
   const version = selectedVersion ?? activeVersion
-  const detailQuery = useQuery({ ...taskPluginDetailQuery(key, version), enabled: open && version !== undefined })
+  // A built-in plugin has no stored version: its detail is asked for without one, once
+  // the version list has answered so the request is not made twice.
+  const detailQuery = useQuery({ ...taskPluginDetailQuery(key, version), enabled: open && versionsQuery.isSuccess })
   const activeDetailQuery = useQuery({
     ...taskPluginDetailQuery(key, activeVersion),
     enabled: open && activeVersion !== undefined && version !== activeVersion,
@@ -52,28 +55,38 @@ export function PluginDetailDrawer(props: PluginDetailDrawerProps) {
   if (loadError !== null) {
     body = <Alert tone="destructive">{toErrorMessage(loadError, t('Could not load the plugin.'))}</Alert>
   } else if (detail !== undefined) {
+    const parts = resolvePluginParts(detail)
     body = (
       <div className="flex flex-col gap-5">
-        <PluginHeader detail={detail} />
+        <PluginHeader detail={detail} parts={parts} />
         <Tabs defaultValue="overview">
           <Tabs.List label={t('Plugin details')}>
             <Tabs.Tab value="overview">{t('Overview')}</Tabs.Tab>
+            {/* A plugin without a task part has no billing parameters or task sandbox. */}
+            {parts.task ? <Tabs.Tab value="billing">{t('Billing parameters')}</Tabs.Tab> : null}
             <Tabs.Tab value="versions">{t('Versions')}</Tabs.Tab>
             <Tabs.Tab value="source">{t('Source')}</Tabs.Tab>
-            <Tabs.Tab value="dryrun">{t('Dry run')}</Tabs.Tab>
+            {parts.task ? <Tabs.Tab value="dryrun">{t('Dry run')}</Tabs.Tab> : null}
           </Tabs.List>
           <Tabs.Panel className="pt-4" value="overview">
-            <PluginOverview detail={detail} />
+            <PluginOverview detail={detail} parts={parts} />
           </Tabs.Panel>
+          {parts.task ? (
+            <Tabs.Panel className="pt-4" value="billing">
+              <BillingParameters detail={detail} />
+            </Tabs.Panel>
+          ) : null}
           <Tabs.Panel className="pt-4" value="versions">
             <VersionList onView={setSelectedVersion} pluginKey={key} selectedVersion={version} versions={versionsQuery.data ?? []} />
           </Tabs.Panel>
           <Tabs.Panel className="pt-4" value="source">
             <SourceView activeSource={activeDetailQuery.data?.plugin?.source} detail={detail} />
           </Tabs.Panel>
-          <Tabs.Panel className="pt-4" value="dryrun">
-            <PluginSandbox pluginKey={key} />
-          </Tabs.Panel>
+          {parts.task ? (
+            <Tabs.Panel className="pt-4" value="dryrun">
+              <PluginSandbox pluginKey={key} />
+            </Tabs.Panel>
+          ) : null}
         </Tabs>
       </div>
     )
@@ -94,86 +107,75 @@ export function PluginDetailDrawer(props: PluginDetailDrawerProps) {
   )
 }
 
-function PluginHeader(props: { detail: TaskPluginDetail }) {
+/** Part tags, in the order the kinds are listed, plus sign-in in place of a key. */
+const HEADER_PART_BADGES = [
+  { id: 'task', label: PLUGIN_KIND_LABELS.task },
+  { id: 'provider', label: PLUGIN_KIND_LABELS.provider },
+  { id: 'login', label: 'Account login' },
+  { id: 'transform', label: PLUGIN_KIND_LABELS.transform },
+] as const
+
+function PluginHeader(props: { detail: TaskPluginDetail; parts: ResolvedPluginParts }) {
   const { i18n, t } = useTranslation()
   const meta = props.detail.meta
   const description = localizedText(meta.description, i18n.language)
+  // A built-in plugin served from the gateway has no stored version to be inactive.
+  const active = props.detail.plugin === undefined || props.detail.plugin.active
   return (
     <div className="flex items-start gap-3">
       <PluginIcon hasIcon={props.detail.has_icon} icon={meta.icon} name={meta.name} pluginKey={meta.key} size="lg" />
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-sm text-muted">{meta.key}</span>
+          <span className="font-mono text-sm break-all text-muted">{meta.key}</span>
+          <CopyButton label={t('Copy plugin key')} size="icon-sm" value={meta.key} />
           <Badge tone="muted">v{meta.version}</Badge>
-          {props.detail.plugin?.active ? <Badge tone="success">{t('Active')}</Badge> : <Badge tone="warning">{t('Inactive version')}</Badge>}
-          {meta.website ? (
-            <a className="text-xs text-primary hover:underline" href={meta.website} rel="noopener noreferrer" target="_blank">
-              {t('Website')}
-            </a>
-          ) : null}
+          {active ? <Badge tone="success">{t('Active')}</Badge> : <Badge tone="warning">{t('Inactive version')}</Badge>}
+          {props.detail.layer === 'factory' ? <Badge tone="secondary">{t('Factory')}</Badge> : null}
         </div>
-        {description === '' ? null : <p className="mt-1 text-sm text-muted">{description}</p>}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {HEADER_PART_BADGES.filter((part) => props.parts[part.id]).map((part) => (
+            <Badge key={part.id} tone="info">
+              {t(part.label)}
+            </Badge>
+          ))}
+        </div>
+        <p className="text-sm text-muted">{description === '' ? t('Not declared') : description}</p>
       </div>
     </div>
   )
 }
 
-function Fact(props: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted">{props.label}</dt>
-      <dd className="mt-0.5 text-sm break-all text-foreground">{props.children}</dd>
-    </div>
-  )
-}
-
-function PluginOverview(props: { detail: TaskPluginDetail }) {
+/**
+ * The usage facts pricing bills against: the plugin's default schema, and the schema of
+ * each model group that reports its own.
+ */
+function BillingParameters(props: { detail: TaskPluginDetail }) {
   const { t } = useTranslation()
   const meta = props.detail.meta
-  const record = props.detail.plugin
-  const channelTypes = meta.channelTypes?.length
-    ? meta.channelTypes.map((type) => `${t(channelTypeName(type))} (#${type})`).join(', ')
-    : t('Task Plugin')
-
+  const profiles = meta.usageProfiles ?? []
+  const grouped = new Set(profiles.flatMap((profile) => profile.models))
+  const defaultModels = (meta.models ?? []).filter((model) => !grouped.has(model))
+  const showDefault = Object.keys(meta.usageSchema ?? {}).length > 0 && (profiles.length === 0 || defaultModels.length > 0)
+  if (!showDefault && profiles.length === 0) return <p className="py-8 text-center text-sm text-muted">{t('No billing parameters declared')}</p>
   return (
     <div className="flex flex-col gap-6">
-      <dl className="grid gap-x-6 gap-y-4 rounded-lg border border-border p-4 sm:grid-cols-2">
-        <Fact label={t('Applicable channels')}>{channelTypes}</Fact>
-        <Fact label={t('Default API address')}>{meta.baseUrl || t('Not declared by this plugin')}</Fact>
-        <Fact label={t('Author')}>
-          {meta.author.url ? (
-            <a className="text-primary hover:underline" href={meta.author.url} rel="noopener noreferrer" target="_blank">
-              {meta.author.name}
-            </a>
-          ) : (
-            meta.author.name
-          )}
-        </Fact>
-        <Fact label={t('Plugin API version')}>{meta.apiVersion}</Fact>
-        {record?.remark ? <Fact label={t('Remark')}>{record.remark}</Fact> : null}
-        {record?.source_hash ? (
-          <Fact label="SHA-256">
-            <span className="font-mono text-xs">{record.source_hash}</span>
-          </Fact>
-        ) : null}
-      </dl>
-
-      <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold text-foreground">{t('Supported models')}</h3>
-        {meta.models?.length ? <PluginModelList models={meta.models} /> : <p className="text-sm text-muted">{t('Not declared by this plugin')}</p>}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold text-foreground">{t('Supported interfaces')}</h3>
-        <PluginEndpoints protocols={meta.protocols} routes={meta.routes} />
-      </section>
-
-      {meta.usageSchema && Object.keys(meta.usageSchema).length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-foreground">{t('Billing usage fields')}</h3>
+      {showDefault && meta.usageSchema ? (
+        <section aria-label={t('Default')} className="flex flex-col gap-3">
+          {profiles.length > 0 ? (
+            <>
+              <h3 className="text-sm font-semibold text-foreground">{t('Default')}</h3>
+              <PluginModelList models={defaultModels} />
+            </>
+          ) : null}
           <UsageSchemaTable schema={meta.usageSchema} />
         </section>
       ) : null}
+      {profiles.map((profile) => (
+        <section aria-label={profile.models.join(', ')} className="flex flex-col gap-3" key={profile.models[0]}>
+          <PluginModelList models={profile.models} />
+          <UsageSchemaTable schema={profile.schema} />
+        </section>
+      ))}
     </div>
   )
 }
@@ -359,7 +361,8 @@ const DIFF_LINE_CLASSES = {
 
 function SourceView(props: { detail: TaskPluginDetail; activeSource?: string }) {
   const { t } = useTranslation()
-  const source = props.detail.plugin?.source ?? ''
+  // A built-in plugin has no stored record; its source comes with the detail itself.
+  const source = props.detail.plugin?.source || props.detail.source || ''
   const canCompare = props.activeSource !== undefined && props.activeSource !== source
   const [compare, setCompare] = useState(false)
   const diff = useMemo(
@@ -368,7 +371,7 @@ function SourceView(props: { detail: TaskPluginDetail; activeSource?: string }) 
   )
 
   if (source === '') {
-    return <p className="text-sm text-muted">{t('This is a built-in plugin; its source ships with the gateway.')}</p>
+    return <p className="text-sm text-muted">{t('No source available')}</p>
   }
 
   return (

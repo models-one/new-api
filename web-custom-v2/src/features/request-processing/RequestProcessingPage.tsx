@@ -14,6 +14,7 @@ import { Switch } from '@/components/form'
 import { ConfirmDialog, toast, toErrorMessage } from '@/components/overlay'
 import { Alert, Badge, Button, PageHeader, Panel } from '@/components/ui'
 import { channelGroupNamesQuery, enabledModelNamesQuery } from '@/features/channels/api'
+import { NodeSyncIndicator } from '@/features/system-info/NodeSyncIndicator'
 import { useTaskPluginsAccess } from '@/features/task-plugins/access'
 import { PluginIcon } from '@/features/task-plugins/components/PluginIcon'
 import type { RequestPluginInstance } from '@/features/task-plugins/types'
@@ -224,7 +225,8 @@ export function RequestProcessingPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <NodeSyncIndicator enabled={isRoot} topics={['options']} />
             <Button disabled={!instancesQuery.isSuccess} onClick={() => setDryRunOpen(true)} variant="outline">
               <PlayIcon aria-hidden="true" />
               {t('Dry run')}

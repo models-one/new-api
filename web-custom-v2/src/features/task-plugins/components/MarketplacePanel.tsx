@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import RefreshCwIcon from 'lucide-react/dist/esm/icons/refresh-cw'
+import SearchIcon from 'lucide-react/dist/esm/icons/search'
 import SettingsIcon from 'lucide-react/dist/esm/icons/settings'
 import ShieldAlertIcon from 'lucide-react/dist/esm/icons/shield-alert'
 import ShieldCheckIcon from 'lucide-react/dist/esm/icons/shield-check'
@@ -9,6 +10,7 @@ import UsersIcon from 'lucide-react/dist/esm/icons/users'
 
 import { formatNumber } from '@/lib/format'
 
+import { Tabs } from '@/components/disclosure'
 import { Input, NativeSelect } from '@/components/form'
 import { Dialog, toast, toErrorMessage } from '@/components/overlay'
 import { Alert, Badge, Button, Panel } from '@/components/ui'
@@ -25,6 +27,7 @@ import {
   deriveInstallState,
   fetchMarketplaceIndex,
   findMarketplaceVersion,
+  findPluginByCode,
   indexHasIntegrityHashes,
   marketplaceIndexQueryKey,
   marketplaceSourceKind,
@@ -37,6 +40,8 @@ import { computeSourceSha256, fetchPluginSourceText, PluginSourceFetchError } fr
 import { localizedText } from '../presentation'
 import type { MarketplaceIndex, MarketplacePlugin, MarketplaceSource, TaskPluginListItem } from '../types'
 import { CommunityPluginReach } from './CommunityPluginReach'
+import { PluginChangelogPanel, PluginReadmeSection } from './PluginDocuments'
+import { PluginWebsiteLink } from './PluginWebsiteLink'
 import { PluginCapabilities } from './PluginFacts'
 import { PluginIcon } from './PluginIcon'
 import { toastPluginChange } from '../lib/plugin-change-toast'
@@ -49,13 +54,20 @@ const SOURCE_KIND_LABELS: Record<MarketplaceSourceKind, string> = {
   third_party: 'Third-party',
 }
 
+/** A plugin found by its code, and the source that lists it. */
+type PluginCodeMatch = { code: string; source: MarketplaceSource; plugin: MarketplacePlugin }
+
 export function MarketplacePanel(props: { installed: TaskPluginListItem[] }) {
-  const { i18n, t } = useTranslation()
+  const { t } = useTranslation()
   const sourcesQuery = useQuery(marketplaceSourcesQuery())
   const sources = sourcesQuery.data ?? []
   const [sourceUrl, setSourceUrl] = useState<string>()
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [target, setTarget] = useState<InstallTarget | null>(null)
+  const [codeMatch, setCodeMatch] = useState<PluginCodeMatch | null>(null)
+  // Codes are looked up in the official indexes and on the community site.
+  const officialSources = sources.filter((source) => marketplaceSourceKind(source.index_url) === 'official')
+  const communitySource = sources.find((source) => marketplaceSourceKind(source.index_url) === 'community')
   const selectedSource = sources.find((source) => source.index_url === sourceUrl) ?? sources[0]
 
   const indexQuery = useQuery({
@@ -90,36 +102,18 @@ export function MarketplacePanel(props: { installed: TaskPluginListItem[] }) {
     indexContent = <p className="text-sm text-muted">{t('This marketplace has no plugins.')}</p>
   } else {
     indexContent = (
-    <ul className="grid gap-3 lg:grid-cols-2">
-      {index.plugins.map((plugin) => {
-        const installState = deriveInstallState(plugin, props.installed)
-        const description = localizedText(plugin.description, i18n.language)
-        return (
+      <ul className="grid gap-3 lg:grid-cols-2">
+        {index.plugins.map((plugin) => (
           <li key={plugin.key}>
-            <Panel className="flex h-full flex-col gap-3 p-4">
-              <div className="flex items-start gap-3">
-                <PluginIcon icon={plugin.icon} name={plugin.name} pluginKey={plugin.key} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">{plugin.name}</p>
-                  <p className="truncate font-mono text-xs text-muted">
-                    {plugin.key} · v{plugin.latest}
-                  </p>
-                  <MarketplaceAuthorLine plugin={plugin} />
-                </div>
-                <InstallButton onClick={() => selectedSource && setTarget({ installState, plugin, source: selectedSource })} state={installState} />
-              </div>
-              {description === '' ? null : <p className="line-clamp-2 text-sm text-muted">{description}</p>}
-              <div className="mt-auto flex flex-wrap gap-1.5">
-                {/* Only the built-in lists decide what is recommended. */}
-                {plugin.recommended && sourceKind !== 'third_party' ? <Badge tone="primary">{t('Recommended')}</Badge> : null}
-                <InstallStateBadge state={installState} />
-                {plugin.models?.length ? <Badge tone="muted">{t('{{count}} models', { count: plugin.models.length })}</Badge> : null}
-              </div>
-            </Panel>
+            <MarketplacePluginCard
+              installed={props.installed}
+              onInstall={setTarget}
+              plugin={plugin}
+              source={selectedSource as MarketplaceSource}
+            />
           </li>
-        )
-      })}
-    </ul>
+        ))}
+      </ul>
     )
   }
 
@@ -163,11 +157,120 @@ export function MarketplacePanel(props: { installed: TaskPluginListItem[] }) {
         </Alert>
       ) : null}
 
+      {officialSources.length > 0 || communitySource ? (
+        <PluginCodeLookup communitySource={communitySource} officialSources={officialSources} onResult={setCodeMatch} />
+      ) : null}
+      {codeMatch === null ? null : (
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">{t('Result for plugin code {{code}}', { code: codeMatch.code })}</h3>
+            <Button className="ml-auto" onClick={() => setCodeMatch(null)} size="sm" variant="quiet">
+              {t('Clear')}
+            </Button>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <MarketplacePluginCard installed={props.installed} onInstall={setTarget} plugin={codeMatch.plugin} source={codeMatch.source} />
+          </div>
+        </section>
+      )}
+
       {indexContent}
 
       <MarketplaceInstallDialog onOpenChange={(open) => (open ? undefined : setTarget(null))} target={target} />
       <MarketplaceSourcesDialog onOpenChange={setSourcesOpen} open={sourcesOpen} sources={sources} />
     </div>
+  )
+}
+
+/** One marketplace plugin: what it is, whether it is installed, and the way to install it. */
+function MarketplacePluginCard(props: {
+  plugin: MarketplacePlugin
+  source: MarketplaceSource
+  installed: TaskPluginListItem[]
+  onInstall: (target: InstallTarget) => void
+}) {
+  const { i18n, t } = useTranslation()
+  const plugin = props.plugin
+  const installState = deriveInstallState(plugin, props.installed)
+  const description = localizedText(plugin.description, i18n.language)
+  return (
+    <Panel className="flex h-full flex-col gap-3 p-4">
+      <div className="flex items-start gap-3">
+        <PluginIcon icon={plugin.icon} name={plugin.name} pluginKey={plugin.key} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{plugin.name}</p>
+          <p className="truncate font-mono text-xs text-muted">
+            {plugin.key} · v{plugin.latest}
+          </p>
+          <MarketplaceAuthorLine plugin={plugin} />
+          <PluginWebsiteLink website={plugin.website} />
+        </div>
+        <InstallButton onClick={() => props.onInstall({ installState, plugin, source: props.source })} state={installState} />
+      </div>
+      {description === '' ? null : <p className="line-clamp-2 text-sm text-muted">{description}</p>}
+      <div className="mt-auto flex flex-wrap gap-1.5">
+        {/* Only the built-in lists decide what is recommended. */}
+        {plugin.recommended && marketplaceSourceKind(props.source.index_url) !== 'third_party' ? (
+          <Badge tone="primary">{t('Recommended')}</Badge>
+        ) : null}
+        <InstallStateBadge state={installState} />
+        {plugin.code ? <Badge tone="muted">{t('Plugin code {{code}}', { code: plugin.code })}</Badge> : null}
+        {plugin.models?.length ? <Badge tone="muted">{t('{{count}} models', { count: plugin.models.length })}</Badge> : null}
+      </div>
+    </Panel>
+  )
+}
+
+/** newapi.ai gives every official and community plugin an 8-digit code. */
+const PLUGIN_CODE = /^\d{8}$/
+
+/** Finds a plugin by its code; the panel shows it as a card to install from. */
+function PluginCodeLookup(props: {
+  officialSources: MarketplaceSource[]
+  communitySource?: MarketplaceSource
+  /** Called after each lookup; null when no plugin has the code. */
+  onResult: (match: PluginCodeMatch | null) => void
+}) {
+  const { t } = useTranslation()
+  const [code, setCode] = useState('')
+  const lookup = useMutation({
+    mutationFn: (value: string) => findPluginByCode(value, props.officialSources, props.communitySource),
+    onSuccess: (found, value) => props.onResult(found ? { code: value, ...found } : null),
+  })
+  const trimmed = code.trim()
+  let message: string | undefined
+  if (lookup.isSuccess && !lookup.data) message = t('No plugin has this code.')
+  if (lookup.isError) message = t('Could not look up the code. Try again later.')
+
+  return (
+    <form
+      className="flex flex-wrap items-end gap-2"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (PLUGIN_CODE.test(trimmed)) lookup.mutate(trimmed)
+      }}
+    >
+      <Input
+        autoComplete="off"
+        className="w-44"
+        description={t('The 8-digit code shown on the plugin page.')}
+        error={message}
+        inputClassName="font-mono"
+        inputMode="numeric"
+        label={t('Plugin code')}
+        onChange={(event) => {
+          setCode(event.target.value)
+          if (!lookup.isIdle) lookup.reset()
+        }}
+        placeholder="12345678"
+        spellCheck={false}
+        value={code}
+      />
+      <Button disabled={!PLUGIN_CODE.test(trimmed) || lookup.isPending} type="submit" variant="outline">
+        <SearchIcon aria-hidden="true" />
+        {t('Find')}
+      </Button>
+    </form>
   )
 }
 
@@ -389,7 +492,20 @@ function MarketplaceInstallDialog(props: { target: InstallTarget | null; onOpenC
 
           {sourceQuery.isPending && entry !== undefined ? <p className="text-sm text-muted">{t('Fetching plugin source…')}</p> : null}
 
-          <PluginCapabilities plugin={target.plugin} source={sourceQuery.data?.text} version={entry} />
+          <Tabs defaultValue="details">
+            <Tabs.List label={t('Plugin details')}>
+              <Tabs.Tab value="details">{t('Plugin details')}</Tabs.Tab>
+              <Tabs.Tab value="changelog">{t('Changelog')}</Tabs.Tab>
+            </Tabs.List>
+            <Tabs.Panel className="flex flex-col gap-4 pt-4" value="details">
+              <PluginReadmeSection indexUrl={target.source.index_url} plugin={target.plugin} version={selectedVersion} />
+              <PluginCapabilities plugin={target.plugin} source={sourceQuery.data?.text} version={entry} />
+            </Tabs.Panel>
+            {/* Unmounted until opened, so the release notes are fetched only when asked for. */}
+            <Tabs.Panel className="pt-4" value="changelog">
+              <PluginChangelogPanel indexUrl={target.source.index_url} plugin={target.plugin} version={selectedVersion} />
+            </Tabs.Panel>
+          </Tabs>
         </div>
       )}
     </Dialog>
