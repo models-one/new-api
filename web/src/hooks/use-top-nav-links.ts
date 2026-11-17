@@ -80,6 +80,15 @@ export function useTopNavLinks(): TopNavLink[] {
   }
 
   // Rankings
+  if (status?.pelican_enabled === true) {
+    links.push({
+      title: t('Pelican tests'),
+      href: '/pelican',
+      requiresAuth: !isAuthed,
+    })
+  }
+
+  // Rankings
   const rankings = modules?.rankings
   if (rankings && typeof rankings === 'object' && rankings.enabled) {
     const requiresAuth = rankings.requireAuth && !isAuthed

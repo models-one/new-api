@@ -372,6 +372,8 @@ func migrateDB() error {
 		&PerfMetric{},
 		&SystemInstance{},
 		&SystemTask{},
+		&PelicanRule{},
+		&PelicanRun{},
 		&SystemTaskLock{},
 		&CasbinRule{},
 		&AuthzRole{},

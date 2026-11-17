@@ -536,6 +536,12 @@ func keepUpstreamRedirectResponse(_ *http.Request, _ []*http.Request) error {
 }
 
 func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Response, error) {
+	if c != nil && c.GetBool("pelican_test") && c.Request != nil {
+		// Synthetic probes have a bounded generation lease, rather than a live
+		// client connection. Cancellation must reach both HTTP and body reads.
+		req = req.WithContext(c.Request.Context())
+		c.Set("pelican_upstream_headers", req.Header.Clone())
+	}
 	client, err := service.GetHttpClientWithProxySettings(info.ChannelSetting.Proxy, info.ChannelSetting)
 	if err != nil {
 		return nil, fmt.Errorf("new proxy http client failed: %w", err)
@@ -569,6 +575,9 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	common2.SetContextKey(c, appconstant.ContextKeyUpstreamRequestOrigin, req.URL.Scheme+"://"+req.URL.Host)
 	resp, err := relayClient.Do(req)
 	if err != nil {
+		if c.GetBool("pelican_test") {
+			return nil, types.NewError(err, types.ErrorCodeDoRequestFailed)
+		}
 		// A url.Error quotes the request URL, whose query may carry a
 		// credential: log its operation, the host and the cause only.
 		reason := err.Error()

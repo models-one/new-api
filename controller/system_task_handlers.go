@@ -28,6 +28,9 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
 	service.RegisterSystemTaskHandler(priceSyncHandler{})
 	service.RegisterSystemTaskHandler(systemTaskCleanupHandler{})
+	service.RegisterSystemTaskHandler(pelicanScheduleHandler{})
+	service.RegisterSystemTaskHandler(pelicanExecuteHandler{})
+	service.RegisterSystemTaskHandler(pelicanSyncHandler{})
 }
 
 // priceSyncHandler pulls the upstream model price table and merges the derived
