@@ -395,6 +395,39 @@ describe('QuotaSection and the payment-compliance gate', () => {
   })
 })
 
+describe('QuotaSection and what a request reserves before it runs', () => {
+  it('shows the stored bypass threshold and multiplier, and writes only the one that changed', async () => {
+    server.stored['quota_setting.trust_quota_usd'] = '10'
+    server.stored['quota_setting.pre_consume_multiplier'] = '1'
+    renderSection(<QuotaSection />)
+    await settled('Input pre-consume multiplier')
+
+    expect(screen.getByLabelText('Wallet pre-consume bypass threshold (USD)')).toHaveValue(10)
+    fireEvent.change(screen.getByLabelText('Input pre-consume multiplier'), { target: { value: '1.5' } })
+    await save()
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0]).toEqual({ key: 'quota_setting.pre_consume_multiplier', value: '1.5' })
+  })
+
+  it('refuses a zero multiplier, which the server rejects, but lets the threshold be 0 to always reserve', async () => {
+    renderSection(<QuotaSection />)
+    await settled('Input pre-consume multiplier')
+
+    fireEvent.change(screen.getByLabelText('Input pre-consume multiplier'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('Wallet pre-consume bypass threshold (USD)'), { target: { value: '0' } })
+    await save()
+
+    expect(await screen.findByText('Enter a number greater than zero.')).toBeInTheDocument()
+    expect(writes()).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText('Input pre-consume multiplier'), { target: { value: '1' } })
+    await save()
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0]).toEqual({ key: 'quota_setting.trust_quota_usd', value: '0' })
+  })
+})
+
 describe('CurrencySection and the divisor everything is expressed with', () => {
   it('refuses a divisor of zero, which the server accepts without complaint', async () => {
     // model/option.go: `common.QuotaPerUnit, _ = strconv.ParseFloat(value, 64)` — the

@@ -20,7 +20,7 @@ import { formatQuota } from '@/lib/format'
 /**
  * `/system-settings/billing/quota`
  *
- * Six keys, every one confirmed present in `GET /api/option/` on the dev server:
+ * Eight keys, every one confirmed present in `GET /api/option/` on the dev server:
  *
  *   QuotaForNewUser                            '0'
  *   QuotaForInviter                            '0'
@@ -28,6 +28,15 @@ import { formatQuota } from '@/lib/format'
  *   TopUpLink                                  ''
  *   general_setting.docs_link                  'https://docs.newapi.pro'
  *   quota_setting.enable_free_model_pre_consume 'true'
+ *   quota_setting.trust_quota_usd              '10'
+ *   quota_setting.pre_consume_multiplier       '1'
+ *
+ * The last two shape the RESERVATION a request holds before it runs, never the final
+ * charge (`pkg/billingexpr/expr.md`, "Pre-consume"). `trust_quota_usd` is a wallet balance
+ * in US dollars above which a request skips the reservation; 0 turns the bypass off.
+ * `pre_consume_multiplier` scales the reserved estimate of the input cost.
+ * `operation_setting.ValidateQuotaOption` refuses a negative or non-finite value for
+ * either and a zero multiplier; the same rules are checked here first.
  *
  * THE REFUSAL THIS SECTION EXISTS TO HANDLE. `controller/option.go`:
  *
@@ -53,6 +62,8 @@ type QuotaDraft = {
   TopUpLink: string
   'general_setting.docs_link': string
   'quota_setting.enable_free_model_pre_consume': boolean
+  'quota_setting.trust_quota_usd': number
+  'quota_setting.pre_consume_multiplier': number
 }
 
 function toDraft(options: SystemOptionMap | undefined): QuotaDraft {
@@ -66,6 +77,8 @@ function toDraft(options: SystemOptionMap | undefined): QuotaDraft {
       'quota_setting.enable_free_model_pre_consume',
       true,
     ),
+    'quota_setting.pre_consume_multiplier': readOptionNumber(options, 'quota_setting.pre_consume_multiplier', 1),
+    'quota_setting.trust_quota_usd': readOptionNumber(options, 'quota_setting.trust_quota_usd', 10),
     TopUpLink: readOptionString(options, 'TopUpLink'),
   }
 }
@@ -119,6 +132,13 @@ export function QuotaSection() {
         )
       }
 
+      if (values['quota_setting.trust_quota_usd'] < 0) {
+        errors['quota_setting.trust_quota_usd'] = t('Enter zero or more.')
+      }
+      if (!(values['quota_setting.pre_consume_multiplier'] > 0)) {
+        errors['quota_setting.pre_consume_multiplier'] = t('Enter a number greater than zero.')
+      }
+
       return errors
     },
   })
@@ -134,7 +154,7 @@ export function QuotaSection() {
     <SettingsSection
       description={t('What a new account starts with, what is held back during a request, and what an invitation pays out.')}
       form={form}
-      note={t('All four amounts are quota units. Their currency equivalents are calculated with this deployment’s own quota divisor, not a fixed one.')}
+      note={t('The balance and reward amounts are quota units. Their currency equivalents are calculated with this deployment’s own quota divisor, not a fixed one.')}
       saveMode="section"
       title={t('Quota settings')}
     >
@@ -210,6 +230,30 @@ export function QuotaSection() {
           onChange={(event) => form.setField('general_setting.docs_link', event.target.value)}
           placeholder="https://docs.example.com"
           value={form.values['general_setting.docs_link']}
+        />
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        <NumberInput
+          description={t('Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.')}
+          disabled={disabled}
+          error={form.errors['quota_setting.trust_quota_usd']}
+          label={t('Wallet pre-consume bypass threshold (USD)')}
+          min={0}
+          onValueChange={(value) => form.setField('quota_setting.trust_quota_usd', value ?? Number.NaN)}
+          step="any"
+          value={form.values['quota_setting.trust_quota_usd']}
+        />
+
+        <NumberInput
+          description={t('Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.')}
+          disabled={disabled}
+          error={form.errors['quota_setting.pre_consume_multiplier']}
+          label={t('Input pre-consume multiplier')}
+          min={0}
+          onValueChange={(value) => form.setField('quota_setting.pre_consume_multiplier', value ?? Number.NaN)}
+          step="any"
+          value={form.values['quota_setting.pre_consume_multiplier']}
         />
       </div>
 
