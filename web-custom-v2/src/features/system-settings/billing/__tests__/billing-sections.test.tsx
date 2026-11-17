@@ -38,6 +38,7 @@ const seeded: Record<string, string> = {
   AudioCompletionRatio: '{}',
   AudioRatio: '{"gpt-4o-audio-preview":16}',
   AutoGroups: '["default"]',
+  MaxTokenAutoGroups: '5',
   'billing_setting.billing_expr': '{}',
   'billing_setting.billing_mode': '{}',
   CacheRatio: '{}',
@@ -740,15 +741,77 @@ describe('GroupPricingSection', () => {
     expect(writes()).toHaveLength(0)
   })
 
-  it('blocks a malformed group-to-group blob, whose refusal corrupts the stored value', async () => {
+  it('edits a special ratio rule in place and adds one for another billing group', async () => {
     renderSection(<GroupPricingSection />)
     await settled('Billing multiplier for vip')
+    fireEvent.click(screen.getByRole('tab', { name: 'Special ratio rules' }))
 
-    fireEvent.change(screen.getByLabelText('Group-to-group overrides'), { target: { value: '[1,2]' } })
+    // The seeded rule names a group that is not in the pricing table; it is shown, flagged.
+    expect(await screen.findByText('Users in vip')).toBeInTheDocument()
+    expect(screen.getByText('Not in pricing table')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Ratio when users in vip are billed as edit_this'), { target: { value: '0.7' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add ratio override' }))
+    expect(await screen.findByText('(instead of 1)')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Ratio when users in vip are billed as default'), { target: { value: '0.5' } })
     await save()
 
-    expect(await screen.findByText('This must be a JSON object.')).toBeInTheDocument()
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0]).toEqual({ key: 'GroupGroupRatio', value: '{"vip":{"edit_this":0.7,"default":0.5}}' })
+  })
+
+  it('refuses a negative special ratio, which would turn a charge into a credit', async () => {
+    renderSection(<GroupPricingSection />)
+    await settled('Billing multiplier for vip')
+    fireEvent.click(screen.getByRole('tab', { name: 'Special ratio rules' }))
+
+    fireEvent.change(await screen.findByLabelText('Ratio when users in vip are billed as edit_this'), { target: { value: '-1' } })
+    await save()
+
+    expect(
+      await screen.findByText('The ratio for users in “vip” billed as “edit_this” must be a number that is not negative.'),
+    ).toBeInTheDocument()
     expect(writes()).toHaveLength(0)
+  })
+
+  it('shows one group to the users of another, and hides one, as the server reads the rules', async () => {
+    renderSection(<GroupPricingSection />)
+    await settled('Billing multiplier for vip')
+    fireEvent.click(screen.getByRole('tab', { name: 'Group visibility' }))
+
+    fireEvent.change(await screen.findByLabelText('Add rules for a user group'), { target: { value: 'vip' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Add rule' }))
+    fireEvent.change(screen.getByLabelText('Label of default for users in vip'), { target: { value: 'Shared pool' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add rule' }))
+    fireEvent.change(screen.getByLabelText('Visibility of svip for users in vip'), { target: { value: 'hidden' } })
+    // A user group added and then left empty is not stored.
+    fireEvent.change(screen.getByLabelText('Add rules for a user group'), { target: { value: 'svip' } })
+    await save()
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0]).toEqual({
+      key: 'group_ratio_setting.group_special_usable_group',
+      value: '{"vip":{"+:default":"Shared pool","-:svip":""}}',
+    })
+  })
+
+  it('saves the auto groups in the order they were arranged, not alphabetically', async () => {
+    renderSection(<GroupPricingSection />)
+    await settled('Billing multiplier for vip')
+    fireEvent.click(screen.getByRole('tab', { name: 'Auto group order' }))
+
+    fireEvent.change(await screen.findByLabelText('Add a group to the auto order'), { target: { value: 'vip' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Move vip up' }))
+    fireEvent.change(screen.getByLabelText('Maximum custom groups per token'), { target: { value: '3' } })
+    await save()
+
+    await waitFor(() => expect(writes()).toHaveLength(2))
+    expect(writes()).toEqual(
+      expect.arrayContaining([
+        { key: 'AutoGroups', value: '["vip","default"]' },
+        { key: 'MaxTokenAutoGroups', value: '3' },
+      ]),
+    )
   })
 
   it('takes a group removal through a confirmation and holds it in the draft', async () => {

@@ -4,7 +4,15 @@ import { readPaymentCompliance } from '@/features/system-settings/billing/compli
 import {
   applyGroupRows,
   buildGroupRows,
+  dropEmptyGroups,
+  findGroupOverrideProblem,
   findGroupRowProblem,
+  parseAutoGroups,
+  parseGroupOverrides,
+  parseGroupVisibility,
+  stringifyAutoGroups,
+  stringifyGroupOverrides,
+  stringifyGroupVisibility,
   type GroupRow,
 } from '@/features/system-settings/billing/group-pricing'
 import {
@@ -353,15 +361,14 @@ describe('the pay-method contract', () => {
   })
 })
 
-describe('joining the four group keys into one row per group', () => {
+describe('joining the three pricing keys into one row per group', () => {
   const live = {
-    AutoGroups: '["default"]',
     GroupRatio: '{"default":1,"svip":1,"vip":1}',
     TopupGroupRatio: '{"default":1,"svip":1,"vip":1}',
     UserUsableGroups: '{"default":"默认分组","vip":"vip分组"}',
   }
 
-  it('names a group that appears in any one of the four keys', () => {
+  it('names a group that appears in any one of the three keys', () => {
     expect(buildGroupRows(live).map((row) => row.name)).toEqual(['default', 'svip', 'vip'])
   })
 
@@ -373,8 +380,6 @@ describe('joining the four group keys into one row per group', () => {
     // editors made easy to create and hard to see.
     expect(rows.svip.selectable).toBe(false)
     expect(rows.svip.label).toBeNull()
-    expect(rows.default.automatic).toBe(true)
-    expect(rows.svip.automatic).toBe(false)
   })
 
   it('keeps a missing multiplier null rather than inventing the server default of 1', () => {
@@ -382,14 +387,13 @@ describe('joining the four group keys into one row per group', () => {
     expect(rows.find((row) => row.name === 'vip')?.topUpRatio).toBeNull()
   })
 
-  it('round-trips a row list back through all four keys', () => {
+  it('round-trips a row list back through all three keys', () => {
     const rows = buildGroupRows(live)
     const rewritten = applyGroupRows(rows)
     expect(buildGroupRows(rewritten)).toEqual(rows)
-    expect(rewritten.AutoGroups).toBe('["default"]')
   })
 
-  it('drops a group from all four keys when its row is removed', () => {
+  it('drops a group from every key when its row is removed', () => {
     const rows = buildGroupRows(live).filter((row) => row.name !== 'svip')
     const rewritten = applyGroupRows(rows)
     expect(parseNumberMap(rewritten.GroupRatio)).toEqual({ default: 1, vip: 1 })
@@ -398,7 +402,6 @@ describe('joining the four group keys into one row per group', () => {
 
   it('falls back to the group name when a selectable group has no label', () => {
     const row: GroupRow = {
-      automatic: false,
       billingRatio: 1,
       label: null,
       name: 'enterprise',
@@ -418,6 +421,58 @@ describe('joining the four group keys into one row per group', () => {
     expect(findGroupRowProblem({ ...base, name: '  ' })).toBe('name')
     // Zero is a legitimate free group, not an error.
     expect(findGroupRowProblem({ ...base, billingRatio: 0 })).toBeUndefined()
+  })
+})
+
+
+describe('the keys that refer to groups by name', () => {
+  it('keeps the auto groups in the order they are tried, dropping a repeated name', () => {
+    // The server walks this list front to back, so sorting it would change which group a
+    // request tries first.
+    const groups = parseAutoGroups('["vip","default","vip","svip"]')
+    expect(groups).toEqual(['vip', 'default', 'svip'])
+    expect(stringifyAutoGroups(groups)).toBe('["vip","default","svip"]')
+  })
+
+  it('reads special ratio rules per user group and writes them back unchanged', () => {
+    const raw = '{"vip":{"premium":0.3,"default":0.8},"svip":{}}'
+    const overrides = parseGroupOverrides(raw)
+    expect(overrides).toEqual([
+      { rules: [{ group: 'premium', ratio: 0.3 }, { group: 'default', ratio: 0.8 }], userGroup: 'vip' },
+      { rules: [], userGroup: 'svip' },
+    ])
+    expect(stringifyGroupOverrides(overrides)).toBe(raw)
+  })
+
+  it('refuses a special ratio that is negative, empty or names no group', () => {
+    const rule = (group: string, ratio: number | null) => [{ rules: [{ group, ratio }], userGroup: 'vip' }]
+    expect(findGroupOverrideProblem(rule('premium', 0))).toBeUndefined()
+    // A negative ratio would turn a charge into a credit, and the server does not check this key.
+    expect(findGroupOverrideProblem(rule('premium', -0.5))).toEqual({ group: 'premium', userGroup: 'vip' })
+    expect(findGroupOverrideProblem(rule('premium', null))).toEqual({ group: 'premium', userGroup: 'vip' })
+    expect(findGroupOverrideProblem(rule('', 1))).toEqual({ group: '', userGroup: 'vip' })
+  })
+
+  it('reads shown and hidden groups, and keeps the stored key form of an untouched rule', () => {
+    const raw = '{"vip":{"+:premium":"Premium plan","-:default":"remove","special":"Special group"}}'
+    const visibility = parseGroupVisibility(raw)
+    expect(visibility).toEqual([
+      {
+        rules: [
+          { description: 'Premium plan', group: 'premium', visible: true },
+          { description: 'remove', group: 'default', visible: false },
+          { bare: true, description: 'Special group', group: 'special', visible: true },
+        ],
+        userGroup: 'vip',
+      },
+    ])
+    expect(stringifyGroupVisibility(visibility)).toBe(raw)
+  })
+
+  it('drops a user group that holds no rule when the blob is saved', () => {
+    expect(dropEmptyGroups('{"vip":{"premium":0.3},"svip":{}}')).toBe('{"vip":{"premium":0.3}}')
+    const untouched = '{ "vip": { "premium": 0.3 } }'
+    expect(dropEmptyGroups(untouched)).toBe(untouched)
   })
 })
 

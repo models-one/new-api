@@ -6,26 +6,39 @@ import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTable, useDataTable, type DataTableColumns } from '@/components/data'
-import { Checkbox, Input, NumberInput, SwitchRow, Textarea } from '@/components/form'
+import { Tabs } from '@/components/disclosure'
+import { Checkbox, Input, NumberInput, SwitchRow } from '@/components/form'
 import { ConfirmDialog, Dialog } from '@/components/overlay'
 import { Button, Panel } from '@/components/ui'
+import { AutoGroupOrder, GroupOverrideRules, GroupVisibilityRules } from '@/features/system-settings/billing/components/GroupRuleEditors'
 import {
   AUTO_GROUPS_KEY,
   applyGroupRows,
   buildGroupRows,
+  dropEmptyGroups,
   emptyGroupRow,
+  findGroupOverrideProblem,
   findGroupRowProblem,
+  GROUP_GROUP_RATIO_KEY,
   GROUP_PRICING_KEYS,
   GROUP_RATIO_KEY,
+  GROUP_VISIBILITY_KEY,
+  parseAutoGroups,
+  parseGroupOverrides,
+  parseGroupVisibility,
+  stringifyAutoGroups,
+  stringifyGroupOverrides,
+  stringifyGroupVisibility,
   TOPUP_GROUP_RATIO_KEY,
   USER_USABLE_GROUPS_KEY,
   type GroupPricingMaps,
   type GroupRow,
 } from '@/features/system-settings/billing/group-pricing'
-import { checkJsonShape, formatJsonForEditor, isSameJson } from '@/features/system-settings/billing/option-json'
+import { checkJsonShape, isSameJson } from '@/features/system-settings/billing/option-json'
 import { SettingsSection } from '@/features/system-settings/components/SettingsSection'
 import {
   readOptionBoolean,
+  readOptionNumber,
   readOptionString,
   systemOptionsQuery,
   type SystemOptionMap,
@@ -35,45 +48,48 @@ import { useOptionSectionForm } from '@/features/system-settings/section-form'
 /**
  * `/system-settings/billing/group-pricing`
  *
- * Seven keys, all confirmed present in `GET /api/option/`:
+ * Eight keys, all confirmed present in `GET /api/option/`:
  *
  *   GroupRatio        '{"default":1,"svip":1,"vip":1}'
  *   TopupGroupRatio   '{"default":1,"svip":1,"vip":1}'
  *   UserUsableGroups  '{"default":"默认分组","vip":"vip分组"}'
- *   AutoGroups        '["default"]'
- *   DefaultUseAutoGroup                             'false'
  *   GroupGroupRatio                                 '{"vip":{"edit_this":0.9}}'
  *   group_ratio_setting.group_special_usable_group  '{}'
+ *   AutoGroups        '["default"]'
+ *   DefaultUseAutoGroup                             'false'
+ *   MaxTokenAutoGroups                              '5'
  *
- * The first four describe the same set of groups from four angles, so they are edited as
- * ONE table of groups rather than four JSON blobs — the legacy console's four separate
- * editors made it easy to price a group that no user could select, or to offer a group
- * with no ratio at all.
+ * Four tabs, one per question an operator asks:
  *
- * The last two are nested maps (`{userGroup: {targetGroup: ratio}}` and
- * `{group: [groups]}`) with no flat row shape, so they keep a JSON editor. Both are
- * validated here before a write: `GroupGroupRatio` is one of the keys whose refusal
- * arrives only AFTER the raw text has replaced the stored value, so an unchecked write
- * corrupts the setting it failed to change.
+ *   Pricing groups       the first three keys as ONE table of groups — the legacy console's
+ *                        separate editors made it easy to price a group no user could
+ *                        select, or to offer a group with no ratio at all
+ *   Special ratio rules  GroupGroupRatio, per user group
+ *   Group visibility     group_special_usable_group, per user group
+ *   Auto group order     AutoGroups in the order they are tried, and the two auto settings
+ *
+ * `GroupGroupRatio` is one of the keys whose refusal arrives only AFTER the raw text has
+ * replaced the stored value, so it is validated here before a write.
  */
 
+type GroupTab = 'pricing' | 'overrides' | 'visibility' | 'auto'
+
 type GroupDraft = GroupPricingMaps & {
+  [AUTO_GROUPS_KEY]: string
   DefaultUseAutoGroup: boolean
-  GroupGroupRatio: string
-  'group_ratio_setting.group_special_usable_group': string
+  MaxTokenAutoGroups: number
+  [GROUP_GROUP_RATIO_KEY]: string
+  [GROUP_VISIBILITY_KEY]: string
 }
 
 function toDraft(options: SystemOptionMap | undefined): GroupDraft {
   return {
     [AUTO_GROUPS_KEY]: readOptionString(options, AUTO_GROUPS_KEY, '[]'),
     DefaultUseAutoGroup: readOptionBoolean(options, 'DefaultUseAutoGroup', false),
+    MaxTokenAutoGroups: readOptionNumber(options, 'MaxTokenAutoGroups', 5),
     [GROUP_RATIO_KEY]: readOptionString(options, GROUP_RATIO_KEY, '{}'),
-    'group_ratio_setting.group_special_usable_group': readOptionString(
-      options,
-      'group_ratio_setting.group_special_usable_group',
-      '{}',
-    ),
-    GroupGroupRatio: readOptionString(options, 'GroupGroupRatio', '{}'),
+    [GROUP_VISIBILITY_KEY]: readOptionString(options, GROUP_VISIBILITY_KEY, '{}'),
+    [GROUP_GROUP_RATIO_KEY]: readOptionString(options, GROUP_GROUP_RATIO_KEY, '{}'),
     [TOPUP_GROUP_RATIO_KEY]: readOptionString(options, TOPUP_GROUP_RATIO_KEY, '{}'),
     [USER_USABLE_GROUPS_KEY]: readOptionString(options, USER_USABLE_GROUPS_KEY, '{}'),
   }
@@ -85,6 +101,7 @@ export function GroupPricingSection() {
   const [pendingRemoval, setPendingRemoval] = useState<string | undefined>(undefined)
   const [addOpen, setAddOpen] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
+  const [tab, setTab] = useState<GroupTab>('pricing')
 
   const saved = toDraft(optionsQuery.data)
 
@@ -99,44 +116,64 @@ export function GroupPricingSection() {
         errors[GROUP_RATIO_KEY] = t('“{{group}}” has a negative multiplier. The server rejects a negative group ratio.', { group: badRow.name })
       }
 
-      const nested = checkJsonShape(values.GroupGroupRatio, 'object')
-      if (nested !== undefined) {
-        errors.GroupGroupRatio = nested === 'syntax'
-          ? t('This is not valid JSON.')
-          : t('This must be a JSON object.')
+      if (checkJsonShape(values[GROUP_GROUP_RATIO_KEY], 'object') !== undefined) {
+        errors[GROUP_GROUP_RATIO_KEY] = t('The stored special ratio rules are not a JSON object. Remove and re-add the rules.')
+      } else {
+        const badRule = findGroupOverrideProblem(parseGroupOverrides(values[GROUP_GROUP_RATIO_KEY]))
+        if (badRule !== undefined) {
+          errors[GROUP_GROUP_RATIO_KEY] = t('The ratio for users in “{{userGroup}}” billed as “{{group}}” must be a number that is not negative.', badRule)
+        }
       }
 
-      const special = checkJsonShape(
-        values['group_ratio_setting.group_special_usable_group'],
-        'object',
-      )
-      if (special !== undefined) {
-        errors['group_ratio_setting.group_special_usable_group'] = special === 'syntax'
-          ? t('This is not valid JSON.')
-          : t('This must be a JSON object.')
+      if (checkJsonShape(values[GROUP_VISIBILITY_KEY], 'object') !== undefined) {
+        errors[GROUP_VISIBILITY_KEY] = t('The stored visibility rules are not a JSON object. Remove and re-add the rules.')
+      }
+
+      if (!Number.isInteger(values.MaxTokenAutoGroups) || values.MaxTokenAutoGroups <= 0) {
+        errors.MaxTokenAutoGroups = t('Enter a whole number greater than 0.')
       }
 
       return errors
+    },
+    // A user group left without any rule says nothing, so it is not stored.
+    serialize: {
+      [GROUP_GROUP_RATIO_KEY]: (value) => dropEmptyGroups(String(value)),
+      [GROUP_VISIBILITY_KEY]: (value) => dropEmptyGroups(String(value)),
     },
   })
 
   const rows = useMemo(() => buildGroupRows(form.values), [form.values])
 
+  const registryNames = useMemo(() => rows.map((row) => row.name), [rows])
+  const registryRatios = useMemo(
+    () => Object.fromEntries(rows.flatMap((row) => (row.billingRatio === null ? [] : [[row.name, row.billingRatio]]))),
+    [rows],
+  )
+  const overrides = useMemo(() => parseGroupOverrides(form.values[GROUP_GROUP_RATIO_KEY]), [form.values])
+  const visibility = useMemo(() => parseGroupVisibility(form.values[GROUP_VISIBILITY_KEY]), [form.values])
+  const autoGroups = useMemo(() => parseAutoGroups(form.values[AUTO_GROUPS_KEY]), [form.values])
+
   /**
-   * Writes the four group keys back, but restores the SERVER'S text for any key whose
-   * content did not actually change. Without this, re-serialising all four on every
-   * keystroke would mark keys dirty purely because this console sorts them, and Save
-   * would rewrite settings nobody touched.
+   * Stores one JSON-valued key, but restores the SERVER'S text when its content did not
+   * actually change. Without this, re-serialising a key on every edit would mark it dirty
+   * purely because this console orders or formats it differently, and Save would rewrite
+   * settings nobody touched.
    */
+  type JsonKey = (typeof GROUP_PRICING_KEYS)[number] | typeof AUTO_GROUPS_KEY | typeof GROUP_GROUP_RATIO_KEY | typeof GROUP_VISIBILITY_KEY
+  const setJsonField = useCallback(
+    (key: JsonKey, text: string) => {
+      const value = isSameJson(text, saved[key]) ? saved[key] : text
+      if (value !== form.values[key]) form.setField(key, value)
+    },
+    [form, saved],
+  )
+
   const commitRows = useCallback(
     (nextRows: readonly GroupRow[]) => {
       const next = applyGroupRows(nextRows)
-      for (const key of GROUP_PRICING_KEYS) {
-        const value = isSameJson(next[key], saved[key]) ? saved[key] : next[key]
-        if (value !== form.values[key]) form.setField(key, value)
-      }
+      for (const key of GROUP_PRICING_KEYS) setJsonField(key, next[key])
     },
-    [form, saved],
+    [setJsonField],
   )
 
   const updateRow = useCallback(
@@ -148,6 +185,8 @@ export function GroupPricingSection() {
 
   const removeRow = (name: string) => {
     commitRows(rows.filter((row) => row.name !== name))
+    // A group that is no longer priced cannot be picked by the auto group either.
+    if (autoGroups.includes(name)) setJsonField(AUTO_GROUPS_KEY, stringifyAutoGroups(autoGroups.filter((group) => group !== name)))
     setPendingRemoval(undefined)
   }
 
@@ -241,20 +280,6 @@ export function GroupPricingSection() {
       },
       {
         cell: ({ row }) => (
-          <Checkbox
-            checked={row.original.automatic}
-            disabled={disabled}
-            hideLabel
-            label={t('“{{group}}” is in the automatic group pool', { group: row.original.name })}
-            onCheckedChange={(checked) => updateRow(row.original.name, { automatic: checked })}
-          />
-        ),
-        header: () => t('Automatic'),
-        id: 'automatic',
-        meta: { label: t('Automatic') },
-      },
-      {
-        cell: ({ row }) => (
           <Button
             aria-label={t('Remove group {{group}}', { group: row.original.name })}
             disabled={disabled}
@@ -289,68 +314,91 @@ export function GroupPricingSection() {
       saveMode="section"
       title={t('Group pricing')}
     >
-      <Panel className="overflow-hidden" muted>
-        <DataTable
-          emptyDescription={t('No groups are configured. Every account will bill at the server default multiplier of 1.')}
-          emptyIcon={<LayersIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
-          emptyTitle={t('No group pricing configured')}
-          isLoading={optionsQuery.isPending}
-          label={t('Groups, their multipliers and their visibility')}
-          loadingLabel={t('Loading groups')}
-          minWidthClassName="min-w-[52rem]"
-          table={table}
-        />
-      </Panel>
+      <Tabs onValueChange={(value) => setTab(value as GroupTab)} value={tab}>
+        <Tabs.List label={t('Group settings')}>
+          <Tabs.Tab value="pricing">{t('Pricing groups')}</Tabs.Tab>
+          <Tabs.Tab value="overrides">{t('Special ratio rules')}</Tabs.Tab>
+          <Tabs.Tab value="visibility">{t('Group visibility')}</Tabs.Tab>
+          <Tabs.Tab value="auto">{t('Auto group order')}</Tabs.Tab>
+        </Tabs.List>
 
-      {form.errors[GROUP_RATIO_KEY] ? (
-        <p className="text-xs leading-5 text-destructive" role="alert">
-          {form.errors[GROUP_RATIO_KEY]}
-        </p>
-      ) : null}
+        <Tabs.Panel className="flex flex-col gap-4 pt-4" value="pricing">
+          <Panel className="overflow-hidden" muted>
+            <DataTable
+              emptyDescription={t('No groups are configured. Every account will bill at the server default multiplier of 1.')}
+              emptyIcon={<LayersIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
+              emptyTitle={t('No group pricing configured')}
+              isLoading={optionsQuery.isPending}
+              label={t('Groups, their multipliers and their visibility')}
+              loadingLabel={t('Loading groups')}
+              minWidthClassName="min-w-[46rem]"
+              table={table}
+            />
+          </Panel>
+          <div>
+            <Button disabled={disabled} onClick={() => setAddOpen(true)} size="sm" variant="outline">
+              <PlusIcon aria-hidden="true" />
+              {t('Add a group')}
+            </Button>
+          </div>
+        </Tabs.Panel>
 
-      <div>
-        <Button disabled={disabled} onClick={() => setAddOpen(true)} size="sm" variant="outline">
-          <PlusIcon aria-hidden="true" />
-          {t('Add a group')}
-        </Button>
-      </div>
+        <Tabs.Panel className="pt-4" value="overrides">
+          <GroupOverrideRules
+            disabled={disabled}
+            names={registryNames}
+            onChange={(next) => setJsonField(GROUP_GROUP_RATIO_KEY, stringifyGroupOverrides(next))}
+            overrides={overrides}
+            ratios={registryRatios}
+          />
+        </Tabs.Panel>
 
-      <SwitchRow
-        checked={form.values.DefaultUseAutoGroup}
-        description={t('New API keys start with automatic group selection instead of a fixed group.')}
-        disabled={disabled}
-        label={t('Use the automatic group by default')}
-        onCheckedChange={(checked) => form.setField('DefaultUseAutoGroup', checked)}
-      />
+        <Tabs.Panel className="pt-4" value="visibility">
+          <GroupVisibilityRules
+            disabled={disabled}
+            names={registryNames}
+            onChange={(next) => setJsonField(GROUP_VISIBILITY_KEY, stringifyGroupVisibility(next))}
+            visibility={visibility}
+          />
+        </Tabs.Panel>
 
-      <Textarea
-        description={t('Per-group overrides, as {"user group": {"target group": multiplier}}. An entry here wins over the group’s own billing multiplier when an account in the outer group uses the inner one.')}
-        disabled={disabled}
-        error={form.errors.GroupGroupRatio}
-        label={t('Group-to-group overrides')}
-        onBlur={() => form.setField('GroupGroupRatio', formatJsonForEditor(form.values.GroupGroupRatio))}
-        onChange={(event) => form.setField('GroupGroupRatio', event.target.value)}
-        rows={5}
-        textareaClassName="mono text-xs"
-        value={form.values.GroupGroupRatio}
-      />
+        <Tabs.Panel className="grid gap-6 pt-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]" value="auto">
+          <AutoGroupOrder
+            disabled={disabled}
+            groups={autoGroups}
+            names={registryNames}
+            onChange={(next) => setJsonField(AUTO_GROUPS_KEY, stringifyAutoGroups(next))}
+          />
+          <div className="flex flex-col gap-4 self-start">
+            <SwitchRow
+              checked={form.values.DefaultUseAutoGroup}
+              description={t('New API keys start with automatic group selection instead of a fixed group.')}
+              disabled={disabled}
+              label={t('Use the automatic group by default')}
+              onCheckedChange={(checked) => form.setField('DefaultUseAutoGroup', checked)}
+            />
+            <NumberInput
+              description={t('How many groups a single API key may list for its own auto order.')}
+              disabled={disabled}
+              error={form.errors.MaxTokenAutoGroups}
+              label={t('Maximum custom groups per token')}
+              min={1}
+              onValueChange={(value) => form.setField('MaxTokenAutoGroups', value ?? Number.NaN)}
+              step={1}
+              value={Number.isFinite(form.values.MaxTokenAutoGroups) ? form.values.MaxTokenAutoGroups : ''}
+            />
+          </div>
+        </Tabs.Panel>
+      </Tabs>
 
-      <Textarea
-        description={t('Extra groups a member of one group may also select, as {"group": ["other group"]}. Leave as {} when nobody needs it.')}
-        disabled={disabled}
-        error={form.errors['group_ratio_setting.group_special_usable_group']}
-        label={t('Additional selectable groups')}
-        onBlur={() =>
-          form.setField(
-            'group_ratio_setting.group_special_usable_group',
-            formatJsonForEditor(form.values['group_ratio_setting.group_special_usable_group']),
-          )}
-        onChange={(event) =>
-          form.setField('group_ratio_setting.group_special_usable_group', event.target.value)}
-        rows={4}
-        textareaClassName="mono text-xs"
-        value={form.values['group_ratio_setting.group_special_usable_group']}
-      />
+      {/* A problem is shown whichever tab is open, so a blocked save always says why. */}
+      {[GROUP_RATIO_KEY, GROUP_GROUP_RATIO_KEY, GROUP_VISIBILITY_KEY].map((key) =>
+        form.errors[key as keyof GroupDraft] ? (
+          <p className="text-xs leading-5 text-destructive" key={key} role="alert">
+            {form.errors[key as keyof GroupDraft]}
+          </p>
+        ) : null,
+      )}
 
       <Dialog
         footer={(
@@ -391,7 +439,7 @@ export function GroupPricingSection() {
       <ConfirmDialog
         cancelLabel={t('Cancel')}
         confirmLabel={t('Remove group')}
-        description={t('“{{group}}” loses its billing multiplier, its top-up multiplier, its label and its place in the automatic pool. Nothing is written until you save the section.', { group: pendingRemoval ?? '' })}
+        description={t('“{{group}}” loses its billing multiplier, its top-up multiplier, its label and its place in the auto group order. Rules that name it stay and are marked. Nothing is written until you save the section.', { group: pendingRemoval ?? '' })}
         destructive
         onConfirm={() => {
           if (pendingRemoval !== undefined) removeRow(pendingRemoval)
