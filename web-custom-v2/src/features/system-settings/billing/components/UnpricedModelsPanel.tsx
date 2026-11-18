@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 
 import { toErrorMessage } from '@/components/overlay'
 import { Alert, Button, Panel } from '@/components/ui'
-import type { ModelPricingRow } from '@/features/system-settings/billing/model-pricing'
+import type { ModelPricingEntry } from '@/features/system-settings/billing/model-pricing-api'
 import { enabledModelsQuery, findUnpricedModels } from '@/features/system-settings/billing/unpriced-models'
 
 /**
@@ -24,8 +24,8 @@ import { enabledModelsQuery, findUnpricedModels } from '@/features/system-settin
  */
 
 type UnpricedModelsPanelProps = {
-  /** The rows the pricing table is showing, draft edits included. */
-  rows: readonly ModelPricingRow[]
+  /** The models the pricing table lists, with their effective prices. */
+  entries: readonly ModelPricingEntry[]
   /** Opens the per-model editor with this model's name already fixed. */
   onSetPrice: (model: string) => void
   disabled?: boolean
@@ -36,8 +36,8 @@ export function UnpricedModelsPanel(props: UnpricedModelsPanelProps) {
   const modelsQuery = useQuery(enabledModelsQuery())
 
   const unpriced = useMemo(
-    () => findUnpricedModels(modelsQuery.data ?? [], props.rows),
-    [modelsQuery.data, props.rows],
+    () => findUnpricedModels(modelsQuery.data ?? [], props.entries),
+    [modelsQuery.data, props.entries],
   )
 
   return (

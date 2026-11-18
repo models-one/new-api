@@ -1,7 +1,12 @@
 import { queryOptions } from '@tanstack/react-query'
 
 import { getJson } from '@/lib/api/client'
-import type { ModelPricingRow } from '@/features/system-settings/billing/model-pricing'
+import {
+  BILLING_MODE_KEY,
+  EXPRESSION_MODE,
+  type ModelPricingEntry,
+  type PricingValues,
+} from '@/features/system-settings/billing/model-pricing-api'
 
 /**
  * MODELS THAT ARE LIVE BUT HAVE NO BASE PRICE
@@ -55,19 +60,20 @@ export function enabledModelsQuery() {
  * Mirrors `isBasePricingUnset` in the legacy console: a model is unpriced when it has
  * neither a fixed price nor a model ratio, and is not billed by an expression. The other
  * ratios are multipliers on a base that does not exist, so they do not count as pricing.
+ * The values read are the EFFECTIVE ones, so a built-in price counts as a price.
  */
-export function isBasePriceMissing(row: ModelPricingRow | undefined): boolean {
-  if (row === undefined) return true
-  if (row.mode === 'tiered_expr') return false
-  return row.price === null && row.ratio === null
+export function isBasePriceMissing(values: PricingValues | undefined): boolean {
+  if (values === undefined) return true
+  if (values[BILLING_MODE_KEY] === EXPRESSION_MODE) return false
+  return values.ModelPrice === undefined && values.ModelRatio === undefined
 }
 
 /** Enabled model names with no base price, sorted and de-duplicated. */
 export function findUnpricedModels(
   enabled: readonly string[],
-  rows: readonly ModelPricingRow[],
+  entries: readonly Pick<ModelPricingEntry, 'model_name' | 'configured' | 'effective'>[],
 ): string[] {
-  const byName = new Map(rows.map((row) => [row.name, row]))
+  const byName = new Map(entries.map((entry) => [entry.model_name, entry.effective ?? entry.configured]))
   const unpriced = new Set<string>()
 
   for (const name of enabled) {

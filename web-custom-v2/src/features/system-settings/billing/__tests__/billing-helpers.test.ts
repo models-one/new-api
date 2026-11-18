@@ -16,14 +16,14 @@ import {
   type GroupRow,
 } from '@/features/system-settings/billing/group-pricing'
 import {
-  applyModelEdit,
-  buildModelRows,
-  checkExpression,
-  countTiers,
-  removeModels,
-  toEdit,
-  type ModelPricingMaps,
-} from '@/features/system-settings/billing/model-pricing'
+  draftFromEntry,
+  flatExpression,
+  formatPrice,
+  parseFlatExpression,
+  pricingFromDraft,
+  ratioToUsdPerMillion,
+  samePricing,
+} from '@/features/system-settings/billing/model-pricing-draft'
 import {
   checkJsonShape,
   formatJsonForEditor,
@@ -97,212 +97,95 @@ describe('JSON-valued option helpers', () => {
   })
 })
 
-/** The ten pricing maps, trimmed from the live payload. */
-function pricingMaps(overrides: Partial<ModelPricingMaps> = {}): ModelPricingMaps {
-  return {
-    AudioCompletionRatio: '{}',
-    AudioRatio: '{}',
-    'billing_setting.billing_expr': '{}',
-    'billing_setting.billing_mode': '{}',
-    CacheRatio: '{}',
-    CompletionRatio: '{}',
-    CreateCacheRatio: '{}',
-    ImageRatio: '{}',
-    ModelPrice: '{}',
-    ModelRatio: '{}',
-    ...overrides,
+describe('editing one model’s price', () => {
+  const builtin = {
+    configured: {},
+    effective: { 'billing_setting.billing_expr': 'tier("base", p * 2.5 + c * 15)', 'billing_setting.billing_mode': 'tiered_expr' },
   }
-}
 
-describe('joining the ten pricing maps into one row per model', () => {
-  it('names a model that appears in any one of the maps', () => {
-    const rows = buildModelRows(
-      pricingMaps({
-        AudioRatio: '{"gpt-4o-audio-preview":16}',
-        ModelRatio: '{"BLOOMZ-7B":0.273972602739726}',
-      }),
-    )
-    expect(rows.map((row) => row.name)).toEqual(['BLOOMZ-7B', 'gpt-4o-audio-preview'])
+  it('opens a model billed by a built-in expression on that expression, not on an empty form', () => {
+    const draft = draftFromEntry(builtin)
+    expect(draft.mode).toBe('expression')
+    expect(draft.expression).toBe('tier("base", p * 2.5 + c * 15)')
   })
 
-  it('resolves the three modes in the precedence the gateway itself applies', () => {
-    // relay/helper/price.go: an expression beats a fixed price, which beats the ratios.
-    const rows = buildModelRows(
-      pricingMaps({
-        'billing_setting.billing_expr': '{"claude-4":"tier(\\"base\\", p * 3 + c * 15)"}',
-        'billing_setting.billing_mode': '{"claude-4":"tiered_expr"}',
-        ModelPrice: '{"dall-e-3":0.04,"claude-4":9}',
-        ModelRatio: '{"gpt-4":15,"claude-4":1}',
-      }),
-    )
-    const byName = Object.fromEntries(rows.map((row) => [row.name, row]))
-
-    expect(byName['claude-4'].mode).toBe('tiered_expr')
-    expect(byName['dall-e-3'].mode).toBe('per-request')
-    expect(byName['gpt-4'].mode).toBe('per-token')
+  it('prices a new model with an expression, not a deprecated mode', () => {
+    expect(draftFromEntry(undefined).mode).toBe('expression')
+    expect(draftFromEntry({ configured: {}, effective: {} }).mode).toBe('expression')
   })
 
-  it('flags the ambiguous middle: a fixed price sitting on top of per-token ratios', () => {
-    const rows = buildModelRows(
-      pricingMaps({ CompletionRatio: '{"gpt-4-all":2}', ModelPrice: '{"gpt-4-all":0.1}' }),
-    )
-    expect(rows[0].hasConflict).toBe(true)
-    expect(rows[0].mode).toBe('per-request')
+  it('opens on the stored mode when something is stored, even if a built-in price exists', () => {
+    const draft = draftFromEntry({ configured: { ModelPrice: 0.04 }, effective: { ModelPrice: 0.04 } })
+    expect(draft.mode).toBe('per-request')
+    expect(draft.modelPrice).toBe('0.04')
   })
 
-  it('does not call a model with only ratios a conflict', () => {
-    const rows = buildModelRows(pricingMaps({ ModelRatio: '{"gpt-4":15}' }))
-    expect(rows[0].hasConflict).toBe(false)
+  it('stores an expression with its mode, and keeps legacy ratios so the model can switch back', () => {
+    const draft = { ...draftFromEntry({ configured: { ModelRatio: 1.25, CompletionRatio: 8 } }), expression: 'tier("base", p * 2.5)', mode: 'expression' as const }
+    expect(pricingFromDraft(draft, {}).values).toEqual({
+      'billing_setting.billing_expr': 'tier("base", p * 2.5)',
+      'billing_setting.billing_mode': 'tiered_expr',
+      CompletionRatio: 8,
+      ModelRatio: 1.25,
+    })
   })
 
-  it('keeps “no entry” distinct from a ratio of zero', () => {
-    const rows = buildModelRows(pricingMaps({ ModelPrice: '{"mj_custom_zoom":0}' }))
-    expect(rows[0].price).toBe(0)
-    expect(rows[0].ratio).toBeNull()
+  it('drops the ratios a fixed price per request would ignore', () => {
+    const draft = { ...draftFromEntry({ configured: { ModelRatio: 1.25 } }), mode: 'per-request' as const, modelPrice: '0.02' }
+    expect(pricingFromDraft(draft, {}).values).toEqual({ 'billing_setting.billing_mode': 'ratio', ModelPrice: 0.02 })
   })
 
-  it('hides an expression belonging to a model whose mode is not tiered', () => {
-    // The stored expression outlives a mode change. Showing it would suggest it is in
-    // force when the gateway is ignoring it.
-    const rows = buildModelRows(
-      pricingMaps({
-        'billing_setting.billing_expr': '{"gpt-4":"tier(\\"base\\", p * 1)"}',
-        ModelRatio: '{"gpt-4":15}',
-      }),
-    )
-    expect(rows[0].mode).toBe('per-token')
-    expect(rows[0].expr).toBe('')
+  it('carries the stored plugin prices over, because a save replaces the model’s pricing as a whole', () => {
+    const configured = { 'billing_setting.plugin_billing_expr': { kling: 'tier("base", u("units") * 0.14)' }, ModelRatio: 1 }
+    const draft = { ...draftFromEntry({ configured }), ratios: { ...draftFromEntry({ configured }).ratios, ModelRatio: '2' } }
+    expect(pricingFromDraft(draft, configured).values).toEqual({
+      'billing_setting.billing_mode': 'ratio',
+      'billing_setting.plugin_billing_expr': { kling: 'tier("base", u("units") * 0.14)' },
+      ModelRatio: 2,
+    })
+  })
+
+  it('names the field that blocks a save', () => {
+    const base = draftFromEntry(undefined)
+    expect(pricingFromDraft({ ...base, mode: 'expression', expression: '  ' }, {}).problem).toEqual({ field: 'expression', reason: 'empty' })
+    expect(pricingFromDraft({ ...base, mode: 'per-token' }, {}).problem).toEqual({ field: 'ModelRatio', reason: 'empty' })
+    // A negative price would turn a charge into a credit.
+    expect(pricingFromDraft({ ...base, mode: 'per-request', modelPrice: '-1' }, {}).problem).toEqual({ field: 'modelPrice', reason: 'invalid' })
+    expect(pricingFromDraft({ ...base, ratios: { ...base.ratios, ModelRatio: '1', CacheRatio: 'abc' } }, {}).problem).toEqual({ field: 'CacheRatio', reason: 'invalid' })
+  })
+
+  it('compares prices by content, so reordered keys are not a change', () => {
+    expect(samePricing({ CompletionRatio: 2, ModelRatio: 1 }, { ModelRatio: 1, CompletionRatio: 2 })).toBe(true)
+    expect(samePricing({ ModelRatio: 1 }, { ModelRatio: 1.5 })).toBe(false)
   })
 })
 
-describe('folding an edited model back into the ten maps', () => {
-  it('clears the keys the chosen mode does not use, so a stale price cannot keep billing', () => {
-    // This is the mispricing guard. relay/helper/price.go prefers a fixed ModelPrice over
-    // every ratio, so leaving one behind when the operator picks per-token would keep the
-    // model billed per request while the UI showed ratios.
-    const before = pricingMaps({
-      CompletionRatio: '{"gpt-4":2}',
-      ModelPrice: '{"gpt-4":0.5}',
-      ModelRatio: '{"gpt-4":15}',
-    })
-
-    const after = applyModelEdit(before, {
-      ...toEdit(buildModelRows(before)[0]),
-      completionRatio: 2,
-      mode: 'per-token',
-      ratio: 15,
-    })
-
-    expect(parseNumberMap(after.ModelPrice)).toEqual({})
-    expect(parseNumberMap(after.ModelRatio)).toEqual({ 'gpt-4': 15 })
-    expect(buildModelRows(after)[0].mode).toBe('per-token')
+describe('flat token prices as an expression', () => {
+  it('writes and reads the one-tier shape most models need', () => {
+    const expression = flatExpression({ cacheRead: '0.25', input: '2.5', output: '15' })
+    expect(expression).toBe('tier("base", p * 2.5 + c * 15 + cr * 0.25)')
+    expect(parseFlatExpression(expression ?? '')).toEqual({ cacheRead: '0.25', input: '2.5', output: '15' })
+    expect(flatExpression({ cacheRead: '', input: '1', output: '4' })).toBe('tier("base", p * 1 + c * 4)')
   })
 
-  it('clears every ratio when the operator switches a model to a flat per-request price', () => {
-    const before = pricingMaps({ CacheRatio: '{"gpt-4":0.1}', ModelRatio: '{"gpt-4":15}' })
-
-    const after = applyModelEdit(before, {
-      ...toEdit(buildModelRows(before)[0]),
-      mode: 'per-request',
-      price: 0.04,
-    })
-
-    expect(parseNumberMap(after.ModelRatio)).toEqual({})
-    expect(parseNumberMap(after.CacheRatio)).toEqual({})
-    expect(parseNumberMap(after.ModelPrice)).toEqual({ 'gpt-4': 0.04 })
+  it('leaves anything with tiers, conditions, rules or other variables to the text editor', () => {
+    expect(parseFlatExpression('len <= 200000 ? tier("short", p * 3 + c * 15) : tier("long", p * 6 + c * 22.5)')).toBeNull()
+    expect(parseFlatExpression('tier("base", p * 5 + c * 25)|||when(header("x") has "y") * 6')).toBeNull()
+    expect(parseFlatExpression('tier("base", p * 2 + c * 8 + img * 2.5)')).toBeNull()
+    expect(parseFlatExpression('tier("request", fixed(0.01))')).toBeNull()
   })
 
-  it('clears the ratios and the price when the model moves to an expression', () => {
-    const before = pricingMaps({ ModelPrice: '{"gpt-4":0.5}', ModelRatio: '{"gpt-4":15}' })
-
-    const after = applyModelEdit(before, {
-      ...toEdit(buildModelRows(before)[0]),
-      expr: 'tier("base", p * 3 + c * 15)',
-      mode: 'tiered_expr',
-    })
-
-    expect(parseNumberMap(after.ModelPrice)).toEqual({})
-    expect(parseNumberMap(after.ModelRatio)).toEqual({})
-    expect(parseStringMap(after['billing_setting.billing_mode'])).toEqual({ 'gpt-4': 'tiered_expr' })
-    expect(parseStringMap(after['billing_setting.billing_expr'])).toEqual({
-      'gpt-4': 'tier("base", p * 3 + c * 15)',
-    })
+  it('needs both an input and an output price', () => {
+    expect(flatExpression({ cacheRead: '', input: '2', output: '' })).toBeNull()
+    expect(flatExpression({ cacheRead: '', input: 'x', output: '1' })).toBeNull()
   })
 
-  it('leaves every other model alone', () => {
-    const before = pricingMaps({ ModelRatio: '{"gpt-4":15,"gpt-3.5":1}' })
-    const target = buildModelRows(before).find((row) => row.name === 'gpt-4')
-    expect(target).toBeDefined()
-    if (target === undefined) return
-
-    const after = applyModelEdit(before, { ...toEdit(target), ratio: 30 })
-    expect(parseNumberMap(after.ModelRatio)).toEqual({ 'gpt-3.5': 1, 'gpt-4': 30 })
-  })
-
-  it('refuses a blank model name rather than writing an empty-string key', () => {
-    const before = pricingMaps({ ModelRatio: '{"gpt-4":15}' })
-    expect(applyModelEdit(before, { ...toEdit(buildModelRows(before)[0]), name: '   ' })).toBe(before)
-  })
-
-  it('removes every trace of a model from all ten maps', () => {
-    const before = pricingMaps({
-      'billing_setting.billing_expr': '{"a":"tier(\\"x\\", p)"}',
-      'billing_setting.billing_mode': '{"a":"tiered_expr"}',
-      CacheRatio: '{"a":0.1,"b":0.2}',
-      ModelRatio: '{"a":1,"b":2}',
-    })
-
-    const after = removeModels(before, ['a'])
-
-    expect(buildModelRows(after).map((row) => row.name)).toEqual(['b'])
-    expect(parseStringMap(after['billing_setting.billing_mode'])).toEqual({})
-    expect(parseStringMap(after['billing_setting.billing_expr'])).toEqual({})
-    expect(parseNumberMap(after.CacheRatio)).toEqual({ b: 0.2 })
-  })
-
-  it('is a no-op when nothing is selected', () => {
-    const before = pricingMaps({ ModelRatio: '{"a":1}' })
-    expect(removeModels(before, [])).toBe(before)
-  })
-})
-
-describe('the billing-expression structural check', () => {
-  // PUT /api/option/ does not validate billing_setting.billing_expr at all — verified
-  // live, the literal text "not json at all" was accepted and stored. These checks are
-  // the only thing between a typo and mispriced live traffic, and they are deliberately
-  // structural rather than pretending to be the compiler in pkg/billingexpr.
-  it('accepts the multi-tier form documented in pkg/billingexpr/expr.md', () => {
-    const expr = [
-      'len <= 200000',
-      '  ? tier("standard", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6)',
-      '  : tier("long_context", p * 6 + c * 22.5 + cr * 0.6 + cc * 7.5 + cc1h * 12)',
-    ].join('\n')
-    expect(checkExpression(expr)).toBeUndefined()
-    expect(countTiers(expr)).toBe(2)
-  })
-
-  it('accepts a request-rule expression appended after the ||| separator', () => {
-    expect(
-      checkExpression('tier("base", p * 5 + c * 25)|||when(header("anthropic-beta") has "fast-mode") * 6'),
-    ).toBeUndefined()
-  })
-
-  it('rejects an empty expression, which the server would store and then fail on at bill time', () => {
-    expect(checkExpression('   ')).toBe('empty')
-  })
-
-  it('rejects unbalanced brackets and an unterminated string', () => {
-    expect(checkExpression('tier("base", p * 3')).toBe('unbalanced')
-    expect(checkExpression('tier("base", p * 3))')).toBe('unbalanced')
-    expect(checkExpression('tier("base, p * 3)')).toBe('unbalanced')
-  })
-
-  it('does not count a bracket that lives inside a string literal', () => {
-    expect(checkExpression('tier("base)", p * 3)')).toBeUndefined()
-  })
-
-  it('rejects an expression with no tier() wrapper, because the matched tier is logged', () => {
-    expect(checkExpression('p * 3 + c * 15')).toBe('no-tier')
+  it('shows a legacy ratio in USD per 1M tokens at the deployment’s quota unit', () => {
+    // A model ratio of 1 is $2 per 1M input tokens at the default 500,000 quota per dollar.
+    expect(formatPrice(ratioToUsdPerMillion(1, 500_000))).toBe('2')
+    expect(formatPrice(ratioToUsdPerMillion(0.075, 500_000))).toBe('0.15')
+    // A ratio converted from another currency is shown to six significant digits.
+    expect(formatPrice(ratioToUsdPerMillion(0.273972602739726, 500_000))).toBe('0.547945')
   })
 })
 
@@ -531,45 +414,38 @@ describe('reading the payment compliance record', () => {
 })
 
 describe('finding servable models that have no base price', () => {
-  const maps: ModelPricingMaps = {
-    AudioCompletionRatio: '{}',
-    AudioRatio: '{}',
-    'billing_setting.billing_expr': '{"tiered-model":"tier(\\"base\\", p * 3)"}',
-    'billing_setting.billing_mode': '{"tiered-model":"tiered_expr"}',
-    CacheRatio: '{"cache-only-model":0.1}',
-    CompletionRatio: '{}',
-    CreateCacheRatio: '{}',
-    ImageRatio: '{}',
-    ModelPrice: '{"priced-model":0.04}',
-    ModelRatio: '{"ratio-model":15}',
-  }
+  const entry = (model_name: string, effective: Record<string, unknown>) => ({ configured: {}, effective, model_name })
+  const entries = [
+    entry('priced-model', { ModelPrice: 0.04 }),
+    entry('ratio-model', { ModelRatio: 15 }),
+    entry('tiered-model', { 'billing_setting.billing_expr': 'tier("base", p * 3)', 'billing_setting.billing_mode': 'tiered_expr' }),
+    entry('cache-only-model', { CacheRatio: 0.1 }),
+  ]
 
-  const rows = buildModelRows(maps)
-
-  it('counts a fixed price, a model ratio and an expression as priced', () => {
-    expect(findUnpricedModels(['priced-model', 'ratio-model', 'tiered-model'], rows)).toEqual([])
+  it('counts a fixed price, a model ratio and an expression as priced, built-in ones included', () => {
+    expect(findUnpricedModels(['priced-model', 'ratio-model', 'tiered-model'], entries)).toEqual([])
   })
 
   it('does not accept a cache ratio as pricing, because it multiplies a base that is missing', () => {
     // relay/helper/price.go refuses the request outright when GetModelRatio misses; the
     // other ratios never come into it.
-    expect(findUnpricedModels(['cache-only-model'], rows)).toEqual(['cache-only-model'])
+    expect(findUnpricedModels(['cache-only-model'], entries)).toEqual(['cache-only-model'])
   })
 
-  it('lists a servable model that the pricing keys have never heard of', () => {
-    expect(findUnpricedModels(['brand-new-model'], rows)).toEqual(['brand-new-model'])
+  it('lists a servable model that the pricing has never heard of', () => {
+    expect(findUnpricedModels(['brand-new-model'], entries)).toEqual(['brand-new-model'])
   })
 
   it('sorts and de-duplicates, because a name can be served by several channels', () => {
-    expect(findUnpricedModels(['zeta', 'alpha', 'zeta'], rows)).toEqual(['alpha', 'zeta'])
+    expect(findUnpricedModels(['zeta', 'alpha', 'zeta'], entries)).toEqual(['alpha', 'zeta'])
   })
 
-  it('treats an absent row as missing rather than throwing', () => {
+  it('treats an absent entry as missing rather than throwing', () => {
     expect(isBasePriceMissing(undefined)).toBe(true)
   })
 
   it('ignores a model that is priced but not servable', () => {
     // The pricing table can hold a model no channel offers. That is not an incident.
-    expect(findUnpricedModels([], rows)).toEqual([])
+    expect(findUnpricedModels([], entries)).toEqual([])
   })
 })

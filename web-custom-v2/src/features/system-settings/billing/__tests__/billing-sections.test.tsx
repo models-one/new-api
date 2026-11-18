@@ -123,6 +123,10 @@ type ServerState = {
   enabledModels: string[] | null
   /** That endpoint sits behind channel:read, which root can be missing. */
   enabledModelsFails: boolean
+  /** Models priced only by a built-in price: nothing stored, an effective price reported. */
+  builtin: Record<string, Record<string, unknown>>
+  /** Bumped on every stored change of a model; the version a save must match. */
+  revisions: Record<string, number>
 }
 
 let server: ServerState
@@ -174,6 +178,8 @@ beforeEach(() => {
     refuse: {},
     stored: { ...seeded },
     topUpFails: false,
+    builtin: {},
+    revisions: {},
   }
 
   get.mockReset()
@@ -192,25 +198,12 @@ beforeEach(() => {
         },
       })
     }
-    if (url.startsWith('/api/option/model_pricing?')) {
-      // Stored values only, as `model.GetModelPricingSnapshot` reports `configured`.
-      const names = new URLSearchParams(url.split('?')[1]).getAll('model')
-      const entries = names.map((name) => {
-        const configured: Record<string, unknown> = {}
-        for (const key of PRICING_KEYS) {
-          const map = JSON.parse(server.stored[key] ?? '{}') as Record<string, unknown>
-          if (name in map) configured[key] = map[name]
-        }
-        const pluginPrices = JSON.parse(server.stored['billing_setting.plugin_billing_expr'] ?? '{}') as Record<string, string>
-        const variants = Object.fromEntries(
-          Object.entries(pluginPrices)
-            .filter(([key]) => key.endsWith(`::${name}`))
-            .map(([key, expr]) => [key.split('::')[0], expr]),
-        )
-        if (Object.keys(variants).length > 0) configured['billing_setting.plugin_billing_expr'] = variants
-        return { model_name: name, version: `v-${name}`, configured }
+    if (url === '/api/option/model_pricing' || url.startsWith('/api/option/model_pricing?')) {
+      const query = url.includes('?') ? new URLSearchParams(url.split('?')[1]).getAll('model') : null
+      const names = query ?? storedModelNames()
+      return Promise.resolve({
+        data: { data: { empty_version: 'v0', entries: names.map(pricingEntry) }, message: '', success: true },
       })
-      return Promise.resolve({ data: { data: { entries }, message: '', success: true } })
     }
     if (url === '/api/status') {
       return Promise.resolve({
@@ -275,13 +268,29 @@ beforeEach(() => {
 
   patch.mockImplementation((url: string, body: { changes: PricingChange[] }) => {
     if (url !== '/api/option/model_pricing') throw new Error(`unmocked PATCH ${url}`)
+    // All or nothing, as `model.UpdateModelPricing` checks every version before writing.
+    if (body.changes.some((change) => change.expected_version !== versionOf(change.model_name))) {
+      return Promise.reject(
+        Object.assign(new Error('Request failed with status code 409'), {
+          isAxiosError: true,
+          response: { data: { message: 'model pricing changed', success: false }, status: 409 },
+        }),
+      )
+    }
     for (const change of body.changes) {
-      for (const key of PRICING_KEYS) {
+      for (const key of [...PRICING_KEYS, PLUGIN_KEY]) {
         const map = JSON.parse(server.stored[key] ?? '{}') as Record<string, unknown>
-        delete map[change.model_name]
-        if (key in change.pricing) map[change.model_name] = change.pricing[key]
+        if (key === PLUGIN_KEY) {
+          for (const stored of Object.keys(map)) if (stored.endsWith(`::${change.model_name}`)) delete map[stored]
+          const plugins = (change.pricing[PLUGIN_KEY] ?? {}) as Record<string, string>
+          for (const [plugin, expr] of Object.entries(plugins)) map[`${plugin}::${change.model_name}`] = expr
+        } else {
+          delete map[change.model_name]
+          if (key in change.pricing) map[change.model_name] = change.pricing[key]
+        }
         server.stored[key] = JSON.stringify(map)
       }
+      server.revisions[change.model_name] = (server.revisions[change.model_name] ?? 0) + 1
     }
     return Promise.resolve({ data: { data: {}, message: '', success: true } })
   })
@@ -293,7 +302,52 @@ const PRICING_KEYS = [
   'billing_setting.billing_mode', 'billing_setting.billing_expr',
 ]
 
-type PricingChange = { model_name: string; expected_version: string; pricing: Record<string, unknown> }
+const PLUGIN_KEY = 'billing_setting.plugin_billing_expr'
+
+type PricingChange = { model_name: string; expected_version: string; pricing: Record<string, unknown>; reset?: boolean }
+
+function versionOf(name: string): string {
+  return `v${server.revisions[name] ?? 0}`
+}
+
+/** Every model with a stored price, then the built-in ones, in name order like the server. */
+function storedModelNames(): string[] {
+  const names = new Set<string>(Object.keys(server.builtin))
+  for (const key of PRICING_KEYS) {
+    for (const name of Object.keys(JSON.parse(server.stored[key] ?? '{}') as Record<string, unknown>)) names.add(name)
+  }
+  return [...names].sort()
+}
+
+/** One entry of `model.GetModelPricingSnapshot`: stored values, plus the effective price. */
+function pricingEntry(name: string) {
+  const configured: Record<string, unknown> = {}
+  for (const key of PRICING_KEYS) {
+    const map = JSON.parse(server.stored[key] ?? '{}') as Record<string, unknown>
+    if (name in map) configured[key] = map[name]
+  }
+  const pluginPrices = JSON.parse(server.stored[PLUGIN_KEY] ?? '{}') as Record<string, string>
+  const variants = Object.fromEntries(
+    Object.entries(pluginPrices)
+      .filter(([key]) => key.endsWith(`::${name}`))
+      .map(([key, expr]) => [key.split('::')[0], expr]),
+  )
+  if (Object.keys(variants).length > 0) configured[PLUGIN_KEY] = variants
+  const priced = Object.keys(configured).some((key) => key !== PLUGIN_KEY)
+  return {
+    configured,
+    effective: priced ? configured : (server.builtin[name] ?? configured),
+    model_name: name,
+    plugin_variants: Object.entries(variants).map(([plugin, expr]) => ({
+      compatible: true,
+      configured: expr,
+      effective: expr,
+      plugin_key: plugin,
+      plugin_name: plugin,
+    })),
+    version: versionOf(name),
+  }
+}
 
 function pricingChanges(): PricingChange[] {
   return patch.mock.calls.flatMap((call) => (call[1] as { changes: PricingChange[] }).changes)
@@ -527,96 +581,194 @@ describe('CheckinSection', () => {
 })
 
 describe('ModelPricingSection', () => {
-  it('joins the ten maps into one row per model and names the mode in force', async () => {
+  /** Opens the per-model editor from the table and returns the dialog. */
+  async function openEditor(model: string) {
+    const button = await screen.findByRole('button', { name: `Edit pricing for ${model}` })
+    fireEvent.click(button)
+    return screen.findByRole('dialog')
+  }
+
+  it('lists every priced model with the price it is actually charged', async () => {
+    server.builtin['claude-x'] = {
+      'billing_setting.billing_expr': 'tier("base", p * 3 + c * 15)',
+      'billing_setting.billing_mode': 'tiered_expr',
+    }
     renderSection(<ModelPricingSection />)
 
     const table = await screen.findByRole('table', { name: 'Configured model prices' })
     await waitFor(() => expect(within(table).getByText('dall-e-3')).toBeInTheDocument())
-    expect(within(table).getByText('gpt-4-all')).toBeInTheDocument()
-    expect(within(table).getByText('gpt-image-1')).toBeInTheDocument()
-    expect(within(table).getByText('gpt-4o-audio-preview')).toBeInTheDocument()
-    // dall-e-3 is the only model with a fixed ModelPrice, so it is the only per-request row.
-    expect(within(table).getAllByText('Per request')).toHaveLength(1)
+    // ModelRatio 15 at a quota unit of 500000 is $30 per 1M input tokens; CompletionRatio 2 doubles it.
+    expect(within(table).getByText('Input $30 · Output $60 per 1M tokens')).toBeInTheDocument()
+    expect(within(table).getByText('$0.04 per request')).toBeInTheDocument()
+    // A model priced only by a built-in expression is listed, and says so.
+    const builtin = within(table).getByText('claude-x').closest('tr') as HTMLElement
+    expect(within(builtin).getByText('Built-in or default price')).toBeInTheDocument()
+    expect(within(builtin).getByText(/\$3/)).toBeInTheDocument()
+    // Only the legacy modes are marked deprecated.
+    expect(within(builtin).queryByText('Deprecated')).not.toBeInTheDocument()
+    const legacy = within(table).getByText('gpt-4-all').closest('tr') as HTMLElement
+    expect(within(legacy).getByText('Deprecated')).toBeInTheDocument()
   })
 
-  it('warns that a fixed price is silently beating the ratios it sits next to', async () => {
-    server.stored.ModelPrice = '{"gpt-4-all":0.1}'
+  it('saves one model through the per-model endpoint, against the version it read', async () => {
     renderSection(<ModelPricingSection />)
+    const dialog = await openEditor('gpt-4-all')
 
-    expect(await screen.findByText(/model\(s\) have overlapping pricing/)).toBeInTheDocument()
-  })
+    fireEvent.change(within(dialog).getByLabelText('Model ratio'), { target: { value: '30' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
 
-  it('blocks a save on a malformed blob, for the keys whose refusal corrupts the value', async () => {
-    // ModelRatio is refused only AFTER the raw text has replaced the stored value, so an
-    // unchecked write of "not json" destroys the price table it failed to change.
-    renderSection(<ModelPricingSection />)
-    fireEvent.click(await screen.findByText('Edit the raw pricing keys'))
-    await settled('ModelRatio')
-
-    fireEvent.change(screen.getByLabelText('ModelRatio'), { target: { value: 'not json' } })
-    await save()
-
-    // Twice: against the field itself, and in the section-level notice that names which
-    // key is blocking — the raw blobs sit inside a collapsed panel, so the field's own
-    // message can be off screen when the save silently refuses to run.
-    expect(await screen.findAllByText('This is not valid JSON.')).toHaveLength(2)
-    expect(screen.getByText('Raw pricing keys · ModelRatio')).toBeInTheDocument()
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0]).toEqual({
+      expected_version: 'v0',
+      model_name: 'gpt-4-all',
+      pricing: { 'billing_setting.billing_mode': 'ratio', CompletionRatio: 2, ModelRatio: 30 },
+    })
+    // The whole-map PUT is never used for pricing.
     expect(writes()).toHaveLength(0)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
-  it('names the blocking key even when the raw editor was left collapsed', async () => {
-    // The blob is edited with the panel open, then the operator collapses it and saves.
-    // Without the notice the console would appear to ignore the button entirely.
+  it('keeps a model’s per-plugin prices, which the server would otherwise drop', async () => {
+    server.stored[PLUGIN_KEY] = '{"acme::gpt-4-all":"p * 3"}'
     renderSection(<ModelPricingSection />)
-    const summary = await screen.findByText('Edit the raw pricing keys')
-    fireEvent.click(summary)
-    await settled('ModelRatio')
+    const dialog = await openEditor('gpt-4-all')
 
-    fireEvent.change(screen.getByLabelText('ModelRatio'), { target: { value: 'not json' } })
-    fireEvent.click(summary)
-    await save()
+    fireEvent.change(within(dialog).getByLabelText('Model ratio'), { target: { value: '30' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
 
-    expect(screen.getByText('Raw pricing keys · ModelRatio')).toBeInTheDocument()
-    expect(screen.getByText(/Save is blocked by/)).toBeInTheDocument()
-    expect(writes()).toHaveLength(0)
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0].pricing[PLUGIN_KEY]).toEqual({ acme: 'p * 3' })
   })
 
-  it('blocks a ratio blob whose entries are not numbers', async () => {
+  it('never stores a built-in price it was only shown', async () => {
+    server.builtin['claude-x'] = {
+      'billing_setting.billing_expr': 'tier("base", p * 3 + c * 15)',
+      'billing_setting.billing_mode': 'tiered_expr',
+    }
     renderSection(<ModelPricingSection />)
-    fireEvent.click(await screen.findByText('Edit the raw pricing keys'))
-    await settled('ModelRatio')
+    const dialog = await openEditor('claude-x')
 
-    fireEvent.change(screen.getByLabelText('ModelRatio'), { target: { value: '{"gpt-4":"fifteen"}' } })
-    await save()
+    // It opens on the built-in expression, as simple prices, with nothing to save.
+    expect(within(dialog).getByLabelText('Input (USD / 1M tokens)')).toHaveValue(3)
+    const saveButton = within(dialog).getByRole('button', { name: 'Save' })
+    expect(saveButton).toBeDisabled()
 
-    expect(
-      await screen.findAllByText('Every entry must be a model name mapped to a number.'),
-    ).toHaveLength(2)
-    expect(writes()).toHaveLength(0)
+    fireEvent.change(within(dialog).getByLabelText('Input (USD / 1M tokens)'), { target: { value: '2.5' } })
+    expect(saveButton).toBeEnabled()
+    fireEvent.click(saveButton)
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0].pricing).toEqual({
+      'billing_setting.billing_expr': 'tier("base", p * 2.5 + c * 15)',
+      'billing_setting.billing_mode': 'tiered_expr',
+    })
+  })
+
+  it('refuses a negative price before the server sees it', async () => {
+    renderSection(<ModelPricingSection />)
+    const dialog = await openEditor('dall-e-3')
+
+    fireEvent.change(within(dialog).getByLabelText('Price per request (USD)'), { target: { value: '-1' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    expect(await within(dialog).findByText('Enter a finite, non-negative price')).toBeInTheDocument()
+    expect(patch).not.toHaveBeenCalled()
+  })
+
+  it('says the price was changed elsewhere instead of overwriting it', async () => {
+    renderSection(<ModelPricingSection />)
+    const dialog = await openEditor('gpt-4-all')
+    // Someone saves the model after this console read it.
+    server.revisions['gpt-4-all'] = 1
+
+    fireEvent.change(within(dialog).getByLabelText('Model ratio'), { target: { value: '30' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    expect(await within(dialog).findByText('This price was changed elsewhere')).toBeInTheDocument()
+    expect(JSON.parse(server.stored.ModelRatio)).toEqual({ 'gpt-4-all': 15 })
+  })
+
+  it('converts a legacy price to the same price as an expression', async () => {
+    post.mockImplementation((url: string) => {
+      if (url !== '/api/option/model_pricing/convert') throw new Error(`unmocked POST ${url}`)
+      return Promise.resolve({
+        data: { data: { expression: 'tier("base", p * 30 + c * 60)' }, message: '', success: true },
+      })
+    })
+    renderSection(<ModelPricingSection />)
+    const dialog = await openEditor('gpt-4-all')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Convert to expression' }))
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Use this expression' }))
+
+    expect(within(dialog).getByLabelText('Input (USD / 1M tokens)')).toHaveValue(30)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    // The ratios stay stored, so the model can be switched back.
+    expect(pricingChanges()[0].pricing).toEqual({
+      'billing_setting.billing_expr': 'tier("base", p * 30 + c * 60)',
+      'billing_setting.billing_mode': 'tiered_expr',
+      CompletionRatio: 2,
+      ModelRatio: 15,
+    })
+  })
+
+  it('restores the selected models to their default price against fresh versions', async () => {
+    renderSection(<ModelPricingSection />)
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Select gpt-4-all' }))
+    // Changed after the list was read; the restore reads the version again.
+    server.revisions['gpt-4-all'] = 3
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restore default price for 1 selected' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore default price' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0]).toEqual({ expected_version: 'v3', model_name: 'gpt-4-all', pricing: {}, reset: true })
+    // It leaves the table; with no built-in price it is now listed as unpriced instead.
+    const table = screen.getByRole('table', { name: 'Configured model prices' })
+    await waitFor(() => expect(within(table).queryByText('gpt-4-all')).not.toBeInTheDocument())
+    expect(await screen.findByRole('button', { name: 'Set a price for gpt-4-all' })).toBeInTheDocument()
+  })
+
+  it('does not offer to restore a model that has nothing stored', async () => {
+    server.builtin['claude-x'] = { ModelRatio: 1 }
+    renderSection(<ModelPricingSection />)
+
+    expect(await screen.findByRole('checkbox', { name: 'Select claude-x' })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('checkbox', { name: 'Select gpt-4-all' })).not.toHaveAttribute('aria-disabled')
   })
 
   it('names a servable model that nothing prices, and says what the gateway does about it', async () => {
-    // dall-e-3 has a fixed ModelPrice and gpt-4-all a ModelRatio, so neither is unpriced;
-    // a third live model with no entry anywhere is the one that matters.
-    server.enabledModels = ['gpt-4-all', 'dall-e-3', 'gpt-5-preview']
+    // A built-in price counts: claude-x is priced although nothing is stored for it.
+    server.builtin['claude-x'] = { ModelRatio: 1 }
+    server.enabledModels = ['gpt-4-all', 'dall-e-3', 'claude-x', 'gpt-5-preview']
     renderSection(<ModelPricingSection />)
 
-    expect(await screen.findByText('gpt-5-preview')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Set a price for gpt-5-preview' })).toBeInTheDocument()
     expect(screen.getByText(/A request for one of them is refused/)).toBeInTheDocument()
-    expect(screen.queryByText(/All 3 servable model/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Set a price for claude-x' })).not.toBeInTheDocument()
   })
 
-  it('opens the editor with the servable model’s own name, not a blank row', async () => {
+  it('opens the editor with the servable model’s own name, not a blank one', async () => {
     server.enabledModels = ['gpt-5-preview']
     renderSection(<ModelPricingSection />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Set a price for gpt-5-preview' }))
 
-    // The label carries the required marker, so it reads "Model*" rather than "Model".
-    const name = await screen.findByLabelText(/^Model\*$/)
+    const dialog = await screen.findByRole('dialog')
+    const name = within(dialog).getByLabelText(/^Model name/)
     expect(name).toHaveValue('gpt-5-preview')
     // The gateway supplied the name, so it must not be retypeable into a different one.
     expect(name).toBeDisabled()
+
+    fireEvent.change(within(dialog).getByLabelText('Input (USD / 1M tokens)'), { target: { value: '1' } })
+    fireEvent.change(within(dialog).getByLabelText('Output (USD / 1M tokens)'), { target: { value: '4' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0]).toMatchObject({ expected_version: 'v0', model_name: 'gpt-5-preview' })
   })
 
   it('says everything is priced rather than showing an empty list', async () => {
@@ -642,7 +794,7 @@ describe('ModelPricingSection', () => {
     renderSection(<ModelPricingSection />)
 
     expect(await screen.findByText('no permission for channel')).toBeInTheDocument()
-    expect(screen.getByText('dall-e-3')).toBeInTheDocument()
+    expect(await screen.findByText('dall-e-3')).toBeInTheDocument()
   })
 
   it('sorts the whole model list, not just the twenty rows on screen', async () => {
@@ -654,6 +806,8 @@ describe('ModelPricingSection', () => {
       many[`model-${String(index).padStart(2, '0')}`] = index
     }
     server.stored.ModelRatio = JSON.stringify(many)
+    server.stored.ModelPrice = '{}'
+    server.stored.CompletionRatio = '{}'
 
     renderSection(<ModelPricingSection />)
     expect(await screen.findByText('model-01')).toBeInTheDocument()
@@ -666,52 +820,15 @@ describe('ModelPricingSection', () => {
     expect(screen.queryByText('model-01')).not.toBeInTheDocument()
   })
 
-  it('writes only the model that changed, through the per-model endpoint', async () => {
+  it('refuses tool prices that are not a JSON object', async () => {
     renderSection(<ModelPricingSection />)
-    fireEvent.click(await screen.findByText('Edit the raw pricing keys'))
-    await settled('ModelRatio')
+    await settled('Tool prices')
 
-    fireEvent.change(screen.getByLabelText('ModelRatio'), { target: { value: '{"gpt-4-all":30}' } })
+    fireEvent.change(screen.getByLabelText('Tool prices'), { target: { value: 'not json' } })
     await save()
 
-    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
-    expect(pricingChanges()[0]).toEqual({
-      model_name: 'gpt-4-all',
-      expected_version: 'v-gpt-4-all',
-      pricing: { ModelRatio: 30, CompletionRatio: 2 },
-    })
-    // The whole-map PUT is never used for pricing.
+    expect(await screen.findAllByText('This is not valid JSON.')).not.toHaveLength(0)
     expect(writes()).toHaveLength(0)
-  })
-
-  it('keeps a model’s per-plugin prices, which this editor does not show', async () => {
-    server.stored['billing_setting.plugin_billing_expr'] = '{"acme::gpt-4-all":"p * 3"}'
-    renderSection(<ModelPricingSection />)
-    fireEvent.click(await screen.findByText('Edit the raw pricing keys'))
-    await settled('ModelRatio')
-
-    fireEvent.change(screen.getByLabelText('ModelRatio'), { target: { value: '{"gpt-4-all":30}' } })
-    await save()
-
-    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
-    expect(pricingChanges()[0].pricing['billing_setting.plugin_billing_expr']).toEqual({ acme: 'p * 3' })
-  })
-
-  it('never stores a built-in expression it was only shown', async () => {
-    // GET /api/option/ reports billing_expr with the built-in expressions merged in. A
-    // whole-map write would store them as administrator overrides; only the edited model
-    // may be written.
-    server.stored['billing_setting.billing_mode'] = '{"builtin-model":"tiered_expr"}'
-    server.stored['billing_setting.billing_expr'] = '{"builtin-model":"p * 2"}'
-    renderSection(<ModelPricingSection />)
-    fireEvent.click(await screen.findByText('Edit the raw pricing keys'))
-    await settled('ModelRatio')
-
-    fireEvent.change(screen.getByLabelText('ModelRatio'), { target: { value: '{"gpt-4-all":30}' } })
-    await save()
-
-    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
-    expect(pricingChanges().map((change) => change.model_name)).toEqual(['gpt-4-all'])
   })
 
   it('gates the server-side ratio reset behind typing the key name', async () => {
