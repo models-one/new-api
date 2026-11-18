@@ -732,6 +732,7 @@
     "Array of chat client presets. Each item is an object with one key-value pair: client name and its URL.": "Tableau de préréglages de clients de chat. Chaque élément est un objet avec une paire clé-valeur : nom du client et son URL.",
     "Artifact service is ready": "Service de rendu prêt",
     "Artifact service needs configuration": "Configurer le service de rendu",
+    "Artifact service URL must be an HTTP(S) address without credentials, query or fragment": "L’adresse du service de rendu doit être une adresse HTTP(S) sans identifiants, paramètres de requête ni fragment",
     "Artifacts": "Artefacts",
     "Artwork details": "Détails du résultat",
     "Artwork from {{channel}} using {{model}}": "Résultat de {{channel}} avec {{model}}",

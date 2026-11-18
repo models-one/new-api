@@ -732,6 +732,7 @@
     "Array of chat client presets. Each item is an object with one key-value pair: client name and its URL.": "チャットクライアントプリセットの配列。各項目は、クライアント名とそのURLという1つのキーと値のペアを持つオブジェクトです。",
     "Artifact service is ready": "作品サービスは準備完了です",
     "Artifact service needs configuration": "作品サービスの設定が必要です",
+    "Artifact service URL must be an HTTP(S) address without credentials, query or fragment": "独立サービスのアドレスには、認証情報、クエリ、フラグメントを含まない HTTP(S) アドレスを指定してください",
     "Artifacts": "成果物",
     "Artwork details": "作品の詳細",
     "Artwork from {{channel}} using {{model}}": "{{channel}} の {{model}} による作品",

@@ -19,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 )
 
 type pelicanConfig struct {
@@ -30,12 +31,15 @@ type pelicanConfig struct {
 }
 
 func loadPelicanConfig() (pelicanConfig, error) {
-	config := pelicanConfig{URL: strings.TrimRight(os.Getenv("PELICAN_SERVICE_URL"), "/"), ServiceToken: os.Getenv("PELICAN_SERVICE_TOKEN"),
+	serviceURL, err := system_setting.GetPelicanServiceURL()
+	config := pelicanConfig{URL: serviceURL, ServiceToken: os.Getenv("PELICAN_SERVICE_TOKEN"),
 		TokenID: common.GetEnvOrDefault("PELICAN_TEST_TOKEN_ID", 0), Concurrency: common.GetEnvOrDefault("PELICAN_CONCURRENCY", 2),
 		Timeout: time.Duration(common.GetEnvOrDefault("PELICAN_TIMEOUT_SECONDS", 300)) * time.Second}
-	parsed, err := url.Parse(config.URL)
-	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Scheme != "https" && parsed.Scheme != "http") {
-		return config, errors.New("PELICAN_SERVICE_URL must be an HTTP(S) service root without credentials, query or fragment")
+	if err != nil {
+		return config, err
+	}
+	if config.URL == "" {
+		return config, system_setting.ErrPelicanServiceURLInvalid
 	}
 	if len(config.ServiceToken) < 32 || strings.ContainsAny(config.ServiceToken, " \r\n\t") {
 		return config, errors.New("PELICAN_SERVICE_TOKEN must contain at least 32 non-whitespace characters")
@@ -198,8 +202,11 @@ func pelicanCheckService(ctx context.Context, config pelicanConfig) error {
 
 type pelicanScheduleHandler struct{}
 
-func (pelicanScheduleHandler) Type() string            { return "pelican_schedule" }
-func (pelicanScheduleHandler) Enabled() bool           { return os.Getenv("PELICAN_SERVICE_URL") != "" }
+func (pelicanScheduleHandler) Type() string { return "pelican_schedule" }
+func (pelicanScheduleHandler) Enabled() bool {
+	serviceURL, err := system_setting.GetPelicanServiceURL()
+	return err == nil && serviceURL != ""
+}
 func (pelicanScheduleHandler) Interval() time.Duration { return 15 * time.Second }
 func (pelicanScheduleHandler) NewPayload() any         { return nil }
 func (pelicanScheduleHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
@@ -329,8 +336,11 @@ func (pelicanExecuteHandler) Run(ctx context.Context, task *model.SystemTask, ru
 
 type pelicanSyncHandler struct{}
 
-func (pelicanSyncHandler) Type() string            { return "pelican_sync" }
-func (pelicanSyncHandler) Enabled() bool           { return os.Getenv("PELICAN_SERVICE_URL") != "" }
+func (pelicanSyncHandler) Type() string { return "pelican_sync" }
+func (pelicanSyncHandler) Enabled() bool {
+	serviceURL, err := system_setting.GetPelicanServiceURL()
+	return err == nil && serviceURL != ""
+}
 func (pelicanSyncHandler) Interval() time.Duration { return 15 * time.Second }
 func (pelicanSyncHandler) NewPayload() any         { return nil }
 func (pelicanSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {

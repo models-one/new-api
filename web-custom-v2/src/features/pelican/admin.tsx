@@ -35,7 +35,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Tabs } from '@/components/disclosure/Tabs'
 import { intlLocale } from '@/i18n/language'
-import { useChannelsAccess } from '@/features/channels/access'
+import { CHANNEL_ROOT_ROLE, useChannelsAccess } from '@/features/channels/access'
 import { formatNumber } from '@/lib/format'
 
 import {
@@ -49,6 +49,7 @@ import {
 } from './api'
 import { ExecutionStatus } from './execution-status'
 import { RuleEditor } from './rule-editor'
+import { ServiceSettings } from './service-settings'
 import { defaultRule, type PelicanRule } from './types'
 
 export function PelicanAdmin() {
@@ -60,6 +61,7 @@ export function PelicanAdmin() {
   const [editing, setEditing] = useState<PelicanRule | null>(null)
   const [deleting, setDeleting] = useState<PelicanRule | null>(null)
   const [diagnostic, setDiagnostic] = useState('')
+  const [serviceSettingsOpen, setServiceSettingsOpen] = useState(false)
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const rules = useQuery({
     queryKey: ['pelican', 'rules'],
@@ -254,7 +256,12 @@ export function PelicanAdmin() {
             {t('Up to 20 artworks per group, retained for 7 days')}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {access.role !== undefined && access.role >= CHANNEL_ROOT_ROLE && (
+            <Button variant="outline" size="sm" onClick={() => setServiceSettingsOpen(true)}>
+              {t('Artifact service settings')}
+            </Button>
+          )}
           {status.data?.error_detail && (
             <Button
               variant="outline"
@@ -274,10 +281,15 @@ export function PelicanAdmin() {
           </Button>
         </div>
       </div>
+      {status.data?.service_url && (
+        <p className="text-muted break-all text-sm">
+          {t('Artifact service URL')}: {status.data.service_url}
+        </p>
+      )}
       {!status.data?.ready && (
         <p className="text-muted text-sm">
           {t(
-            'Configure PELICAN_SERVICE_URL, PELICAN_SERVICE_TOKEN and PELICAN_TEST_TOKEN_ID on the server.',
+            'Set the artifact service address in service settings. Configure PELICAN_SERVICE_TOKEN and PELICAN_TEST_TOKEN_ID on the server.',
           )}
         </p>
       )}
@@ -358,6 +370,14 @@ export function PelicanAdmin() {
           />
         </Tabs.Panel>
       </Tabs>
+      {serviceSettingsOpen && access.role !== undefined && access.role >= CHANNEL_ROOT_ROLE && (
+        <ServiceSettings
+          onClose={() => {
+            setServiceSettingsOpen(false)
+            void cache.invalidateQueries({ queryKey: pelicanKeys.all })
+          }}
+        />
+      )}
       {editing && (
         <RuleEditor
           key={`${editing.id}:${editing.revision}`}

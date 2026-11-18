@@ -732,6 +732,7 @@
     "Array of chat client presets. Each item is an object with one key-value pair: client name and its URL.": "聊天用戶端預設陣列。每個項目都是一個物件，包含一個鍵值對：用戶端名稱及其 URL。",
     "Artifact service is ready": "作品服務已就緒",
     "Artifact service needs configuration": "作品服務需要設定",
+    "Artifact service URL must be an HTTP(S) address without credentials, query or fragment": "獨立服務位址必須為 HTTP(S) 位址，且不能包含帳號密碼、查詢參數或片段",
     "Artifacts": "製品",
     "Artwork details": "作品詳情",
     "Artwork from {{channel}} using {{model}}": "{{channel}} 使用 {{model}} 生成的作品",

@@ -732,6 +732,7 @@
     "Array of chat client presets. Each item is an object with one key-value pair: client name and its URL.": "Array of chat client presets. Each item is an object with one key-value pair: client name and its URL.",
     "Artifact service is ready": "Artifact service is ready",
     "Artifact service needs configuration": "Artifact service needs configuration",
+    "Artifact service URL must be an HTTP(S) address without credentials, query or fragment": "Artifact service URL must be an HTTP(S) address without credentials, query or fragment",
     "Artifacts": "Artifacts",
     "Artwork details": "Artwork details",
     "Artwork from {{channel}} using {{model}}": "Artwork from {{channel}} using {{model}}",

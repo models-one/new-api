@@ -732,6 +732,7 @@
     "Array of chat client presets. Each item is an object with one key-value pair: client name and its URL.": "Массив предустановок чат-клиентов. Каждый элемент представляет собой объект с одной парой ключ-значение: имя клиента и его URL.",
     "Artifact service is ready": "Сервис результатов готов",
     "Artifact service needs configuration": "Настройте сервис результатов",
+    "Artifact service URL must be an HTTP(S) address without credentials, query or fragment": "Адрес сервиса артефактов должен использовать HTTP(S) и не содержать учётных данных, параметров запроса или фрагмента",
     "Artifacts": "Артефакты",
     "Artwork details": "Сведения о результате",
     "Artwork from {{channel}} using {{model}}": "Результат {{channel}}, модель {{model}}",

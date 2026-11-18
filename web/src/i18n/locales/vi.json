@@ -732,6 +732,7 @@
     "Array of chat client presets. Each item is an object with one key-value pair: client name and its URL.": "Mảng các thiết lập sẵn của ứng dụng trò chuyện. Mỗi mục là một đối tượng với",
     "Artifact service is ready": "Dịch vụ kết quả đã sẵn sàng",
     "Artifact service needs configuration": "Cần cấu hình dịch vụ kết quả",
+    "Artifact service URL must be an HTTP(S) address without credentials, query or fragment": "Địa chỉ dịch vụ độc lập phải dùng HTTP(S), không chứa thông tin xác thực, tham số truy vấn hoặc phần fragment",
     "Artifacts": "Sản phẩm",
     "Artwork details": "Chi tiết tác phẩm",
     "Artwork from {{channel}} using {{model}}": "Tác phẩm từ {{channel}} dùng {{model}}",

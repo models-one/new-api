@@ -22,7 +22,15 @@ import { defaultRule, type PelicanArtwork } from '../types'
 const i18n = createInstance()
 await i18n.init({
   lng: 'en',
-  resources: { en: { translation: {} } },
+  resources: {
+    en: { translation: {} },
+    zh: {
+      translation: {
+        'Artifact service URL must be an HTTP(S) address without credentials, query or fragment':
+          '独立服务地址必须为 HTTP(S) 地址，且不能包含凭据、查询参数或片段',
+      },
+    },
+  },
   initAsync: false,
 })
 const clients: QueryClient[] = []
@@ -91,19 +99,29 @@ beforeEach(() => {
   )
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  await i18n.changeLanguage('en')
   for (const client of clients.splice(0)) client.clear()
   api.defaults.adapter = originalAdapter
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
-async function mount(component: React.ReactNode, role = 1) {
+async function mount(
+  component: React.ReactNode,
+  role = 1,
+  adminPermissions?: Record<string, Record<string, boolean>>,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
-  client.setQueryData(['user', 'self'], { id: 1, role, username: 'tester' })
+  client.setQueryData(['user', 'self'], {
+    id: 1,
+    role,
+    username: 'tester',
+    permissions: { admin_permissions: adminPermissions },
+  })
   clients.push(client)
   const route = createRootRoute({
     component: () => (
@@ -346,4 +364,88 @@ it('shows execution failures to an administrator with the original debugging det
   const dialog = await screen.findByRole('dialog')
   expect(within(dialog).getByText(/upstream status 504: deadline exceeded/)).toBeVisible()
   expect(within(dialog).getByRole('button', { name: 'Copy' })).toBeEnabled()
+})
+
+it('saves a root service address, preserves failed edits and clears the override', async () => {
+  let saved = ''
+  let refusal = ''
+  const adapter = mockApi((config) => {
+    if (config.url === '/api/option/') {
+      if (config.method === 'put') {
+        if (refusal) return { success: false, message: refusal }
+        const body = JSON.parse(config.data as string)
+        expect(body.key).toBe('PelicanServiceURL')
+        saved = body.value
+        return { success: true }
+      }
+      return { success: true, data: [{ key: 'PelicanServiceURL', value: saved }] }
+    }
+    if (config.url === '/api/user/self') return { success: true, data: { id: 1, role: 100 } }
+    if (config.url?.endsWith('/status'))
+      return {
+        success: true,
+        data: { ready: true, service_url: saved || 'http://environment:3001' },
+      }
+    if (config.url?.endsWith('/rules')) return { success: true, data: [] }
+    return { success: true, data: { total: 0, items: [] } }
+  })
+  await mount(<PelicanAdmin />, 100)
+  fireEvent.click(await screen.findByRole('button', { name: 'Artifact service settings' }))
+  const dialog = await screen.findByRole('dialog')
+  const input = await within(dialog).findByRole('textbox', { name: 'Artifact service URL' })
+  fireEvent.change(input, { target: { value: ' http://renderer:3001/prefix/ ' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+  await waitFor(() => expect(input).toHaveValue('http://renderer:3001/prefix'))
+  expect(within(dialog).getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  await act(() => i18n.changeLanguage('zh'))
+  refusal = 'Artifact service URL must be an HTTP(S) address without credentials, query or fragment'
+  fireEvent.change(input, { target: { value: 'ftp://invalid.example' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+  expect(
+    await within(dialog).findByText(
+      '独立服务地址必须为 HTTP(S) 地址，且不能包含凭据、查询参数或片段',
+    ),
+  ).toBeVisible()
+  expect(input).toHaveValue('ftp://invalid.example')
+  expect(saved).toBe('http://renderer:3001/prefix')
+  await act(() => i18n.changeLanguage('en'))
+  refusal = 'database: connection reset by peer'
+  fireEvent.change(input, { target: { value: 'https://replacement.example' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+  expect(await within(dialog).findByText(refusal)).toBeVisible()
+  expect(input).toHaveValue('https://replacement.example')
+  expect(saved).toBe('http://renderer:3001/prefix')
+  refusal = ''
+  fireEvent.change(input, { target: { value: '' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+  await waitFor(() =>
+    expect(within(dialog).getByRole('button', { name: 'Save changes' })).toBeDisabled(),
+  )
+  expect(saved).toBe('')
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+  expect(await screen.findByText('Artifact service URL: http://environment:3001')).toBeVisible()
+  expect(adapter.mock.calls.filter(([config]) => config.method === 'put')).toHaveLength(4)
+})
+
+it('does not offer service configuration or fetch root options to a channel administrator', async () => {
+  const adapter = mockApi((config) => {
+    if (config.url === '/api/user/self')
+      return {
+        success: true,
+        data: {
+          id: 1,
+          role: 10,
+          permissions: { admin_permissions: { channel: { read: true, operate: true } } },
+        },
+      }
+    if (config.url?.endsWith('/status')) return { success: true, data: { ready: true } }
+    if (config.url?.endsWith('/rules')) return { success: true, data: [] }
+    return { success: true, data: { total: 0, items: [] } }
+  })
+  await mount(<PelicanAdmin />, 10, { channel: { read: true, operate: true } })
+  expect(await screen.findByRole('button', { name: 'Check connection' })).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: 'Artifact service settings' }),
+  ).not.toBeInTheDocument()
+  expect(adapter.mock.calls.some(([config]) => config.url === '/api/option/')).toBe(false)
 })

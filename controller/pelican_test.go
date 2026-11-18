@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -21,9 +22,11 @@ import (
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestPelicanDatabaseLifecycle(t *testing.T) {
@@ -353,4 +356,162 @@ func TestPelicanProtocolDiagnostics(t *testing.T) {
 	assert.NotContains(t, string(encoded), "secret-token")
 	assert.NotContains(t, string(encoded), "opaque")
 	assert.Contains(t, string(encoded), "REDACTED")
+}
+
+func TestPelicanServiceURLValidation(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"", ""}, {" \n\t", ""},
+		{" http://model-artifact-service:3001/prefix/// \n", "http://model-artifact-service:3001/prefix"},
+		{"https://example.com", "https://example.com"},
+		{"http://192.168.1.2:8080/prefix", "http://192.168.1.2:8080/prefix"},
+		{"http://[::1]:3001/prefix/", "http://[::1]:3001/prefix"},
+	} {
+		value, err := system_setting.NormalizePelicanServiceURL(tc.input)
+		require.NoError(t, err)
+		assert.Equal(t, tc.want, value)
+	}
+	common.OptionMapRWMutex.Lock()
+	originalOptions := common.OptionMap
+	common.OptionMap = map[string]string{}
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		common.OptionMap = originalOptions
+		common.OptionMapRWMutex.Unlock()
+	})
+	for _, invalid := range []string{
+		"ftp://example.com", "/relative/path", "http://", "http:///path",
+		"http://user:private-fixture@example.com", "http://user@example.com",
+		"http://example.com?key=private-fixture", "http://example.com?",
+		"http://example.com#private-fixture", "http://example.com#",
+		`http://example.com\path`, "http://example.com/%5cpath",
+		"http://example.com:", "http://example.com:abc", "http://example.com:0",
+		"http://example.com:65536", "http://example.com:-1", "http://example.com:80:81",
+		"http://:3001", "http://::1", "http://[not-ip]:3001",
+		"http://example.com/" + strings.Repeat("x", 2048),
+	} {
+		value, err := system_setting.NormalizePelicanServiceURL(invalid)
+		require.ErrorIs(t, err, system_setting.ErrPelicanServiceURLInvalid)
+		assert.Empty(t, value)
+		t.Setenv("PELICAN_SERVICE_URL", invalid)
+		config, err := loadPelicanConfig()
+		require.ErrorIs(t, err, system_setting.ErrPelicanServiceURLInvalid)
+		assert.Empty(t, config.URL)
+		assert.NotContains(t, err.Error(), "private-fixture")
+		assert.False(t, (pelicanScheduleHandler{}).Enabled())
+		assert.False(t, (pelicanSyncHandler{}).Enabled())
+	}
+}
+
+func TestPelicanServiceURLDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []struct{ kind, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {
+		t.Run(dialect.kind, func(t *testing.T) {
+			if dialect.env != "" && os.Getenv(dialect.env) == "" {
+				t.Skip("external test database is not configured")
+			}
+			db := modelManagementDB(t, dialect.kind, os.Getenv(dialect.env))
+			require.NoError(t, db.AutoMigrate(&model.SystemTask{}))
+			t.Setenv("PELICAN_SERVICE_TOKEN", strings.Repeat("fixture", 8))
+			t.Setenv("PELICAN_TEST_TOKEN_ID", "1")
+			t.Setenv("PELICAN_CONCURRENCY", "2")
+			t.Setenv("PELICAN_TIMEOUT_SECONDS", "30")
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				assert.Contains(t, []string{"/fallback/v1/capabilities", "/saved/v1/capabilities", "/bulk/v1/capabilities"}, r.URL.Path)
+				assert.Equal(t, "Bearer "+strings.Repeat("fixture", 8), r.Header.Get("Authorization"))
+				_, _ = w.Write([]byte(`{"render":true,"retention":{"max_items":20,"max_age_seconds":604800}}`))
+			}))
+			defer server.Close()
+			var response struct {
+				Success    bool   `json:"success"`
+				Message    string `json:"message"`
+				MessageKey string `json:"message_key"`
+				Data       struct {
+					Enabled bool   `json:"pelican_enabled"`
+					URL     string `json:"service_url"`
+				} `json:"data"`
+			}
+			for _, step := range []struct {
+				name, override, environment, want string
+				bulk                              bool
+			}{
+				{name: "environment", environment: " " + server.URL + "/fallback/// ", want: server.URL + "/fallback"},
+				{name: "saved", override: " " + server.URL + "/saved/// ", environment: "http://unused-docker:3001", want: server.URL + "/saved"},
+				{name: "bulk", override: " " + server.URL + "/bulk/ ", want: server.URL + "/bulk", bulk: true},
+				{name: "blank_fallback", override: " \t", environment: server.URL + "/fallback", want: server.URL + "/fallback"},
+				{name: "blank_disabled"},
+			} {
+				t.Run(step.name, func(t *testing.T) {
+					t.Setenv("PELICAN_SERVICE_URL", step.environment)
+					if step.bulk {
+						require.NoError(t, model.UpdateOptionsBulk(map[string]string{system_setting.PelicanServiceURLOptionKey: step.override}))
+					} else {
+						response.Success = false
+						modelManagementRequest(t, UpdateOption, "PUT", "/api/option/", model.Option{Key: system_setting.PelicanServiceURLOptionKey, Value: step.override}, &response)
+						require.True(t, response.Success, response.Message)
+					}
+					var stored model.Option
+					require.NoError(t, db.Where(&model.Option{Key: system_setting.PelicanServiceURLOptionKey}).First(&stored).Error)
+					assert.Equal(t, strings.TrimRight(strings.TrimSpace(step.override), "/"), stored.Value)
+					effective, err := system_setting.GetPelicanServiceURL()
+					require.NoError(t, err)
+					assert.Equal(t, step.want, effective, "saving takes effect before any reload")
+					common.OptionMapRWMutex.Lock()
+					delete(common.OptionMap, system_setting.PelicanServiceURLOptionKey)
+					common.OptionMapRWMutex.Unlock()
+					require.NoError(t, model.LoadOptionsFromDatabase())
+					effective, err = system_setting.GetPelicanServiceURL()
+					require.NoError(t, err)
+					assert.Equal(t, step.want, effective)
+					assert.Equal(t, step.want != "", (pelicanScheduleHandler{}).Enabled())
+					assert.Equal(t, step.want != "", (pelicanSyncHandler{}).Enabled())
+					modelManagementRequest(t, GetStatus, "GET", "/api/status", nil, &response)
+					assert.Equal(t, step.want != "", response.Data.Enabled)
+					config, err := loadPelicanConfig()
+					assert.Equal(t, step.want, config.URL)
+					if step.want == "" {
+						require.ErrorIs(t, err, system_setting.ErrPelicanServiceURLInvalid)
+					} else {
+						require.NoError(t, err)
+						require.NoError(t, pelicanCheckService(context.Background(), config))
+					}
+					// Avoid looking up a relay token: the configuration error must still
+					// expose the effective address through the existing status field.
+					t.Setenv("PELICAN_TEST_TOKEN_ID", "0")
+					modelManagementRequest(t, GetPelicanStatus, "GET", "/api/pelican/status", nil, &response)
+					assert.Equal(t, step.want, response.Data.URL)
+				})
+			}
+			assert.EqualValues(t, 4, requests.Load())
+			t.Setenv("PELICAN_SERVICE_URL", "")
+			retainedURL := server.URL + "/saved"
+			require.NoError(t, model.UpdateOption(system_setting.PelicanServiceURLOptionKey, retainedURL))
+			modelManagementRequest(t, UpdateOption, "PUT", "/api/option/", model.Option{Key: system_setting.PelicanServiceURLOptionKey, Value: "https://user:private-fixture@example.com?"}, &response)
+			assert.False(t, response.Success)
+			assert.Equal(t, system_setting.ErrPelicanServiceURLInvalid.Key, response.MessageKey)
+			assert.NotContains(t, response.Message, "private-fixture")
+			require.ErrorIs(t, model.UpdateOptionsBulk(map[string]string{system_setting.PelicanServiceURLOptionKey: "https://example.com#", "Notice": "must not be saved"}), system_setting.ErrPelicanServiceURLInvalid)
+			var count int64
+			require.NoError(t, db.Model(&model.Option{}).Where(&model.Option{Key: "Notice"}).Count(&count).Error)
+			assert.Zero(t, count)
+			saveErr := errors.New("fixture database write failure: disk full")
+			require.NoError(t, db.Callback().Update().Before("gorm:update").Register("pelican_service_url_save_failure", func(tx *gorm.DB) {
+				if option, ok := tx.Statement.Dest.(*model.Option); ok && option.Key == system_setting.PelicanServiceURLOptionKey {
+					tx.AddError(saveErr)
+				}
+			}))
+			t.Cleanup(func() { require.NoError(t, db.Callback().Update().Remove("pelican_service_url_save_failure")) })
+			require.ErrorIs(t, model.UpdateOption(system_setting.PelicanServiceURLOptionKey, server.URL+"/failed"), saveErr)
+			modelManagementRequest(t, UpdateOption, "PUT", "/api/option/", model.Option{Key: system_setting.PelicanServiceURLOptionKey, Value: server.URL + "/failed"}, &response)
+			assert.False(t, response.Success)
+			assert.Equal(t, saveErr.Error(), response.Message, "preserve the lower-level database diagnostic")
+			var stored model.Option
+			require.NoError(t, db.Where(&model.Option{Key: system_setting.PelicanServiceURLOptionKey}).First(&stored).Error)
+			assert.Equal(t, retainedURL, stored.Value)
+			effective, err := system_setting.GetPelicanServiceURL()
+			require.NoError(t, err)
+			assert.Equal(t, retainedURL, effective, "invalid and failed writes must leave the live configuration unchanged")
+		})
+	}
 }
