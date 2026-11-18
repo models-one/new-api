@@ -853,6 +853,80 @@ describe('ModelPricingSection', () => {
   })
 })
 
+describe('ModelPricingSection, tiered prices', () => {
+  const LONG_CONTEXT = 'len <= 200000 ? tier("standard", p * 3 + c * 15) : tier("long_context", p * 6 + c * 22.5)'
+
+  async function openTiered() {
+    server.stored['billing_setting.billing_mode'] = '{"claude-x":"tiered_expr"}'
+    server.stored['billing_setting.billing_expr'] = JSON.stringify({ 'claude-x': LONG_CONTEXT })
+    renderSection(<ModelPricingSection />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit pricing for claude-x' }))
+    return screen.findByRole('dialog')
+  }
+
+  it('opens a tiered price as ordered rules and saves nothing when nothing changed', async () => {
+    const dialog = await openTiered()
+
+    expect(within(dialog).getByRole('button', { name: 'Tiered' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(dialog).getByText('Rule 1')).toBeInTheDocument()
+    expect(within(dialog).getByText('Otherwise')).toBeInTheDocument()
+    expect(within(dialog).getAllByLabelText('Tier name').map((input) => (input as HTMLInputElement).value)).toEqual(['standard', 'long_context'])
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('changes one price and leaves the rest of the expression as it was written', async () => {
+    const dialog = await openTiered()
+
+    const outputs = within(dialog).getAllByLabelText('Completion price (USD / 1M)')
+    fireEvent.change(outputs[1], { target: { value: '25' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0].pricing['billing_setting.billing_expr']).toBe(
+      'len <= 200000 ? tier("standard", p * 3 + c * 15) : tier("long_context", p * 6 + c * 25)',
+    )
+  })
+
+  it('refuses to save an incomplete multiplier rather than dropping it', async () => {
+    const dialog = await openTiered()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add a multiplier' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    expect(await within(dialog).findByText('Complete this condition.')).toBeInTheDocument()
+    expect(within(dialog).getByText('Enter a finite, non-negative multiplier.')).toBeInTheDocument()
+    expect(patch).not.toHaveBeenCalled()
+    // Switching away would lose the unfinished rule, so it waits until the rule is complete.
+    expect(within(dialog).getByRole('button', { name: 'Text' })).toBeDisabled()
+
+    fireEvent.change(within(dialog).getByLabelText('Field path'), { target: { value: 'service_tier' } })
+    fireEvent.change(within(dialog).getByLabelText('Value'), { target: { value: 'priority' } })
+    fireEvent.change(within(dialog).getByLabelText('Multiply the price by'), { target: { value: '2' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0].pricing['billing_setting.billing_expr']).toBe(`(${LONG_CONTEXT}) * (param("service_tier") == "priority" ? 2 : 1)`)
+  })
+
+  it('starts a new model from a template', async () => {
+    renderSection(<ModelPricingSection />)
+    const add = await screen.findByRole('button', { name: 'Add a model' })
+    await waitFor(() => expect(add).toBeEnabled())
+    fireEvent.click(add)
+    const dialog = await screen.findByRole('dialog')
+
+    fireEvent.change(within(dialog).getByLabelText(/^Model name/), { target: { value: 'night-model' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tiered' }))
+    fireEvent.change(within(dialog).getByLabelText('Start from a template'), { target: { value: 'night-discount' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0].pricing['billing_setting.billing_expr']).toBe(
+      '(tier("base", p * 3 + c * 15)) * (hour("Asia/Shanghai") >= 21 || hour("Asia/Shanghai") < 6 ? 0.5 : 1)',
+    )
+  })
+})
+
 describe('GroupPricingSection', () => {
   it('shows a group that is priced but that no user can select', async () => {
     renderSection(<GroupPricingSection />)
