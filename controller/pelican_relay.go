@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -29,10 +30,10 @@ import (
 const pelicanContextKey = "pelican_execution"
 
 type pelicanObservation struct {
-	Info       *relaycommon.RelayInfo
-	Err        *types.NewAPIError
-	ChannelKey string
-	Headers    http.Header
+	Info        *relaycommon.RelayInfo
+	Err         *types.NewAPIError
+	ChannelKey  string
+	Credentials map[string][]string
 }
 
 // The ordinary relay performs validation, provider conversion and quota
@@ -87,8 +88,8 @@ func generatePelican(ctx context.Context, rule model.PelicanRule, runID string, 
 		common.SetContextKey(c, constant.ContextKeyChannelAutoBan, false)
 		observation.ChannelKey = common.GetContextKeyString(c, constant.ContextKeyChannelKey)
 		Relay(c, format)
-		if value, exists := c.Get("pelican_upstream_headers"); exists {
-			observation.Headers, _ = value.(http.Header)
+		if value, exists := c.Get("pelican_upstream_credentials"); exists {
+			observation.Credentials, _ = value.(map[string][]string)
 		}
 	})
 	request := httptest.NewRequestWithContext(ctx, http.MethodPost, path, bytes.NewReader(encoded))
@@ -106,12 +107,12 @@ func generatePelican(ctx context.Context, rule model.PelicanRule, runID string, 
 			secrets = append(secrets, text)
 		}
 	}
-	for name, values := range observation.Headers {
+	for name, values := range observation.Credentials {
 		if !pelicanSensitiveHeader.MatchString(name) {
 			continue
 		}
 		for _, value := range values {
-			secrets = append(secrets, value)
+			secrets = append(secrets, value, url.QueryEscape(value))
 			if scheme, credential, found := strings.Cut(value, " "); found && (strings.EqualFold(scheme, "bearer") || strings.EqualFold(scheme, "basic")) {
 				secrets = append(secrets, credential)
 				if strings.EqualFold(scheme, "basic") {

@@ -535,12 +535,32 @@ func keepUpstreamRedirectResponse(_ *http.Request, _ []*http.Request) error {
 	return http.ErrUseLastResponse
 }
 
+// ObservePelicanUpstream keeps request credentials in the private probe context
+// for redacting diagnostics and generated artifacts, including chained requests.
+func ObservePelicanUpstream(c *gin.Context, target *url.URL, header http.Header) {
+	if c == nil || !c.GetBool("pelican_test") {
+		return
+	}
+	observed, _ := c.Get("pelican_upstream_credentials")
+	values, _ := observed.(map[string][]string)
+	if values == nil {
+		values = make(map[string][]string)
+	}
+	for name, items := range header {
+		values[name] = append(values[name], items...)
+	}
+	for name, items := range target.Query() {
+		values[name] = append(values[name], items...)
+	}
+	c.Set("pelican_upstream_credentials", values)
+}
+
 func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Response, error) {
 	if c != nil && c.GetBool("pelican_test") && c.Request != nil {
 		// Synthetic probes have a bounded generation lease, rather than a live
 		// client connection. Cancellation must reach both HTTP and body reads.
 		req = req.WithContext(c.Request.Context())
-		c.Set("pelican_upstream_headers", req.Header.Clone())
+		ObservePelicanUpstream(c, req.URL, req.Header)
 	}
 	client, err := service.GetHttpClientWithProxySettings(info.ChannelSetting.Proxy, info.ChannelSetting)
 	if err != nil {
@@ -576,6 +596,11 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	resp, err := relayClient.Do(req)
 	if err != nil {
 		if c.GetBool("pelican_test") {
+			// Preserve the transport cause, but never persist a signed request URL.
+			var urlErr *url.Error
+			if errors.As(err, &urlErr) && urlErr.Err != nil {
+				err = fmt.Errorf("%s %s: %w", urlErr.Op, req.URL.Host, urlErr.Err)
+			}
 			return nil, types.NewError(err, types.ErrorCodeDoRequestFailed)
 		}
 		// A url.Error quotes the request URL, whose query may carry a

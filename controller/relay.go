@@ -99,7 +99,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	// hooks receive the request once the client has the whole response and
 	// the request has settled.
 	defer func() {
-		requestplugin.Report(c, relayFormat, relayInfo, ingressRecord, newAPIError)
+		// Probe diagnostics are sanitized after Relay returns; never export the
+		// unsanitized response through asynchronous report hooks.
+		if pelican == nil {
+			requestplugin.Report(c, relayFormat, relayInfo, ingressRecord, newAPIError)
+		}
 	}()
 
 	defer func() {

@@ -65,7 +65,7 @@ func (e *pelicanDiagnosticError) Error() string {
 var pelicanSecretField = regexp.MustCompile(`(?i)^(authorization|proxy.authorization|x.api.key|api.?key|(?:access|refresh|id).?token|token|password|secret|client.?secret|private.?key|cookie|set.cookie)$`)
 var pelicanSecretText = regexp.MustCompile(`(?i)((?:authorization|x-api-key|api_key|access_token|refresh_token|password|secret|cookie)\s*[:=]\s*)([^\r\n,}]+)`)
 var pelicanURLCredentials = regexp.MustCompile(`(https?://)[^\s/@:]+:[^\s/@]+@`)
-var pelicanSensitiveHeader = regexp.MustCompile(`(?i)(auth|api.?key|token|secret|password|cookie|credential)`)
+var pelicanSensitiveHeader = regexp.MustCompile(`(?i)(auth|api.?key|token|secret|password|cookie|credential|signature|(?:^|[-_])sig(?:$|[-_])|^key$)`)
 
 func pelicanSanitize(value any, secrets []string, depth int) any {
 	if depth > 24 {

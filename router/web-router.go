@@ -99,6 +99,8 @@ func webIndexForPath(path string, legacyIndexPage []byte, customIndexPage []byte
 		"/users",
 		"/system-info",
 		"/channels",
+		"/pelican",
+		"/pelican-management",
 		"/task-plugins",
 		"/request-processing",
 		"/system-settings",

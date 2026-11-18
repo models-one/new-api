@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -105,113 +106,143 @@ func TestPelicanDatabaseLifecycle(t *testing.T) {
 
 func TestPelicanGenerationUsesSelectedChannelAndQuota(t *testing.T) {
 	require.NoError(t, i18n.Init())
-	db := modelManagementDB(t, "sqlite", "")
-	require.NoError(t, db.AutoMigrate(&model.Token{}, &model.Log{}, &model.SubscriptionPlan{}, &model.UserSubscription{}, &model.SubscriptionPreConsumeRecord{}))
-	oldGroups := setting.UserUsableGroups2JSONString()
-	oldGroupRatio, err := common.Marshal(ratio_setting.GetGroupRatioCopy())
+	_, err := jsplugin.DefaultRegistry.Register(`
+export const meta = {apiVersion:1,key:"pelican-provider-fixture",name:"Pelican provider fixture",version:"1.0.0",author:{name:"Test"},relay:[{incoming_path:"/v1/chat/completions",upstream_path:"/v1/chat/completions"}]};
+export function exchangeKey() { return {token:{value:"fixture-generated-signature"}}; }
+export function signRequest(ctx) { return {query:{signature:ctx.token.value,page:"0"}}; }
+export function credentialRejected(ctx, response) { return response.status === 503; }
+`, jsplugin.Options{})
 	require.NoError(t, err)
-	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default"}`))
-	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1}`))
-	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"pelican-fixture":1}`))
-	require.NoError(t, ratio_setting.UpdateCompletionRatioByJSONString(`{"pelican-fixture":1}`))
-	oldQuota := *operation_setting.GetQuotaSetting()
-	operation_setting.GetQuotaSetting().TrustQuotaUSD = 0
-	t.Cleanup(func() {
-		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(oldGroups))
-		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(string(oldGroupRatio)))
-		*operation_setting.GetQuotaSetting() = oldQuota
-	})
-	service.InitHttpClient()
-	var calls atomic.Int32
-	var failing atomic.Bool
-	var blockUntilCancelled atomic.Bool
-	reached := make(chan struct{})
-	release := make(chan struct{})
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		var request map[string]any
-		require.NoError(t, common.DecodeJson(r.Body, &request))
-		if blockUntilCancelled.Load() {
-			close(reached)
-			select {
-			case <-r.Context().Done():
-			case <-release:
+	t.Cleanup(func() { jsplugin.DefaultRegistry.Unregister("pelican-provider-fixture") })
+	for _, tc := range []struct {
+		name        string
+		channelType int
+		setting     *string
+		signature   string
+	}{
+		{name: "openai", channelType: constant.ChannelTypeOpenAI},
+		{name: "signed-provider", channelType: constant.ChannelTypeTaskPlugin, setting: common.GetPointer(`{"task_plugin_key":"pelican-provider-fixture"}`), signature: "fixture-generated-signature"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := modelManagementDB(t, "sqlite", "")
+			require.NoError(t, db.AutoMigrate(&model.Token{}, &model.Log{}, &model.SubscriptionPlan{}, &model.UserSubscription{}, &model.SubscriptionPreConsumeRecord{}))
+			oldGroups := setting.UserUsableGroups2JSONString()
+			oldGroupRatio, err := common.Marshal(ratio_setting.GetGroupRatioCopy())
+			require.NoError(t, err)
+			require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default"}`))
+			require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1}`))
+			require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"pelican-fixture":1}`))
+			require.NoError(t, ratio_setting.UpdateCompletionRatioByJSONString(`{"pelican-fixture":1}`))
+			oldQuota := *operation_setting.GetQuotaSetting()
+			operation_setting.GetQuotaSetting().TrustQuotaUSD = 0
+			t.Cleanup(func() {
+				require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(oldGroups))
+				require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(string(oldGroupRatio)))
+				*operation_setting.GetQuotaSetting() = oldQuota
+			})
+			service.InitHttpClient()
+			var calls atomic.Int32
+			var failing atomic.Bool
+			var blockUntilCancelled atomic.Bool
+			reached := make(chan struct{})
+			release := make(chan struct{})
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				var request map[string]any
+				if !assert.NoError(t, common.DecodeJson(r.Body, &request)) {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				assert.Equal(t, tc.signature, r.URL.Query().Get("signature"))
+				if blockUntilCancelled.Load() {
+					close(reached)
+					select {
+					case <-r.Context().Done():
+					case <-release:
+					}
+					return
+				}
+				assert.Equal(t, "pelican-fixture", request["model"])
+				assert.Equal(t, false, request["stream"])
+				assert.Equal(t, "Bearer override-fixture-secret", r.Header.Get("Authorization"))
+				if failing.Load() {
+					w.WriteHeader(503)
+					_, _ = w.Write([]byte(fmt.Sprintf(`{"error":{"message":"provider failed: override-fixture-secret %s","type":"backend_error"}}`, tc.signature)))
+					return
+				}
+				_, _ = w.Write([]byte(`{"id":"local-fixture","object":"chat.completion","model":"pelican-fixture","choices":[{"index":0,"message":{"role":"assistant","content":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\"><circle r=\"2\"/></svg>"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`))
+			}))
+			defer upstream.Close()
+			defer close(release)
+			channel := model.Channel{Name: "Pinned", Type: tc.channelType, Setting: tc.setting, Key: "provider-fixture-secret", HeaderOverride: common.GetPointer(`{"Authorization":"Bearer override-fixture-secret","X-Fixture-Value":"0"}`), BaseURL: &upstream.URL, Models: "pelican-fixture", Group: "default", Status: common.ChannelStatusEnabled}
+			require.NoError(t, db.Create(&channel).Error)
+			require.NoError(t, channel.AddAbilities(db))
+			model.InitChannelCache()
+			user := model.User{Username: "pelican-billing", DisplayName: "Pelican", Status: common.UserStatusEnabled, Role: common.RoleCommonUser, Group: "default", Quota: 1000000, AffCode: "pelican-fixture-aff"}
+			require.NoError(t, db.Create(&user).Error)
+			token := model.Token{UserId: user.Id, Key: "pelicanfixturetestkey000000000001", Name: "Pelican billing", Status: common.TokenStatusEnabled, Group: "default", RemainQuota: 1000000, ExpiredTime: -1}
+			require.NoError(t, db.Create(&token).Error)
+			config := pelicanConfig{TokenID: token.Id, Timeout: time.Minute}
+			rule := model.PelicanRule{ChannelID: channel.Id, Model: "pelican-fixture", Protocol: "openai-chat", Prompt: "Generate an SVG", Parameters: `{"max_tokens":1024,"temperature":0}`}
+			cancelled, cancel := context.WithCancel(context.Background())
+			cancel()
+			_, err = generatePelican(cancelled, rule, "expired-context", config)
+			require.ErrorIs(t, err, context.Canceled)
+			assert.Zero(t, calls.Load())
+			result, err := generatePelican(context.Background(), rule, "fixture-request", config)
+			require.NoError(t, err)
+			assert.Contains(t, result["text"], "<svg")
+			assert.Contains(t, result["text"], `viewBox="0 0 10 10"`, "non-secret header values must not alter generated SVG coordinates")
+			var charged model.Token
+			require.NoError(t, db.First(&charged, token.Id).Error)
+			assert.Less(t, charged.RemainQuota, token.RemainQuota)
+			failing.Store(true)
+			_, err = generatePelican(context.Background(), rule, "failed-fixture", config)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "backend_error")
+			assert.NotContains(t, err.Error(), channel.Key)
+			assert.NotContains(t, err.Error(), "override-fixture-secret")
+			if tc.signature != "" {
+				assert.NotContains(t, err.Error(), tc.signature, "upstream error echoes must redact the final signing credential")
 			}
-			return
-		}
-		assert.Equal(t, "pelican-fixture", request["model"])
-		assert.Equal(t, false, request["stream"])
-		assert.Equal(t, "Bearer override-fixture-secret", r.Header.Get("Authorization"))
-		if failing.Load() {
-			w.WriteHeader(503)
-			_, _ = w.Write([]byte(`{"error":{"message":"provider failed: override-fixture-secret","type":"backend_error"}}`))
-			return
-		}
-		_, _ = w.Write([]byte(`{"id":"local-fixture","object":"chat.completion","model":"pelican-fixture","choices":[{"index":0,"message":{"role":"assistant","content":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\"><circle r=\"2\"/></svg>"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`))
-	}))
-	defer upstream.Close()
-	defer close(release)
-	channel := model.Channel{Name: "Pinned", Type: constant.ChannelTypeOpenAI, Key: "provider-fixture-secret", HeaderOverride: common.GetPointer(`{"Authorization":"Bearer override-fixture-secret","X-Fixture-Value":"0"}`), BaseURL: &upstream.URL, Models: "pelican-fixture", Group: "default", Status: common.ChannelStatusEnabled}
-	require.NoError(t, db.Create(&channel).Error)
-	require.NoError(t, channel.AddAbilities(db))
-	model.InitChannelCache()
-	user := model.User{Username: "pelican-billing", DisplayName: "Pelican", Status: common.UserStatusEnabled, Role: common.RoleCommonUser, Group: "default", Quota: 1000000, AffCode: "pelican-fixture-aff"}
-	require.NoError(t, db.Create(&user).Error)
-	token := model.Token{UserId: user.Id, Key: "pelicanfixturetestkey000000000001", Name: "Pelican billing", Status: common.TokenStatusEnabled, Group: "default", RemainQuota: 1000000, ExpiredTime: -1}
-	require.NoError(t, db.Create(&token).Error)
-	config := pelicanConfig{TokenID: token.Id, Timeout: time.Minute}
-	rule := model.PelicanRule{ChannelID: channel.Id, Model: "pelican-fixture", Protocol: "openai-chat", Prompt: "Generate an SVG", Parameters: `{"max_tokens":1024,"temperature":0}`}
-	cancelled, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err = generatePelican(cancelled, rule, "expired-context", config)
-	require.ErrorIs(t, err, context.Canceled)
-	assert.Zero(t, calls.Load())
-	result, err := generatePelican(context.Background(), rule, "fixture-request", config)
-	require.NoError(t, err)
-	assert.Contains(t, result["text"], "<svg")
-	assert.Contains(t, result["text"], `viewBox="0 0 10 10"`, "non-secret header values must not alter generated SVG coordinates")
-	var charged model.Token
-	require.NoError(t, db.First(&charged, token.Id).Error)
-	assert.Less(t, charged.RemainQuota, token.RemainQuota)
-	failing.Store(true)
-	_, err = generatePelican(context.Background(), rule, "failed-fixture", config)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "backend_error")
-	assert.NotContains(t, err.Error(), channel.Key)
-	assert.NotContains(t, err.Error(), "override-fixture-secret")
-	assert.EqualValues(t, 2, calls.Load(), "no channel or model retries")
-	var preserved model.Channel
-	require.NoError(t, db.First(&preserved, channel.Id).Error)
-	assert.Equal(t, common.ChannelStatusEnabled, preserved.Status)
-	require.NoError(t, db.First(&charged, token.Id).Error)
-	remaining := charged.RemainQuota
-	token.ModelLimitsEnabled, token.ModelLimits = true, "other-model"
-	require.NoError(t, db.Save(&token).Error)
-	_, err = generatePelican(context.Background(), rule, "forbidden-fixture", config)
-	require.ErrorContains(t, err, "does not allow this model")
-	require.NoError(t, db.First(&charged, token.Id).Error)
-	assert.Equal(t, token.RemainQuota, charged.RemainQuota)
-	assert.Greater(t, remaining, 0)
-	assert.EqualValues(t, 2, calls.Load())
-	token.ModelLimitsEnabled = false
-	require.NoError(t, db.Save(&token).Error)
-	blockUntilCancelled.Store(true)
-	active, abort := context.WithCancel(context.Background())
-	defer abort()
-	finished := make(chan error, 1)
-	go func() { _, err := generatePelican(active, rule, "cancel-in-flight", config); finished <- err }()
-	select {
-	case <-reached:
-	case <-time.After(5 * time.Second):
-		t.Fatal("upstream was not reached")
-	}
-	abort()
-	select {
-	case err := <-finished:
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "context canceled")
-	case <-time.After(5 * time.Second):
-		t.Fatal("cancelled generation did not stop")
+			assert.EqualValues(t, 2, calls.Load(), "no channel, model or provider credential retries")
+			var preserved model.Channel
+			require.NoError(t, db.First(&preserved, channel.Id).Error)
+			assert.Equal(t, common.ChannelStatusEnabled, preserved.Status)
+			require.NoError(t, db.First(&charged, token.Id).Error)
+			remaining := charged.RemainQuota
+			token.ModelLimitsEnabled, token.ModelLimits = true, "other-model"
+			require.NoError(t, db.Save(&token).Error)
+			_, err = generatePelican(context.Background(), rule, "forbidden-fixture", config)
+			require.ErrorContains(t, err, "does not allow this model")
+			require.NoError(t, db.First(&charged, token.Id).Error)
+			assert.Equal(t, token.RemainQuota, charged.RemainQuota)
+			assert.Greater(t, remaining, 0)
+			assert.EqualValues(t, 2, calls.Load())
+			token.ModelLimitsEnabled = false
+			require.NoError(t, db.Save(&token).Error)
+			blockUntilCancelled.Store(true)
+			active, abort := context.WithCancel(context.Background())
+			defer abort()
+			finished := make(chan error, 1)
+			go func() { _, err := generatePelican(active, rule, "cancel-in-flight", config); finished <- err }()
+			select {
+			case <-reached:
+			case <-time.After(5 * time.Second):
+				t.Fatal("upstream was not reached")
+			}
+			abort()
+			select {
+			case err := <-finished:
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "context canceled")
+				if tc.signature != "" {
+					assert.NotContains(t, err.Error(), tc.signature, "transport diagnostics must redact the final signing credential")
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("cancelled generation did not stop")
+			}
+		})
 	}
 }
 

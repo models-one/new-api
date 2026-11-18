@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -272,7 +273,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 		return nil, err
 	}
 	resp, _ := response.(*http.Response)
-	if resp == nil || !a.canRenew() || !a.rejected(c, info, resp) || a.renew(c, info) != nil {
+	if resp == nil || c.GetBool("pelican_test") || !a.canRenew() || !a.rejected(c, info, resp) || a.renew(c, info) != nil {
 		return response, nil
 	}
 	_ = resp.Body.Close()
@@ -549,8 +550,18 @@ func (a *Adaptor) useFreshCredential(c *gin.Context, info *relaycommon.RelayInfo
 	if a.credential.NeedsLogin {
 		// Only a login restores the key, even after an administrator enabled
 		// it again: disable it for the reason a login clears.
-		service.DisablePluginCredentialForLogin(info.ChannelId, common.GetContextKeyString(c, constant.ContextKeyChannelName), info.ChannelIsMultiKey, common.GetContextKeyBool(c, constant.ContextKeyChannelAutoBan), info.ApiKey)
+		if !c.GetBool("pelican_test") {
+			service.DisablePluginCredentialForLogin(info.ChannelId, common.GetContextKeyString(c, constant.ContextKeyChannelName), info.ChannelIsMultiKey, common.GetContextKeyBool(c, constant.ContextKeyChannelAutoBan), info.ApiKey)
+		}
 		return types.NewError(service.ErrPluginCredentialNeedsLogin, types.ErrorCodeDoRequestFailed)
+	}
+	if c.GetBool("pelican_test") {
+		// Probes observe availability without refreshing persisted credentials
+		// or disabling a channel when a refresh demands a new login.
+		if a.credential.ExpiresAt > 0 && a.credential.ExpiresAt <= time.Now().Unix() {
+			return types.NewError(errors.New("plugin credential expired; refresh it before running the test"), types.ErrorCodeDoRequestFailed)
+		}
+		return nil
 	}
 	line, err := service.FreshPluginCredentialLine(c.Request.Context(), a.plugin, info.ChannelId, credentialIndex(info), info.ApiKey)
 	if errors.Is(err, service.ErrPluginCredentialNeedsLogin) {

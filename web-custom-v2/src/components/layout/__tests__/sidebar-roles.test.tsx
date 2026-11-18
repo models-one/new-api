@@ -12,16 +12,26 @@ import {
   createRouter,
 } from '@tanstack/react-router'
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Sidebar } from '@/components/layout/Sidebar'
+import { api } from '@/lib/http-client'
 import { useAuthStore } from '@/stores/auth-store'
 
-afterEach(cleanup)
+const originalAdapter = api.defaults.adapter
+const clients: QueryClient[] = []
+afterEach(() => {
+  cleanup()
+  api.defaults.adapter = originalAdapter
+  for (const client of clients.splice(0)) client.clear()
+  vi.restoreAllMocks()
+  useAuthStore.setState({ auth: initialAuth })
+})
 
 const initialAuth = useAuthStore.getState().auth
 
 beforeEach(() => {
+  api.defaults.adapter = async (config) => ({ data: { success: true, data: useAuthStore.getState().auth.user ?? {} }, status: 200, statusText: 'OK', headers: {}, config })
   useAuthStore.setState({ auth: { ...initialAuth, user: null } })
 })
 
@@ -35,7 +45,7 @@ function signInAs(role: number) {
   })
 }
 
-async function renderSidebar() {
+async function renderSidebar(pelicanEnabled = false) {
   const rootRoute = createRootRoute({
     component: () => <Sidebar onClose={() => undefined} open />,
   })
@@ -50,7 +60,9 @@ async function renderSidebar() {
   })
 
   await router.load()
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } })
+  clients.push(queryClient)
+  queryClient.setQueryData(['server-status'], { pelican_enabled: pelicanEnabled })
   render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
@@ -67,6 +79,8 @@ describe('Sidebar administration group', () => {
     expect(screen.queryByRole('link', { name: 'Subscription plans' })).not.toBeInTheDocument()
     // The group heading goes with them rather than sitting above nothing.
     expect(screen.queryByText('Administration')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Manage tests' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Pelican tests' })).not.toBeInTheDocument()
   })
 
   it('shows them at common.RoleAdminUser, not only to the root account', async () => {
@@ -75,6 +89,7 @@ describe('Sidebar administration group', () => {
 
     expect(screen.getByRole('link', { name: 'Redemption codes' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Subscription plans' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Manage tests' })).toHaveAttribute('href', '/pelican-management')
   })
 
   it('keeps everyone out of the admin group while the role is still unknown', async () => {
@@ -83,10 +98,11 @@ describe('Sidebar administration group', () => {
     expect(screen.queryByRole('link', { name: 'Redemption codes' })).not.toBeInTheDocument()
   })
 
-  it('offers the account centre to every signed-in user', async () => {
+  it('offers the account centre and enabled Pelican gallery to signed-in users', async () => {
     signInAs(1)
-    await renderSidebar()
+    await renderSidebar(true)
 
     expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/profile')
+    expect(screen.getByRole('link', { name: 'Pelican tests' })).toHaveAttribute('href', '/pelican')
   })
 })
