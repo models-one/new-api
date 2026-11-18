@@ -37,6 +37,8 @@ export type PricingDraft = {
   expression: string
   modelPrice: string
   ratios: Record<LegacyRatioKey, string>
+  /** Task plugin key → its own expression. A plugin absent here uses the model price. */
+  plugins: Record<string, string>
 }
 
 function typed(value: number | undefined): string {
@@ -61,12 +63,14 @@ export function draftFromEntry(entry: Pick<ModelPricingEntry, 'configured' | 'ef
     expression: configured[BILLING_EXPR_KEY] ?? (mode === 'expression' ? (effective[BILLING_EXPR_KEY] ?? '') : ''),
     mode,
     modelPrice: typed(configured.ModelPrice),
+    plugins: { ...configured[PLUGIN_BILLING_EXPR_KEY] },
     ratios,
   }
 }
 
 export type DraftProblem =
   | { field: 'expression'; reason: 'empty' }
+  | { field: 'plugin'; plugin: string; reason: 'empty' }
   | { field: 'modelPrice'; reason: 'empty' | 'invalid' }
   | { field: LegacyRatioKey; reason: 'empty' | 'invalid' }
 
@@ -80,16 +84,19 @@ function readNumber(text: string): number | null | 'invalid' {
 
 /**
  * The complete values to store for the model, or the first problem. The server replaces a
- * model's stored pricing as a whole, so the plugin prices this editor does not change are
- * carried over from what is stored.
+ * model's stored pricing as a whole, so the plugin prices are always written with it.
  */
 export function pricingFromDraft(
   draft: PricingDraft,
-  configured: PricingValues,
 ): { values: PricingValues; problem?: undefined } | { values?: undefined; problem: DraftProblem } {
   const values: PricingValues = {}
-  const plugins = configured[PLUGIN_BILLING_EXPR_KEY]
-  if (plugins !== undefined && Object.keys(plugins).length > 0) values[PLUGIN_BILLING_EXPR_KEY] = plugins
+  const plugins: Record<string, string> = {}
+  for (const [plugin, expression] of Object.entries(draft.plugins)) {
+    // An empty plugin price is a price still being typed, never "free".
+    if (expression.trim() === '') return { problem: { field: 'plugin', plugin, reason: 'empty' } }
+    plugins[plugin] = expression.trim()
+  }
+  if (Object.keys(plugins).length > 0) values[PLUGIN_BILLING_EXPR_KEY] = plugins
 
   const price = readNumber(draft.modelPrice)
   if (price === 'invalid') return { problem: { field: 'modelPrice', reason: 'invalid' } }

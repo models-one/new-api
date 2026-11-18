@@ -122,7 +122,7 @@ describe('editing one model’s price', () => {
 
   it('stores an expression with its mode, and keeps legacy ratios so the model can switch back', () => {
     const draft = { ...draftFromEntry({ configured: { ModelRatio: 1.25, CompletionRatio: 8 } }), expression: 'tier("base", p * 2.5)', mode: 'expression' as const }
-    expect(pricingFromDraft(draft, {}).values).toEqual({
+    expect(pricingFromDraft(draft).values).toEqual({
       'billing_setting.billing_expr': 'tier("base", p * 2.5)',
       'billing_setting.billing_mode': 'tiered_expr',
       CompletionRatio: 8,
@@ -132,13 +132,13 @@ describe('editing one model’s price', () => {
 
   it('drops the ratios a fixed price per request would ignore', () => {
     const draft = { ...draftFromEntry({ configured: { ModelRatio: 1.25 } }), mode: 'per-request' as const, modelPrice: '0.02' }
-    expect(pricingFromDraft(draft, {}).values).toEqual({ 'billing_setting.billing_mode': 'ratio', ModelPrice: 0.02 })
+    expect(pricingFromDraft(draft).values).toEqual({ 'billing_setting.billing_mode': 'ratio', ModelPrice: 0.02 })
   })
 
   it('carries the stored plugin prices over, because a save replaces the model’s pricing as a whole', () => {
     const configured = { 'billing_setting.plugin_billing_expr': { kling: 'tier("base", u("units") * 0.14)' }, ModelRatio: 1 }
     const draft = { ...draftFromEntry({ configured }), ratios: { ...draftFromEntry({ configured }).ratios, ModelRatio: '2' } }
-    expect(pricingFromDraft(draft, configured).values).toEqual({
+    expect(pricingFromDraft(draft).values).toEqual({
       'billing_setting.billing_mode': 'ratio',
       'billing_setting.plugin_billing_expr': { kling: 'tier("base", u("units") * 0.14)' },
       ModelRatio: 2,
@@ -147,11 +147,11 @@ describe('editing one model’s price', () => {
 
   it('names the field that blocks a save', () => {
     const base = draftFromEntry(undefined)
-    expect(pricingFromDraft({ ...base, mode: 'expression', expression: '  ' }, {}).problem).toEqual({ field: 'expression', reason: 'empty' })
-    expect(pricingFromDraft({ ...base, mode: 'per-token' }, {}).problem).toEqual({ field: 'ModelRatio', reason: 'empty' })
+    expect(pricingFromDraft({ ...base, mode: 'expression', expression: '  ' }).problem).toEqual({ field: 'expression', reason: 'empty' })
+    expect(pricingFromDraft({ ...base, mode: 'per-token' }).problem).toEqual({ field: 'ModelRatio', reason: 'empty' })
     // A negative price would turn a charge into a credit.
-    expect(pricingFromDraft({ ...base, mode: 'per-request', modelPrice: '-1' }, {}).problem).toEqual({ field: 'modelPrice', reason: 'invalid' })
-    expect(pricingFromDraft({ ...base, ratios: { ...base.ratios, ModelRatio: '1', CacheRatio: 'abc' } }, {}).problem).toEqual({ field: 'CacheRatio', reason: 'invalid' })
+    expect(pricingFromDraft({ ...base, mode: 'per-request', modelPrice: '-1' }).problem).toEqual({ field: 'modelPrice', reason: 'invalid' })
+    expect(pricingFromDraft({ ...base, ratios: { ...base.ratios, ModelRatio: '1', CacheRatio: 'abc' } }).problem).toEqual({ field: 'CacheRatio', reason: 'invalid' })
   })
 
   it('compares prices by content, so reordered keys are not a change', () => {
