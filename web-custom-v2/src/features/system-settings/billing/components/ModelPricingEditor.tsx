@@ -7,6 +7,7 @@ import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
 import { Input, NumberInput, RadioGroup, Textarea, type RadioOption } from '@/components/form'
 import { ConfirmDialog, Dialog, toErrorMessage } from '@/components/overlay'
 import { Alert, Badge, Button, Panel, SegmentedControl } from '@/components/ui'
+import { TaskPluginPrices } from '@/features/system-settings/billing/components/TaskPluginPrices'
 import { TieredExpressionEditor, type TieredResult } from '@/features/system-settings/billing/components/TieredExpressionEditor'
 import {
   convertModelPricing,
@@ -15,6 +16,7 @@ import {
   saveModelPricingChanges,
   type LegacyRatioKey,
   type ModelPricingEntry,
+  type ModelPricingIssue,
   type PricingConversion,
 } from '@/features/system-settings/billing/model-pricing-api'
 import {
@@ -60,6 +62,8 @@ type ModelPricingEditorProps = {
   existingNames: readonly string[]
   /** A name to start a new model with, such as an unpriced model a channel serves. */
   initialName?: string
+  /** The task plugins that cannot charge this model, as the server reports them. */
+  issues: readonly ModelPricingIssue[]
   quotaPerUnit: number
   onClose: () => void
   /** Called after a save or reset was stored; the list reloads. */
@@ -92,8 +96,8 @@ export function ModelPricingEditor(props: ModelPricingEditorProps) {
   const duplicate = isNew && props.existingNames.includes(modelName)
   // What the editor opened with. A built-in price it was only shown is not a change, so
   // saving it untouched would store the built-in price as an override.
-  const [opened] = useState(() => pricingFromDraft(draftFromEntry(props.entry), configured).values ?? configured)
-  const result = pricingFromDraft(draft, configured)
+  const [opened] = useState(() => pricingFromDraft(draftFromEntry(props.entry)).values ?? configured)
+  const result = pricingFromDraft(draft)
   const unchanged = !isNew && result.values !== undefined && samePricing(result.values, opened)
 
   const saveMutation = useMutation({
@@ -112,7 +116,7 @@ export function ModelPricingEditor(props: ModelPricingEditorProps) {
   const convertMutation = useMutation({
     mutationFn: () => {
       // The legacy draft as typed, with its mode, is what the server converts.
-      const legacy = pricingFromDraft(draft, configured)
+      const legacy = pricingFromDraft(draft)
       if (legacy.values === undefined) throw new Error('draft has a problem')
       return convertModelPricing(modelName, legacy.values)
     },
@@ -439,21 +443,13 @@ export function ModelPricingEditor(props: ModelPricingEditorProps) {
             </Panel>
           ) : null}
 
-          {plugins.length > 0 ? (
-            <section aria-label={t('Plugin prices')} className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-foreground">{t('Plugin prices')}</h3>
-              <p className="text-xs text-muted">{t('Task plugins serving this model can have their own price. They are kept as they are when you save here.')}</p>
-              <ul className="flex flex-col gap-1 text-sm">
-                {plugins.map((plugin) => (
-                  <li className="flex flex-wrap items-center gap-2" key={plugin.plugin_key}>
-                    <span className="font-medium text-foreground">{plugin.plugin_name}</span>
-                    {plugin.configured ? <Badge tone="info">{t('Own price')}</Badge> : <Badge tone="muted">{t('Uses the model price')}</Badge>}
-                    {plugin.stale ? <Badge tone="warning">{t('No longer serves this model')}</Badge> : null}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+          <TaskPluginPrices
+            draft={draft}
+            issues={props.issues}
+            onChange={(plugins) => update({ plugins })}
+            showProblems={showProblems}
+            variants={plugins}
+          />
 
           {showProblems && unchanged ? <p className="text-sm text-muted">{t('Nothing has changed.')}</p> : null}
           {conflict ? (

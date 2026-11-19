@@ -4,6 +4,7 @@ import CoinsIcon from 'lucide-react/dist/esm/icons/coins'
 import PencilIcon from 'lucide-react/dist/esm/icons/pencil'
 import PlusIcon from 'lucide-react/dist/esm/icons/plus'
 import RotateCcwIcon from 'lucide-react/dist/esm/icons/rotate-ccw'
+import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -25,10 +26,12 @@ import {
   BILLING_EXPR_KEY,
   fetchModelPricingEntries,
   ModelPricingConflictError,
+  modelPricingIssuesQuery,
   modelPricingKeys,
   modelPricingQuery,
   saveModelPricingChanges,
   type ModelPricingEntry,
+  type ModelPricingIssue,
   type PricingValues,
 } from '@/features/system-settings/billing/model-pricing-api'
 import { formatPrice, pricingModeOf, ratioToUsdPerMillion, type PricingMode } from '@/features/system-settings/billing/model-pricing-draft'
@@ -71,7 +74,7 @@ function toDraft(options: SystemOptionMap | undefined): PricingSectionDraft {
   }
 }
 
-type SourceFilter = 'all' | 'stored' | 'inherited'
+type SourceFilter = 'all' | 'stored' | 'inherited' | 'attention'
 
 type PricingRow = {
   name: string
@@ -79,6 +82,8 @@ type PricingRow = {
   /** True when nothing is stored and the model bills at a built-in or default price. */
   inherited: boolean
   entry: ModelPricingEntry
+  /** Task plugins that cannot charge this model. */
+  issues: ModelPricingIssue[]
 }
 
 const MODE_TONE: Record<PricingMode, 'success' | 'warning' | 'info'> = {
@@ -150,6 +155,7 @@ export function ModelPricingSection() {
   const queryClient = useQueryClient()
   const optionsQuery = useQuery(systemOptionsQuery())
   const pricingQuery = useQuery(modelPricingQuery())
+  const issuesQuery = useQuery(modelPricingIssuesQuery())
   const invalidateOptions = useInvalidateSystemOptions()
   const quotaPerUnit = useQuotaPerUnit()
 
@@ -181,16 +187,27 @@ export function ModelPricingSection() {
   })
 
   const entries = useMemo(() => pricingQuery.data?.entries ?? [], [pricingQuery.data])
+  const issuesByModel = useMemo(() => {
+    const byModel = new Map<string, ModelPricingIssue[]>()
+    for (const issue of issuesQuery.data ?? []) byModel.set(issue.model_name, [...(byModel.get(issue.model_name) ?? []), issue])
+    return byModel
+  }, [issuesQuery.data])
   const rows = useMemo<PricingRow[]>(
     () =>
       entries.map((entry) => ({
         entry,
         inherited: Object.keys(entry.configured).length === 0,
+        issues: issuesByModel.get(entry.model_name) ?? [],
         mode: pricingModeOf(entry.effective ?? entry.configured),
         name: entry.model_name,
       })),
-    [entries],
+    [entries, issuesByModel],
   )
+  // A task model a channel serves with no price of its own is not in the list at all.
+  const unlistedIssueModels = useMemo(() => {
+    const listed = new Set(entries.map((entry) => entry.model_name))
+    return [...issuesByModel.keys()].filter((name) => !listed.has(name))
+  }, [entries, issuesByModel])
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -198,6 +215,7 @@ export function ModelPricingSection() {
       if (modeFilter !== 'all' && row.mode !== modeFilter) return false
       if (sourceFilter === 'stored' && row.inherited) return false
       if (sourceFilter === 'inherited' && !row.inherited) return false
+      if (sourceFilter === 'attention' && row.issues.length === 0) return false
       return needle === '' || row.name.toLowerCase().includes(needle)
     })
   }, [modeFilter, rows, search, sourceFilter])
@@ -222,6 +240,16 @@ export function ModelPricingSection() {
 
   async function reloadPricing() {
     await queryClient.invalidateQueries({ queryKey: modelPricingKeys.all })
+  }
+
+  /** Opens a model the list does not hold, read fresh so its plugins and version are current. */
+  async function openUnlisted(name: string) {
+    try {
+      const fresh = await fetchModelPricingEntries([name])
+      setEditor({ entry: fresh.entries[0] })
+    } catch (error) {
+      toast.error(toErrorMessage(error))
+    }
   }
 
   /**
@@ -300,6 +328,11 @@ export function ModelPricingSection() {
           <span className="flex flex-col gap-1">
             <span className="mono text-xs text-foreground">{row.original.name}</span>
             {row.original.inherited ? <span className="text-xs text-muted">{t('Built-in or default price')}</span> : null}
+            {row.original.issues.length > 0 ? (
+              <span>
+                <Badge tone="warning">{t('Plugin price needed')}</Badge>
+              </span>
+            ) : null}
           </span>
         ),
         header: ({ column }) => <DataTableColumnHeader column={column} title={t('Model')} />,
@@ -389,6 +422,45 @@ export function ModelPricingSection() {
             </Alert>
           ) : null}
 
+          {issuesByModel.size > 0 ? (
+            <Alert
+              action={
+                sourceFilter === 'attention' ? (
+                  <Button onClick={() => setSourceFilter('all')} size="sm" variant="outline">
+                    {t('Show all models')}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setSourceFilter('attention')
+                      setPage(1)
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {t('Review')}
+                  </Button>
+                )
+              }
+              icon={<TriangleAlertIcon aria-hidden="true" />}
+              title={t('{{count}} model(s) need a plugin price', { count: issuesByModel.size })}
+              tone="warning"
+            >
+              <p>{t('A task plugin serving these models has no usable price, so its tasks are refused. Open a model to see which plugin and what to change.')}</p>
+              {unlistedIssueModels.length > 0 ? (
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {unlistedIssueModels.map((name) => (
+                    <li key={name}>
+                      <Button aria-label={t('Set a price for {{model}}', { model: name })} onClick={() => void openUnlisted(name)} size="sm" variant="outline">
+                        <span className="mono">{name}</span>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </Alert>
+          ) : null}
+
           <Panel className="overflow-hidden" muted>
             <DataTableToolbar
               actions={(
@@ -433,6 +505,7 @@ export function ModelPricingSection() {
                       { label: t('All prices'), value: 'all' },
                       { label: t('Set here only'), value: 'stored' },
                       { label: t('Built-in or default price'), value: 'inherited' },
+                      { label: t('Needs attention'), value: 'attention' },
                     ]}
                     size="sm"
                     value={sourceFilter}
@@ -537,6 +610,7 @@ export function ModelPricingSection() {
           entry={editor.entry}
           existingNames={rows.filter((row) => !row.inherited).map((row) => row.name)}
           initialName={editor.initialName}
+          issues={editor.entry === undefined ? [] : (issuesByModel.get(editor.entry.model_name) ?? [])}
           onClose={() => setEditor(null)}
           onReload={() => {
             setEditor(null)

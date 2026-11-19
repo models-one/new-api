@@ -31,3 +31,9 @@ export type BillingUsageFieldSchema = {
 }
 
 export type BillingUsageSchema = Record<string, BillingUsageFieldSchema>
+
+/** A sample task a plugin publishes, priced in the editor to show what a price means. */
+export type BillingUsageExample = {
+  label: string
+  facts: Record<string, string | number>
+}

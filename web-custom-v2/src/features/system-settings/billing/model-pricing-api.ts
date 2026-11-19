@@ -3,6 +3,7 @@ import axios from 'axios'
 
 import { getJson, patchJson, postJson } from '@/lib/api/client'
 import type { ApiRequestConfig } from '@/lib/http-client'
+import type { BillingUsageExample, BillingUsageSchema } from '@/lib/billing-expression/usage-schema'
 
 /**
  * The per-model pricing API (`controller/model_pricing_config.go`, root only).
@@ -70,6 +71,10 @@ export type ModelPricingPluginVariant = {
   plugin_key: string
   plugin_name: string
   icon?: string
+  /** The usage facts the plugin reports for this model, read by \`u("field")\`. */
+  usage_schema?: BillingUsageSchema
+  usage_examples?: BillingUsageExample[]
+  /** The plugin's own stored expression; empty when it uses the model price. */
   configured: string
   effective: string
   compatible: boolean
@@ -114,6 +119,26 @@ export type PricingConversion = PricingPreview & {
 
 export const modelPricingKeys = {
   all: ['system-settings', 'model-pricing'] as const,
+  // Under `all`, so every save that reloads the prices also reloads the issues.
+  issues: ['system-settings', 'model-pricing', 'issues'] as const,
+}
+
+/** Why a task plugin cannot charge a model it serves (`model.GetModelPricingIssues`). */
+export type ModelPricingIssueReason = 'unconfigured' | 'incompatible' | 'stale'
+
+export type ModelPricingIssue = {
+  model_name: string
+  plugin_key: string
+  plugin_name: string
+  reason: ModelPricingIssueReason
+}
+
+export function modelPricingIssuesQuery() {
+  return queryOptions({
+    queryFn: async (): Promise<ModelPricingIssue[]> =>
+      (await getJson<ModelPricingIssue[] | null>('/api/option/model_pricing/issues', silent)) ?? [],
+    queryKey: modelPricingKeys.issues,
+  })
 }
 
 export function modelPricingQuery() {

@@ -127,6 +127,10 @@ type ServerState = {
   builtin: Record<string, Record<string, unknown>>
   /** Bumped on every stored change of a model; the version a save must match. */
   revisions: Record<string, number>
+  /** Task plugins serving a model: `GET /api/option/model_pricing` plugin variants. */
+  plugins: Record<string, Array<{ key: string; schema: Record<string, unknown>; relay?: boolean; stale?: boolean }>>
+  /** `GET /api/option/model_pricing/issues`. */
+  issues: Array<{ model_name: string; plugin_key: string; plugin_name: string; reason: string }>
 }
 
 let server: ServerState
@@ -179,6 +183,8 @@ beforeEach(() => {
     stored: { ...seeded },
     topUpFails: false,
     builtin: {},
+    issues: [],
+    plugins: {},
     revisions: {},
   }
 
@@ -197,6 +203,9 @@ beforeEach(() => {
           success: true,
         },
       })
+    }
+    if (url === '/api/option/model_pricing/issues') {
+      return Promise.resolve({ data: { data: server.issues, message: '', success: true } })
     }
     if (url === '/api/option/model_pricing' || url.startsWith('/api/option/model_pricing?')) {
       const query = url.includes('?') ? new URLSearchParams(url.split('?')[1]).getAll('model') : null
@@ -338,13 +347,21 @@ function pricingEntry(name: string) {
     configured,
     effective: priced ? configured : (server.builtin[name] ?? configured),
     model_name: name,
-    plugin_variants: Object.entries(variants).map(([plugin, expr]) => ({
-      compatible: true,
-      configured: expr,
-      effective: expr,
-      plugin_key: plugin,
-      plugin_name: plugin,
-    })),
+    plugin_variants: [
+      ...(server.plugins[name] ?? []).map((plugin) => ({
+        compatible: true,
+        configured: variants[plugin.key] ?? '',
+        effective: variants[plugin.key] ?? '',
+        plugin_key: plugin.key,
+        plugin_name: plugin.key,
+        relay: plugin.relay,
+        stale: plugin.stale,
+        usage_schema: plugin.schema,
+      })),
+      ...Object.entries(variants)
+        .filter(([plugin]) => !(server.plugins[name] ?? []).some((item) => item.key === plugin))
+        .map(([plugin, expr]) => ({ compatible: true, configured: expr, effective: expr, plugin_key: plugin, plugin_name: plugin, usage_schema: {} })),
+    ],
     version: versionOf(name),
   }
 }
@@ -924,6 +941,107 @@ describe('ModelPricingSection, tiered prices', () => {
     expect(pricingChanges()[0].pricing['billing_setting.billing_expr']).toBe(
       '(tier("base", p * 3 + c * 15)) * (hour("Asia/Shanghai") >= 21 || hour("Asia/Shanghai") < 6 ? 0.5 : 1)',
     )
+  })
+})
+
+describe('ModelPricingSection, task plugin prices', () => {
+  const VIDEO = { resolution: { enum: ['720p', '1080p'], type: 'number' }, seconds: { type: 'number', unit: 'second' } }
+
+  function serveVideo() {
+    server.stored.ModelPrice = '{"veo-3":0.5}'
+    server.plugins['veo-3'] = [{ key: 'vertex', schema: VIDEO }]
+  }
+
+  async function openVeo() {
+    renderSection(<ModelPricingSection />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit pricing for veo-3' }))
+    return screen.findByRole('dialog')
+  }
+
+  it('flags the models a plugin cannot charge, and narrows the list to them', async () => {
+    serveVideo()
+    server.issues = [{ model_name: 'veo-3', plugin_key: 'vertex', plugin_name: 'Vertex', reason: 'unconfigured' }]
+    renderSection(<ModelPricingSection />)
+
+    expect(await screen.findByText('1 model(s) need a plugin price')).toBeInTheDocument()
+    const table = screen.getByRole('table', { name: 'Configured model prices' })
+    expect(within(table).getByText('Plugin price needed')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+    await waitFor(() => expect(within(table).queryByText('gpt-4-all')).not.toBeInTheDocument())
+    expect(within(table).getByText('veo-3')).toBeInTheDocument()
+  })
+
+  it('opens a model that only has an issue, read fresh from the server', async () => {
+    server.plugins['kling-v2'] = [{ key: 'kling', schema: VIDEO }]
+    server.issues = [{ model_name: 'kling-v2', plugin_key: 'kling', plugin_name: 'Kling', reason: 'unconfigured' }]
+    renderSection(<ModelPricingSection />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Set a price for kling-v2' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Price of kling-v2' })
+    expect(within(dialog).getByText('No price can charge this plugin’s tasks. Set a separate price for it below.')).toBeInTheDocument()
+  })
+
+  it('prices a plugin per second and resolution, refusing to save until every price is typed', async () => {
+    serveVideo()
+    const dialog = await openVeo()
+
+    // An own price starts as an empty table: nothing is charged at a price nobody typed.
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Set a separate price for this plugin' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    expect(await within(dialog).findByText('Enter every unit price — 0 for free — with no negative values.')).toBeInTheDocument()
+    expect(patch).not.toHaveBeenCalled()
+
+    fireEvent.change(within(dialog).getByLabelText('seconds price, row 1'), { target: { value: '0.25' } })
+    fireEvent.change(within(dialog).getByLabelText('seconds price, row 2'), { target: { value: '0.1' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    // Rows follow the schema’s enum order with the last one as the fallback.
+    expect(pricingChanges()[0].pricing).toEqual({
+      'billing_setting.billing_mode': 'ratio',
+      'billing_setting.plugin_billing_expr': {
+        vertex: 'u("resolution") == "720p" ? tier("720p", u("seconds") * 0.25) : tier("1080p", u("seconds") * 0.1)',
+      },
+      ModelPrice: 0.5,
+    })
+  })
+
+  it('stops charging a plugin its own price when it is switched back to the model price', async () => {
+    serveVideo()
+    server.stored[PLUGIN_KEY] = '{"vertex::veo-3":"tier(\\"base\\", u(\\"seconds\\") * 0.2)"}'
+    const dialog = await openVeo()
+
+    expect(within(dialog).getByText('Own price')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Set a separate price for this plugin' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0].pricing).toEqual({ 'billing_setting.billing_mode': 'ratio', ModelPrice: 0.5 })
+  })
+
+  it('says when the model price cannot charge a plugin’s tasks', async () => {
+    server.stored['billing_setting.billing_mode'] = '{"veo-3":"tiered_expr"}'
+    server.stored['billing_setting.billing_expr'] = '{"veo-3":"tier(\\"base\\", p * 2 + c * 8)"}'
+    server.plugins['veo-3'] = [{ key: 'vertex', schema: VIDEO }]
+    const dialog = await openVeo()
+
+    expect(within(dialog).getByText('The model price above cannot charge this plugin’s tasks, so they are refused until it has its own price.')).toBeInTheDocument()
+  })
+
+  it('removes the saved price of a plugin that no longer offers the model', async () => {
+    serveVideo()
+    server.plugins['veo-3'] = [{ key: 'vertex', schema: VIDEO, stale: true }]
+    server.stored[PLUGIN_KEY] = '{"vertex::veo-3":"tier(\\"base\\", u(\\"seconds\\") * 0.2)"}'
+    const dialog = await openVeo()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove saved price' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0].pricing[PLUGIN_KEY]).toBeUndefined()
   })
 })
 
