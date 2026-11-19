@@ -251,7 +251,10 @@ export function credentialRejected(ctx, response) { return response.status === 5
 
 func TestPelicanRenderSyncRetainsPayloadAndUsesIdempotency(t *testing.T) {
 	db := modelManagementDB(t, "sqlite", "")
-	require.NoError(t, db.AutoMigrate(&model.PelicanRun{}))
+	require.NoError(t, db.AutoMigrate(&model.PelicanRun{}, &model.SystemTask{}, &model.SystemTaskLock{}))
+	token := strings.Repeat("fixture-render-token", 32)
+	t.Setenv("PELICAN_SERVICE_TOKEN", token)
+	t.Setenv("PELICAN_TEST_TOKEN_ID", "")
 	var fail atomic.Bool
 	fail.Store(true)
 	var requests atomic.Int32
@@ -260,22 +263,34 @@ func TestPelicanRenderSyncRetainsPayloadAndUsesIdempotency(t *testing.T) {
 		assert.Equal(t, "stable-run-id", r.Header.Get("Idempotency-Key"))
 		if fail.Load() {
 			w.WriteHeader(503)
-			_, _ = w.Write([]byte(`{"error":{"message":"storage is temporarily offline"}}`))
+			_, _ = fmt.Fprintf(w, "storage is temporarily offline: %s", token)
 			return
 		}
 		_, _ = w.Write([]byte(`{"id":"run_remote","status":"queued","artifacts":[]}`))
 	}))
 	defer server.Close()
+	t.Setenv("PELICAN_SERVICE_URL", server.URL)
 	run := model.PelicanRun{ID: "stable-run-id", CollectionKey: "group", ChannelID: 1, Model: "fixture", Status: "render_pending", RenderPayload: `{"text":"saved output"}`, ExpiresAt: time.Now().Unix() + 1000}
 	require.NoError(t, db.Create(&run).Error)
-	config := pelicanConfig{URL: server.URL, ServiceToken: "nonsecret-test-token"}
-	require.Error(t, syncPelicanRun(context.Background(), config, run))
+	task := model.SystemTask{TaskID: "render-sync", Type: "pelican_sync", Status: model.SystemTaskStatusRunning, LockedBy: "runner"}
+	require.NoError(t, db.Create(&task).Error)
+	require.NoError(t, db.Create(&model.SystemTaskLock{
+		Type: task.Type, TaskID: task.TaskID, LockedBy: task.LockedBy, LockedUntil: time.Now().Unix() + 1000,
+	}).Error)
+	pelicanSyncHandler{}.Run(context.Background(), &task, "runner")
+	require.NoError(t, db.First(&task, task.ID).Error)
+	assert.Equal(t, model.SystemTaskStatusFailed, task.Status)
+	assert.Contains(t, task.Error, "storage is temporarily offline")
+	assert.NotContains(t, task.Error, token)
 	var saved model.PelicanRun
 	require.NoError(t, db.First(&saved, "id = ?", run.ID).Error)
 	assert.Equal(t, run.RenderPayload, saved.RenderPayload)
 	assert.Equal(t, "render_pending", saved.Status)
 	assert.Contains(t, string(saved.ErrorDetail), "storage is temporarily offline")
+	assert.NotContains(t, string(saved.ErrorDetail), token)
 	fail.Store(false)
+	config, err := loadPelicanServiceConfig()
+	require.NoError(t, err)
 	require.NoError(t, syncPelicanRun(context.Background(), config, saved))
 	require.NoError(t, db.First(&saved, "id = ?", run.ID).Error)
 	assert.Equal(t, "rendering", saved.Status)
@@ -333,6 +348,24 @@ func TestPelicanGalleryFiltersPrivateAndExpiredArtifacts(t *testing.T) {
 	c.Writer.WriteHeaderNow()
 	assert.Equal(t, 404, recorder.Code)
 	require.NoError(t, db.Model(&rule).Update("published", true).Error)
+	t.Setenv("PELICAN_TEST_TOKEN_ID", "")
+	token := strings.Repeat("artifact-token-", 3)
+	t.Setenv("PELICAN_SERVICE_TOKEN", token)
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer "+token, r.Header.Get("Authorization"))
+		if r.URL.Path == "/v1/artifacts/art_fixture" {
+			_, _ = w.Write([]byte("x"))
+		}
+	}))
+	t.Cleanup(service.Close)
+	t.Setenv("PELICAN_SERVICE_URL", service.URL)
+	recorder = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest("GET", "/", nil)
+	c.Params = gin.Params{{Key: "run_id", Value: run.ID}, {Key: "artifact_id", Value: "art_fixture"}}
+	GetPelicanArtifact(c)
+	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, "x", recorder.Body.String())
 	require.NoError(t, db.Model(&run).Update("expires_at", time.Now().Unix()-1).Error)
 	recorder = httptest.NewRecorder()
 	c, _ = gin.CreateTestContext(recorder)
@@ -447,9 +480,7 @@ func TestPelicanServiceURLDatabaseMatrix(t *testing.T) {
 					if step.bulk {
 						require.NoError(t, model.UpdateOptionsBulk(map[string]string{system_setting.PelicanServiceURLOptionKey: step.override}))
 					} else {
-						response.Success = false
-						modelManagementRequest(t, UpdateOption, "PUT", "/api/option/", model.Option{Key: system_setting.PelicanServiceURLOptionKey, Value: step.override}, &response)
-						require.True(t, response.Success, response.Message)
+						require.NoError(t, model.UpdateOption(system_setting.PelicanServiceURLOptionKey, step.override))
 					}
 					var stored model.Option
 					require.NoError(t, db.Where(&model.Option{Key: system_setting.PelicanServiceURLOptionKey}).First(&stored).Error)
@@ -489,7 +520,7 @@ func TestPelicanServiceURLDatabaseMatrix(t *testing.T) {
 			require.NoError(t, model.UpdateOption(system_setting.PelicanServiceURLOptionKey, retainedURL))
 			modelManagementRequest(t, UpdateOption, "PUT", "/api/option/", model.Option{Key: system_setting.PelicanServiceURLOptionKey, Value: "https://user:private-fixture@example.com?"}, &response)
 			assert.False(t, response.Success)
-			assert.Equal(t, system_setting.ErrPelicanServiceURLInvalid.Key, response.MessageKey)
+			assert.Equal(t, common.NewMessage("Change this value in the artifact service settings").Key, response.MessageKey)
 			assert.NotContains(t, response.Message, "private-fixture")
 			require.ErrorIs(t, model.UpdateOptionsBulk(map[string]string{system_setting.PelicanServiceURLOptionKey: "https://example.com#", "Notice": "must not be saved"}), system_setting.ErrPelicanServiceURLInvalid)
 			var count int64
@@ -503,15 +534,122 @@ func TestPelicanServiceURLDatabaseMatrix(t *testing.T) {
 			}))
 			t.Cleanup(func() { require.NoError(t, db.Callback().Update().Remove("pelican_service_url_save_failure")) })
 			require.ErrorIs(t, model.UpdateOption(system_setting.PelicanServiceURLOptionKey, server.URL+"/failed"), saveErr)
-			modelManagementRequest(t, UpdateOption, "PUT", "/api/option/", model.Option{Key: system_setting.PelicanServiceURLOptionKey, Value: server.URL + "/failed"}, &response)
-			assert.False(t, response.Success)
-			assert.Equal(t, saveErr.Error(), response.Message, "preserve the lower-level database diagnostic")
 			var stored model.Option
 			require.NoError(t, db.Where(&model.Option{Key: system_setting.PelicanServiceURLOptionKey}).First(&stored).Error)
 			assert.Equal(t, retainedURL, stored.Value)
 			effective, err := system_setting.GetPelicanServiceURL()
 			require.NoError(t, err)
 			assert.Equal(t, retainedURL, effective, "invalid and failed writes must leave the live configuration unchanged")
+
+			require.NoError(t, db.AutoMigrate(&model.Token{}))
+			t.Setenv("CRYPTO_SECRET", strings.Repeat("stable-key-", 4))
+			draftToken := strings.Repeat("replacement", 4)
+			var calls atomic.Int32
+			renderer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				if r.Header.Get("Authorization") != "Bearer "+draftToken {
+					w.WriteHeader(http.StatusUnauthorized)
+					_, _ = w.Write([]byte(r.Header.Get("Authorization")))
+					return
+				}
+				_, _ = w.Write([]byte(`{"render":true,"retention":{"max_items":20,"max_age_seconds":604800}}`))
+			}))
+			t.Cleanup(renderer.Close)
+			request := func(handler gin.HandlerFunc, input map[string]any) *httptest.ResponseRecorder {
+				t.Helper()
+				return modelManagementRequest(t, func(c *gin.Context) {
+					c.Set("id", 21)
+					handler(c)
+				}, "PUT", "/api/pelican/settings", input, nil)
+			}
+			require.Equal(t, 400, request(UpdatePelicanConnection, map[string]any{"url": renderer.URL}).Code)
+			assert.Zero(t, calls.Load(), "never send the old credential to a changed URL")
+			require.Equal(t, 200, request(UpdatePelicanConnection, map[string]any{"url": renderer.URL, "service_token": draftToken}).Code)
+			var option model.Option
+			require.NoError(t, db.First(&option, &model.Option{Key: system_setting.PelicanConnectionOptionKey}).Error)
+			assert.NotContains(t, option.Value, draftToken)
+			connection, err := system_setting.PelicanConnectionSnapshot()
+			require.NoError(t, err)
+			connection.URL += "/other"
+			_, err = connection.Token()
+			require.Error(t, err, "a stored credential is bound to its service URL")
+			config, _ := loadPelicanConfig()
+			assert.Equal(t, renderer.URL, config.URL)
+			assert.Equal(t, draftToken, config.ServiceToken)
+
+			invalidToken := strings.Repeat("unauthorized-", 3)
+			refused := request(UpdatePelicanConnection, map[string]any{"url": renderer.URL, "service_token": invalidToken})
+			assert.Equal(t, 400, refused.Code)
+			assert.Contains(t, refused.Body.String(), "401")
+			assert.NotContains(t, refused.Body.String(), invalidToken)
+			require.NoError(t, model.LoadOptionsFromDatabase())
+			config, _ = loadPelicanConfig()
+			assert.Equal(t, draftToken, config.ServiceToken)
+
+			settings := modelManagementRequest(t, GetPelicanSettings, "GET", "/api/pelican/settings", nil, nil)
+			require.Equal(t, 200, settings.Code)
+			assert.Contains(t, settings.Body.String(), `"service_token_configured":true`)
+			assert.NotContains(t, settings.Body.String(), draftToken)
+			options := modelManagementRequest(t, GetOptions, "GET", "/api/option/", nil, nil)
+			assert.NotContains(t, options.Body.String(), system_setting.PelicanConnectionOptionKey)
+
+			renderer.Close()
+			own := model.Token{UserId: 21, Name: "pelican", Group: "default", Status: common.TokenStatusEnabled, Key: strings.Repeat("x", 32)}
+			other := model.Token{UserId: 22, Name: "other", Group: "default", Status: common.TokenStatusEnabled, Key: strings.Repeat("y", 32)}
+			require.NoError(t, db.Create(&own).Error)
+			require.NoError(t, db.Create(&other).Error)
+			assert.Equal(t, 400, request(UpdatePelicanTestToken, map[string]any{"id": other.Id}).Code)
+			updated := request(UpdatePelicanTestToken, map[string]any{"id": own.Id})
+			require.Equal(t, 200, updated.Code, updated.Body.String())
+			config, err = loadPelicanConfig()
+			require.NoError(t, err)
+			assert.Equal(t, own.Id, config.TokenID)
+			assert.Equal(t, 200, request(UpdatePelicanTestToken, map[string]any{"id": 0}).Code)
+			assert.Equal(t, 1, system_setting.PelicanTestTokenID(), "clearing the override restores the env value")
+			assert.Equal(t, 200, request(UpdatePelicanConnection, map[string]any{"url": ""}).Code)
+			_, err = loadPelicanConfig()
+			assert.ErrorIs(t, err, system_setting.ErrPelicanServiceURLInvalid)
+		})
+	}
+}
+
+func TestPelicanSettingsRequireRecentDashboardLogin(t *testing.T) {
+	db := modelManagementDB(t, "sqlite", "")
+	require.NoError(t, db.AutoMigrate(&model.UserSession{}))
+	user := model.User{Username: "pelican-root", Role: common.RoleRootUser, Status: common.UserStatusEnabled, AuthVersion: 1}
+	require.NoError(t, db.Create(&user).Error)
+	now := time.Now().Unix()
+	for _, test := range []struct {
+		name      string
+		createdAt int64
+		want      int
+	}{
+		{"missing_browser_session", 0, http.StatusForbidden},
+		{"stale_login", now - 16*60, http.StatusForbidden},
+		{"active_recent_login", now - 5, http.StatusNoContent},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.createdAt != 0 {
+				session := model.UserSession{
+					SID: test.name, UserID: user.Id, Version: 1, UserAuthVersion: 1, Status: model.UserSessionStatusActive,
+					RefreshHash: strings.Repeat("a", 64), LoginMethod: "password",
+					CreatedAt: test.createdAt, LastActiveAt: now, ExpiresAt: now + 3600,
+				}
+				require.NoError(t, db.Create(&session).Error)
+			}
+			recorder := httptest.NewRecorder()
+			router := gin.New()
+			router.PUT("/settings", func(c *gin.Context) {
+				c.Set("id", user.Id)
+				c.Set("session_id", test.name)
+				c.Set("auth_version", int64(1))
+				c.Set("session_version", int64(1))
+				if test.createdAt == 0 {
+					c.Set("session_id", "")
+				}
+			}, RequireRecentPelicanLogin, func(c *gin.Context) { c.Status(http.StatusNoContent) })
+			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/settings", nil))
+			assert.Equal(t, test.want, recorder.Code, recorder.Body.String())
 		})
 	}
 }

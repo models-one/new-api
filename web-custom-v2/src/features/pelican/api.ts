@@ -53,6 +53,28 @@ export function getRules(): Promise<PelicanRule[]> {
 export function getPelicanStatus(): Promise<PelicanStatus> {
   return request({ url: '/api/pelican/admin/status' })
 }
+export type PelicanSettings = {
+  url: string
+  service_token_configured: boolean
+  test_token_id: number
+  test_tokens: { id: number; name: string }[]
+}
+
+export function getPelicanSettings(): Promise<PelicanSettings> {
+  return request({ url: '/api/pelican/settings' })
+}
+
+export function savePelicanConnection(url: string, service_token: string): Promise<void> {
+  return request({
+    url: '/api/pelican/settings/connection',
+    method: 'PUT',
+    data: { url, service_token },
+  })
+}
+
+export function savePelicanTestToken(id: number): Promise<void> {
+  return request({ url: '/api/pelican/settings/test-token', method: 'PUT', data: { id } })
+}
 export function saveRule(rule: PelicanRule): Promise<PelicanRule> {
   return request({
     url: `/api/pelican/admin/rules${rule.id ? `/${rule.id}` : ''}`,

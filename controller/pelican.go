@@ -21,7 +21,11 @@ import (
 )
 
 func pelicanAPIError(c *gin.Context, err error, status int) {
-	config, _ := loadPelicanConfig()
+	config, _ := loadPelicanServiceConfig()
+	pelicanConnectionError(c, err, status, config)
+}
+
+func pelicanConnectionError(c *gin.Context, err error, status int, config pelicanConfig) {
 	message := common.NewMessage("Pelican operation failed")
 	fields := message.Fields()
 	fields["success"], fields["message"], fields["details"] = false, message.Error(), pelicanErrorDetail(err, config)
@@ -143,7 +147,7 @@ func RunPelicanRule(c *gin.Context) {
 		err = pelicanCheckService(c.Request.Context(), config)
 	}
 	if err != nil {
-		pelicanAPIError(c, err, 503)
+		pelicanConnectionError(c, err, 503, config)
 		return
 	}
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -338,10 +342,10 @@ func servePelicanArtifact(c *gin.Context, admin bool) {
 		c.Status(502)
 		return
 	}
-	config, err := loadPelicanConfig()
+	config, err := loadPelicanServiceConfig()
 	if err != nil {
 		if admin {
-			pelicanAPIError(c, err, 503)
+			pelicanConnectionError(c, err, 503, config)
 		} else {
 			c.Status(503)
 		}
@@ -356,7 +360,7 @@ func servePelicanArtifact(c *gin.Context, admin bool) {
 	response, err := pelicanHTTP.Do(request)
 	if err != nil {
 		if admin {
-			pelicanAPIError(c, err, 502)
+			pelicanConnectionError(c, err, 502, config)
 		} else {
 			c.Status(502)
 		}
@@ -370,7 +374,7 @@ func servePelicanArtifact(c *gin.Context, admin bool) {
 		}
 		if admin {
 			body, _ := io.ReadAll(io.LimitReader(response.Body, 32000))
-			pelicanAPIError(c, &pelicanDiagnosticError{Detail: map[string]any{"status": response.StatusCode, "response_body": string(body)}}, 502)
+			pelicanConnectionError(c, &pelicanDiagnosticError{Detail: map[string]any{"status": response.StatusCode, "response_body": string(body)}}, 502, config)
 		} else {
 			c.Status(502)
 		}

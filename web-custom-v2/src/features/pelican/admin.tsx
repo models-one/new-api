@@ -286,13 +286,6 @@ export function PelicanAdmin() {
           {t('Artifact service URL')}: {status.data.service_url}
         </p>
       )}
-      {!status.data?.ready && (
-        <p className="text-muted text-sm">
-          {t(
-            'Set the artifact service address in service settings. Configure PELICAN_SERVICE_TOKEN and PELICAN_TEST_TOKEN_ID on the server.',
-          )}
-        </p>
-      )}
       <Tabs defaultValue="rules">
         <Tabs.List className="overflow-y-hidden">
           <Tabs.Tab value="rules">{t('Test rules')}</Tabs.Tab>

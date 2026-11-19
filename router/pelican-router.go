@@ -9,6 +9,10 @@ import (
 )
 
 func registerPelicanRoutes(api *gin.RouterGroup) {
+	settings := api.Group("/pelican/settings", middleware.RootAuth(), middleware.SessionCookieOriginGuard(), middleware.DisableCache())
+	settings.GET("", controller.GetPelicanSettings)
+	settings.PUT("/connection", middleware.CriticalRateLimit(), controller.RequireRecentPelicanLogin, controller.UpdatePelicanConnection)
+	settings.PUT("/test-token", middleware.CriticalRateLimit(), controller.RequireRecentPelicanLogin, controller.UpdatePelicanTestToken)
 	user := api.Group("/pelican", middleware.UserAuth(), middleware.DisableCache())
 	user.GET("/gallery", controller.GetPelicanGallery)
 	user.GET("/runs/:run_id/artifacts/:artifact_id", controller.GetPelicanArtifact)

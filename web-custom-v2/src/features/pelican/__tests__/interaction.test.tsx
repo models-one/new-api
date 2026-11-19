@@ -366,19 +366,32 @@ it('shows execution failures to an administrator with the original debugging det
   expect(within(dialog).getByRole('button', { name: 'Copy' })).toBeEnabled()
 })
 
-it('saves a root service address, preserves failed edits and clears the override', async () => {
-  let saved = ''
+it('saves root connection and test key independently without echoing the service token', async () => {
+  let saved = 'http://environment:3001'
+  let testToken = 0
   let refusal = ''
   const adapter = mockApi((config) => {
-    if (config.url === '/api/option/') {
-      if (config.method === 'put') {
-        if (refusal) return { success: false, message: refusal }
-        const body = JSON.parse(config.data as string)
-        expect(body.key).toBe('PelicanServiceURL')
-        saved = body.value
-        return { success: true }
+    if (config.url === '/api/pelican/settings') {
+      return {
+        success: true,
+        data: {
+          url: saved,
+          service_token_configured: true,
+          test_token_id: testToken,
+          test_tokens: [{ id: 9, name: 'fixture' }],
+        },
       }
-      return { success: true, data: [{ key: 'PelicanServiceURL', value: saved }] }
+    }
+    if (config.url === '/api/pelican/settings/connection') {
+      if (refusal) return { success: false, message: refusal }
+      const body = JSON.parse(config.data as string)
+      expect(body.service_token).toBe('fixture-write-only-service-credential')
+      saved = body.url.replace(/\/+$/, '')
+      return { success: true }
+    }
+    if (config.url === '/api/pelican/settings/test-token') {
+      testToken = JSON.parse(config.data as string).id
+      return { success: true }
     }
     if (config.url === '/api/user/self') return { success: true, data: { id: 1, role: 100 } }
     if (config.url?.endsWith('/status'))
@@ -393,14 +406,20 @@ it('saves a root service address, preserves failed edits and clears the override
   fireEvent.click(await screen.findByRole('button', { name: 'Artifact service settings' }))
   const dialog = await screen.findByRole('dialog')
   const input = await within(dialog).findByRole('textbox', { name: 'Artifact service URL' })
+  const secret = within(dialog).getByLabelText('Artifact service token')
+  const connectionSave = within(dialog).getAllByRole('button', { name: 'Save changes' })[0]
+  const keySave = within(dialog).getAllByRole('button', { name: 'Save changes' })[1]
+  expect(secret).toHaveValue('')
   fireEvent.change(input, { target: { value: ' http://renderer:3001/prefix/ ' } })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+  fireEvent.change(secret, { target: { value: 'fixture-write-only-service-credential' } })
+  fireEvent.click(connectionSave)
   await waitFor(() => expect(input).toHaveValue('http://renderer:3001/prefix'))
-  expect(within(dialog).getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  expect(secret).toHaveValue('')
+  expect(connectionSave).toBeDisabled()
   await act(() => i18n.changeLanguage('zh'))
   refusal = 'Artifact service URL must be an HTTP(S) address without credentials, query or fragment'
   fireEvent.change(input, { target: { value: 'ftp://invalid.example' } })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+  fireEvent.click(connectionSave)
   expect(
     await within(dialog).findByText(
       '独立服务地址必须为 HTTP(S) 地址，且不能包含凭据、查询参数或片段',
@@ -411,19 +430,18 @@ it('saves a root service address, preserves failed edits and clears the override
   await act(() => i18n.changeLanguage('en'))
   refusal = 'database: connection reset by peer'
   fireEvent.change(input, { target: { value: 'https://replacement.example' } })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+  fireEvent.click(connectionSave)
   expect(await within(dialog).findByText(refusal)).toBeVisible()
   expect(input).toHaveValue('https://replacement.example')
   expect(saved).toBe('http://renderer:3001/prefix')
-  refusal = ''
-  fireEvent.change(input, { target: { value: '' } })
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
-  await waitFor(() =>
-    expect(within(dialog).getByRole('button', { name: 'Save changes' })).toBeDisabled(),
-  )
-  expect(saved).toBe('')
+  const select = within(dialog).getByRole('combobox', { name: 'Test API key' })
+  fireEvent.change(select, { target: { value: '9' } })
+  fireEvent.click(keySave)
+  await waitFor(() => expect(keySave).toBeDisabled())
+  expect(testToken).toBe(9)
+  expect(input).toHaveValue('https://replacement.example')
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
-  expect(await screen.findByText('Artifact service URL: http://environment:3001')).toBeVisible()
+  expect(await screen.findByText('Artifact service URL: http://renderer:3001/prefix')).toBeVisible()
   expect(adapter.mock.calls.filter(([config]) => config.method === 'put')).toHaveLength(4)
 })
 
@@ -447,5 +465,7 @@ it('does not offer service configuration or fetch root options to a channel admi
   expect(
     screen.queryByRole('button', { name: 'Artifact service settings' }),
   ).not.toBeInTheDocument()
-  expect(adapter.mock.calls.some(([config]) => config.url === '/api/option/')).toBe(false)
+  expect(
+    adapter.mock.calls.some(([config]) => config.url?.startsWith('/api/pelican/settings')),
+  ).toBe(false)
 })

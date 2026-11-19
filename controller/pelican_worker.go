@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -31,18 +30,12 @@ type pelicanConfig struct {
 }
 
 func loadPelicanConfig() (pelicanConfig, error) {
-	serviceURL, err := system_setting.GetPelicanServiceURL()
-	config := pelicanConfig{URL: serviceURL, ServiceToken: os.Getenv("PELICAN_SERVICE_TOKEN"),
-		TokenID: common.GetEnvOrDefault("PELICAN_TEST_TOKEN_ID", 0), Concurrency: common.GetEnvOrDefault("PELICAN_CONCURRENCY", 2),
-		Timeout: time.Duration(common.GetEnvOrDefault("PELICAN_TIMEOUT_SECONDS", 300)) * time.Second}
+	config, err := loadPelicanServiceConfig()
+	config.TokenID = system_setting.PelicanTestTokenID()
+	config.Concurrency = common.GetEnvOrDefault("PELICAN_CONCURRENCY", 2)
+	config.Timeout = time.Duration(common.GetEnvOrDefault("PELICAN_TIMEOUT_SECONDS", 300)) * time.Second
 	if err != nil {
 		return config, err
-	}
-	if config.URL == "" {
-		return config, system_setting.ErrPelicanServiceURLInvalid
-	}
-	if len(config.ServiceToken) < 32 || strings.ContainsAny(config.ServiceToken, " \r\n\t") {
-		return config, errors.New("PELICAN_SERVICE_TOKEN must contain at least 32 non-whitespace characters")
 	}
 	if config.TokenID <= 0 {
 		return config, errors.New("PELICAN_TEST_TOKEN_ID must reference a dedicated relay token")
@@ -54,6 +47,32 @@ func loadPelicanConfig() (pelicanConfig, error) {
 		return config, errors.New("PELICAN_TIMEOUT_SECONDS must be between 1 and 1800")
 	}
 	return config, nil
+}
+
+func loadPelicanServiceConfig() (pelicanConfig, error) {
+	connection, err := system_setting.PelicanConnectionSnapshot()
+	config := pelicanConfig{URL: connection.URL}
+	if err != nil {
+		return config, err
+	}
+	if config.URL == "" {
+		return config, system_setting.ErrPelicanServiceURLInvalid
+	}
+	config.ServiceToken, err = connection.Token()
+	if err != nil {
+		return config, err
+	}
+	if err := validatePelicanExistingToken(config.ServiceToken); err != nil {
+		return config, err
+	}
+	return config, nil
+}
+
+func validatePelicanExistingToken(token string) error {
+	if len(token) < 32 || strings.ContainsAny(token, " \r\n\t") {
+		return errors.New("PELICAN_SERVICE_TOKEN must contain at least 32 non-whitespace characters")
+	}
+	return nil
 }
 
 type pelicanDiagnosticError struct{ Detail any }
@@ -344,7 +363,7 @@ func (pelicanSyncHandler) Enabled() bool {
 func (pelicanSyncHandler) Interval() time.Duration { return 15 * time.Second }
 func (pelicanSyncHandler) NewPayload() any         { return nil }
 func (pelicanSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
-	config, err := loadPelicanConfig()
+	config, err := loadPelicanServiceConfig()
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return
@@ -357,7 +376,7 @@ func (pelicanSyncHandler) Run(ctx context.Context, task *model.SystemTask, runne
 			break
 		}
 		if syncErr := syncPelicanRun(ctx, config, run); syncErr != nil {
-			err = syncErr
+			err = errors.New(pelicanErrorDetail(syncErr, config))
 		}
 	}
 	finishSystemTaskHandler(task, runnerID, pelicanTaskStatus(err), map[string]int{"checked": len(pending)}, err)

@@ -1,6 +1,12 @@
 package system_setting
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hkdf"
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
 	"net/netip"
 	"net/url"
 	"os"
@@ -11,6 +17,92 @@ import (
 )
 
 const PelicanServiceURLOptionKey = "PelicanServiceURL"
+const PelicanConnectionOptionKey = "PelicanConnectionSecret"
+const PelicanTestTokenOptionKey = "PelicanTestTokenID"
+
+type PelicanConnection struct {
+	URL         string `json:"url"`
+	SealedToken string `json:"sealed_token,omitempty"`
+}
+
+func PelicanConnectionSnapshot() (PelicanConnection, error) {
+	common.OptionMapRWMutex.RLock()
+	stored := common.OptionMap[PelicanConnectionOptionKey]
+	legacyURL := common.OptionMap[PelicanServiceURLOptionKey]
+	common.OptionMapRWMutex.RUnlock()
+	var connection PelicanConnection
+	if stored != "" {
+		if err := common.UnmarshalJsonStr(stored, &connection); err != nil {
+			return connection, errors.New("Invalid stored artifact service connection")
+		}
+	} else {
+		connection.URL = legacyURL
+	}
+	if connection.URL == "" && connection.SealedToken == "" {
+		connection.URL = os.Getenv("PELICAN_SERVICE_URL")
+	}
+	var err error
+	connection.URL, err = NormalizePelicanServiceURL(connection.URL)
+	return connection, err
+}
+
+func PelicanTestTokenID() int {
+	common.OptionMapRWMutex.RLock()
+	saved := common.OptionMap[PelicanTestTokenOptionKey]
+	common.OptionMapRWMutex.RUnlock()
+	if saved == "" {
+		return common.GetEnvOrDefault("PELICAN_TEST_TOKEN_ID", 0)
+	}
+	id, _ := strconv.Atoi(saved)
+	return id
+}
+
+func (c PelicanConnection) Token() (string, error) {
+	if c.SealedToken == "" {
+		return os.Getenv("PELICAN_SERVICE_TOKEN"), nil
+	}
+	aead, err := pelicanConnectionCipher()
+	if err != nil {
+		return "", err
+	}
+	sealed, err := base64.RawStdEncoding.DecodeString(c.SealedToken)
+	if err != nil {
+		return "", errors.New("Cannot decrypt the artifact service token")
+	}
+	raw, err := aead.Open(nil, nil, sealed, []byte(c.URL))
+	if err != nil {
+		return "", errors.New("Cannot decrypt the artifact service token")
+	}
+	return string(raw), nil
+}
+
+func (c *PelicanConnection) SealToken(token string) error {
+	aead, err := pelicanConnectionCipher()
+	if err != nil {
+		return err
+	}
+	c.SealedToken = base64.RawStdEncoding.EncodeToString(aead.Seal(nil, nil, []byte(token), []byte(c.URL)))
+	return nil
+}
+
+func pelicanConnectionCipher() (cipher.AEAD, error) {
+	secret := os.Getenv("CRYPTO_SECRET")
+	if secret == "" {
+		secret = os.Getenv("SESSION_SECRET")
+	}
+	if len(secret) < 32 {
+		return nil, errors.New("Configure a stable CRYPTO_SECRET or SESSION_SECRET of at least 32 characters before saving an artifact service token")
+	}
+	key, err := hkdf.Key(sha256.New, []byte(secret), nil, "new-api/pelican-connection/v1", 32)
+	if err != nil {
+		return nil, err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	return cipher.NewGCMWithRandomNonce(block)
+}
 
 var ErrPelicanServiceURLInvalid = common.NewMessage("Artifact service URL must be an HTTP(S) address without credentials, query or fragment")
 
@@ -48,11 +140,6 @@ func NormalizePelicanServiceURL(value string) (string, error) {
 // GetPelicanServiceURL reads the live option on every call. A blank override
 // falls back to the environment; invalid addresses are never returned to callers.
 func GetPelicanServiceURL() (string, error) {
-	common.OptionMapRWMutex.RLock()
-	value := common.OptionMap[PelicanServiceURLOptionKey]
-	common.OptionMapRWMutex.RUnlock()
-	if strings.TrimSpace(value) == "" {
-		value = os.Getenv("PELICAN_SERVICE_URL")
-	}
-	return NormalizePelicanServiceURL(value)
+	connection, err := PelicanConnectionSnapshot()
+	return connection.URL, err
 }
