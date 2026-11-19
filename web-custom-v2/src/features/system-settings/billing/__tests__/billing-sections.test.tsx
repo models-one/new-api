@@ -372,6 +372,11 @@ function pricingChanges(): PricingChange[] {
 
 afterEach(cleanup)
 
+/** The model pricing page shows one tab at a time. */
+async function openTab(name: string) {
+  fireEvent.click(await screen.findByRole('tab', { name }))
+}
+
 describe('QuotaSection and the payment-compliance gate', () => {
   it('reads the amounts off a payload in which every value is a string', async () => {
     renderSection(<QuotaSection />)
@@ -746,6 +751,7 @@ describe('ModelPricingSection', () => {
     // It leaves the table; with no built-in price it is now listed as unpriced instead.
     const table = screen.getByRole('table', { name: 'Configured model prices' })
     await waitFor(() => expect(within(table).queryByText('gpt-4-all')).not.toBeInTheDocument())
+    await openTab('Unpriced models')
     expect(await screen.findByRole('button', { name: 'Set a price for gpt-4-all' })).toBeInTheDocument()
   })
 
@@ -762,6 +768,7 @@ describe('ModelPricingSection', () => {
     server.builtin['claude-x'] = { ModelRatio: 1 }
     server.enabledModels = ['gpt-4-all', 'dall-e-3', 'claude-x', 'gpt-5-preview']
     renderSection(<ModelPricingSection />)
+    await openTab('Unpriced models')
 
     expect(await screen.findByRole('button', { name: 'Set a price for gpt-5-preview' })).toBeInTheDocument()
     expect(screen.getByText(/A request for one of them is refused/)).toBeInTheDocument()
@@ -771,6 +778,7 @@ describe('ModelPricingSection', () => {
   it('opens the editor with the servable model’s own name, not a blank one', async () => {
     server.enabledModels = ['gpt-5-preview']
     renderSection(<ModelPricingSection />)
+    await openTab('Unpriced models')
 
     fireEvent.click(await screen.findByRole('button', { name: 'Set a price for gpt-5-preview' }))
 
@@ -791,6 +799,7 @@ describe('ModelPricingSection', () => {
   it('says everything is priced rather than showing an empty list', async () => {
     server.enabledModels = ['gpt-4-all', 'dall-e-3']
     renderSection(<ModelPricingSection />)
+    await openTab('Unpriced models')
 
     expect(await screen.findByText(/All 2 servable model\(s\) have a base price\./)).toBeInTheDocument()
   })
@@ -798,6 +807,7 @@ describe('ModelPricingSection', () => {
   it('separates “no channel is enabled” from “everything is priced”', async () => {
     server.enabledModels = null
     renderSection(<ModelPricingSection />)
+    await openTab('Unpriced models')
 
     expect(
       await screen.findByText(/No channel is enabled, so nothing is servable yet/),
@@ -809,8 +819,10 @@ describe('ModelPricingSection', () => {
     // gate the rest of this page sits behind. Losing it must not take the table with it.
     server.enabledModelsFails = true
     renderSection(<ModelPricingSection />)
+    await openTab('Unpriced models')
 
     expect(await screen.findByText('no permission for channel')).toBeInTheDocument()
+    await openTab('Models')
     expect(await screen.findByText('dall-e-3')).toBeInTheDocument()
   })
 
@@ -835,17 +847,6 @@ describe('ModelPricingSection', () => {
 
     expect(await screen.findByText('model-25')).toBeInTheDocument()
     expect(screen.queryByText('model-01')).not.toBeInTheDocument()
-  })
-
-  it('refuses tool prices that are not a JSON object', async () => {
-    renderSection(<ModelPricingSection />)
-    await settled('Tool prices')
-
-    fireEvent.change(screen.getByLabelText('Tool prices'), { target: { value: 'not json' } })
-    await save()
-
-    expect(await screen.findAllByText('This is not valid JSON.')).not.toHaveLength(0)
-    expect(writes()).toHaveLength(0)
   })
 
   it('gates the server-side ratio reset behind typing the key name', async () => {
@@ -1042,6 +1043,159 @@ describe('ModelPricingSection, task plugin prices', () => {
 
     await waitFor(() => expect(pricingChanges()).toHaveLength(1))
     expect(pricingChanges()[0].pricing[PLUGIN_KEY]).toBeUndefined()
+  })
+})
+
+describe('ModelPricingSection, tool prices', () => {
+  function storedToolPrices(): Record<string, number> {
+    const write = writes().find((item) => item.key === 'tool_price_setting.prices')
+    return JSON.parse(write?.value ?? 'null') as Record<string, number>
+  }
+
+  it('stores only the prices changed or added, never an untouched built-in', async () => {
+    server.stored['tool_price_setting.prices'] = '{"custom_tool":3}'
+    renderSection(<ModelPricingSection />)
+    await openTab('Tool prices')
+
+    // Built-ins are listed for reference; nothing changed, so nothing can be saved.
+    expect(await screen.findByLabelText('Price of web_search')).toHaveValue('10')
+    expect(screen.getByRole('button', { name: 'Save tool prices' })).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText('Price of file_search'), { target: { value: '0' } })
+    expect(screen.getByText('Overrides built-in 2.5')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save tool prices' }))
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(storedToolPrices()).toEqual({ custom_tool: 3, file_search: 0 })
+  })
+
+  it('goes back to a built-in price by dropping the override', async () => {
+    server.stored['tool_price_setting.prices'] = '{"web_search":8}'
+    renderSection(<ModelPricingSection />)
+    await openTab('Tool prices')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Use the built-in price for web_search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save tool prices' }))
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(storedToolPrices()).toEqual({})
+  })
+
+  it('adds a price for a model prefix, and refuses a negative or empty one', async () => {
+    renderSection(<ModelPricingSection />)
+    await openTab('Tool prices')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a tool price' }))
+    fireEvent.change(screen.getByLabelText('Tool name of new tool'), { target: { value: 'web_search' } })
+    fireEvent.change(screen.getByLabelText('Model prefix of web_search'), { target: { value: 'gpt-5*' } })
+    fireEvent.change(screen.getByLabelText('Price of web_search:gpt-5*'), { target: { value: '-1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save tool prices' }))
+
+    expect(await screen.findByText('Enter a finite, non-negative price (0 makes it free).')).toBeInTheDocument()
+    expect(writes()).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText('Price of web_search:gpt-5*'), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save tool prices' }))
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(storedToolPrices()).toEqual({ 'web_search:gpt-5*': 12 })
+  })
+})
+
+describe('ModelPricingSection, upstream sync', () => {
+  const SOURCE = 'up-a(3)'
+
+  beforeEach(() => {
+    const fallback = get.getMockImplementation()!
+    get.mockImplementation((url: string) => {
+      if (url === '/api/ratio_sync/channels') {
+        return Promise.resolve({
+          data: {
+            data: [
+              { base_url: 'https://a.example', id: 3, name: 'up-a', status: 1, type: 1 },
+              { base_url: 'https://basellm.github.io', id: -100, name: '官方倍率预设', status: 1, type: 0 },
+            ],
+            message: '',
+            success: true,
+          },
+        })
+      }
+      return fallback(url)
+    })
+    post.mockImplementation((url: string) => {
+      if (url !== '/api/ratio_sync/fetch') throw new Error(`unmocked POST ${url}`)
+      return Promise.resolve({
+        data: {
+          data: {
+            differences: { 'gpt-4-all': {} },
+            prices: {
+              'dall-e-3': { current: { model_price: 0.04 }, upstreams: { [SOURCE]: { model_price: 0.04 } } },
+              'gpt-4-all': { current: { completion_ratio: 2, model_ratio: 15 }, upstreams: { [SOURCE]: { completion_ratio: 2, model_ratio: 10 } } },
+            },
+            test_results: [{ name: SOURCE, status: 'success' }],
+          },
+          message: '',
+          success: true,
+        },
+      })
+    })
+  })
+
+  async function compare() {
+    renderSection(<ModelPricingSection />)
+    await openTab('Upstream sync')
+    fireEvent.click(await screen.findByRole('checkbox', { name: /up-a/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Compare prices' }))
+    await screen.findByRole('list', { name: 'Models to compare' })
+  }
+
+  it('reads the chosen sources server-side and lists only the models that differ', async () => {
+    await compare()
+
+    expect(post).toHaveBeenCalledWith(
+      '/api/ratio_sync/fetch',
+      { include_unchanged: true, timeout: 10, upstreams: [{ base_url: 'https://a.example', endpoint: '/api/pricing', id: 3, name: 'up-a' }] },
+      expect.anything(),
+    )
+    const list = screen.getByRole('list', { name: 'Models to compare' })
+    expect(within(list).getByText('gpt-4-all')).toBeInTheDocument()
+    expect(within(list).queryByText('dall-e-3')).not.toBeInTheDocument()
+    expect(patch).not.toHaveBeenCalled()
+  })
+
+  it('imports a chosen price for that model only, against the version read with the comparison', async () => {
+    server.stored[PLUGIN_KEY] = '{"acme::gpt-4-all":"tier(\\"base\\", u(\\"n\\") * 1)"}'
+    await compare()
+
+    fireEvent.click(screen.getByRole('radio', { name: /^up-a\(3\)/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Review 1 change(s)' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Import these prices?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Import 1 price(s)' }))
+
+    await waitFor(() => expect(pricingChanges()).toHaveLength(1))
+    expect(pricingChanges()[0]).toEqual({
+      expected_version: 'v0',
+      model_name: 'gpt-4-all',
+      pricing: {
+        'billing_setting.billing_mode': 'ratio',
+        'billing_setting.plugin_billing_expr': { acme: 'tier("base", u("n") * 1)' },
+        CompletionRatio: 2,
+        ModelRatio: 10,
+      },
+    })
+  })
+
+  it('refuses to import over a price changed after the comparison', async () => {
+    await compare()
+    server.revisions['gpt-4-all'] = 1
+
+    fireEvent.click(screen.getByRole('radio', { name: /^up-a\(3\)/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Review 1 change(s)' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Import these prices?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Import 1 price(s)' }))
+
+    expect(await within(dialog).findByText('Prices changed since the comparison')).toBeInTheDocument()
+    expect(JSON.parse(server.stored.ModelRatio)).toEqual({ 'gpt-4-all': 15 })
   })
 })
 

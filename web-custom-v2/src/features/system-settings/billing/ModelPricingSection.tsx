@@ -16,14 +16,16 @@ import {
   useDataTable,
   type DataTableColumns,
 } from '@/components/data'
-import { Checkbox, NativeSelect, SearchInput, SwitchRow, Textarea, type CheckboxState } from '@/components/form'
+import { Checkbox, NativeSelect, SearchInput, SwitchRow, type CheckboxState } from '@/components/form'
 import { ConfirmDialog, toErrorMessage, toast } from '@/components/overlay'
 import { Alert, Badge, Button, Panel } from '@/components/ui'
-import { formatTierCondition, parseTieredBilling } from '@/features/pricing/tiered-billing'
+import { Tabs } from '@/components/disclosure'
 import { ModelPricingEditor } from '@/features/system-settings/billing/components/ModelPricingEditor'
+import { PriceSyncPanel } from '@/features/system-settings/billing/components/PriceSyncPanel'
+import { ToolPricesPanel } from '@/features/system-settings/billing/components/ToolPricesPanel'
+import { PriceSummary } from '@/features/system-settings/billing/components/PriceSummary'
 import { UnpricedModelsPanel } from '@/features/system-settings/billing/components/UnpricedModelsPanel'
 import {
-  BILLING_EXPR_KEY,
   fetchModelPricingEntries,
   ModelPricingConflictError,
   modelPricingIssuesQuery,
@@ -32,14 +34,11 @@ import {
   saveModelPricingChanges,
   type ModelPricingEntry,
   type ModelPricingIssue,
-  type PricingValues,
 } from '@/features/system-settings/billing/model-pricing-api'
-import { formatPrice, pricingModeOf, ratioToUsdPerMillion, type PricingMode } from '@/features/system-settings/billing/model-pricing-draft'
-import { checkJsonShape } from '@/features/system-settings/billing/option-json'
+import { pricingModeOf, type PricingMode } from '@/features/system-settings/billing/model-pricing-draft'
 import { SettingsSection } from '@/features/system-settings/components/SettingsSection'
 import {
   readOptionBoolean,
-  readOptionString,
   systemOptionsQuery,
   useInvalidateSystemOptions,
   type SystemOptionMap,
@@ -58,21 +57,19 @@ import { postJson } from '@/lib/api/client'
  * and is refused if someone else changed it first. Nothing writes the pricing option maps
  * whole, which would store the built-in prices as administrator overrides.
  *
- * Two plain options stay on the section form: `ExposeRatioEnabled` and
- * `tool_price_setting.prices`.
+ * Four tabs: the model list (with `ExposeRatioEnabled` and the ratio reset), servable
+ * models with no price, tool prices, and comparing with upstream sources.
  */
 
 type PricingSectionDraft = {
   ExposeRatioEnabled: boolean
-  'tool_price_setting.prices': string
 }
 
 function toDraft(options: SystemOptionMap | undefined): PricingSectionDraft {
-  return {
-    ExposeRatioEnabled: readOptionBoolean(options, 'ExposeRatioEnabled', false),
-    'tool_price_setting.prices': readOptionString(options, 'tool_price_setting.prices', '{}'),
-  }
+  return { ExposeRatioEnabled: readOptionBoolean(options, 'ExposeRatioEnabled', false) }
 }
+
+type PricingTab = 'models' | 'unpriced' | 'tools' | 'sync'
 
 type SourceFilter = 'all' | 'stored' | 'inherited' | 'attention'
 
@@ -104,50 +101,6 @@ function selectAllState(all: boolean, some: boolean): CheckboxState {
   return some ? 'indeterminate' : false
 }
 
-/** The price a model is charged, in one line of USD figures. */
-function PriceSummary(props: { values: PricingValues; quotaPerUnit: number }) {
-  const { t } = useTranslation()
-  const values = props.values
-  const mode = pricingModeOf(values)
-
-  if (mode === 'per-request') {
-    return <span className="text-sm">{t('${{price}} per request', { price: formatPrice(values.ModelPrice ?? 0) })}</span>
-  }
-
-  if (mode === 'per-token') {
-    const ratio = values.ModelRatio
-    if (ratio === undefined) return <span className="text-sm text-muted">{t('Not priced')}</span>
-    const input = ratioToUsdPerMillion(ratio, props.quotaPerUnit)
-    const output = input * (values.CompletionRatio ?? 1)
-    return (
-      <span className="text-sm">
-        {t('Input ${{input}} · Output ${{output}} per 1M tokens', { input: formatPrice(input), output: formatPrice(output) })}
-      </span>
-    )
-  }
-
-  const billing = parseTieredBilling({ billing_expr: values[BILLING_EXPR_KEY] ?? '', billing_mode: 'tiered_expr' } as Parameters<typeof parseTieredBilling>[0])
-  const first = billing?.tiers[0]
-  if (billing === undefined || first === undefined) {
-    return <span className="mono text-xs text-muted">{t('Custom expression')}</span>
-  }
-  return (
-    <span className="flex flex-col gap-0.5 text-sm">
-      <span>
-        {first.prices.map((price) => `${t(price.variable.labelKey)} $${formatPrice(price.perMillion)}`).join(' · ')}
-        {first.prices.length > 0 ? ` ${t('per 1M tokens')}` : ''}
-      </span>
-      {billing.tiers.length > 1 ? (
-        <span className="text-xs text-muted">
-          {t('{{count}} tiers', { count: billing.tiers.length })}
-          {first.conditions.length > 0 ? ` · ${t('first when {{condition}}', { condition: first.conditions.map(formatTierCondition).join(' && ') })}` : ''}
-        </span>
-      ) : null}
-      {billing.hasConditionalMultipliers ? <span className="text-xs text-muted">{t('With request rules')}</span> : null}
-    </span>
-  )
-}
-
 type EditorTarget = { entry: ModelPricingEntry | undefined; initialName?: string }
 
 export function ModelPricingSection() {
@@ -172,19 +125,8 @@ export function ModelPricingSection() {
   const [confirmReset, setConfirmReset] = useState(false)
   const [resetting, setResetting] = useState(false)
 
-  const form = useOptionSectionForm<PricingSectionDraft>({
-    saved: toDraft(optionsQuery.data),
-    validate: (values) => {
-      const errors: Partial<Record<keyof PricingSectionDraft, string>> = {}
-      const toolProblem = checkJsonShape(values['tool_price_setting.prices'], 'object')
-      if (toolProblem !== undefined) {
-        errors['tool_price_setting.prices'] = toolProblem === 'syntax'
-          ? t('This is not valid JSON.')
-          : t('This must be a JSON object.')
-      }
-      return errors
-    },
-  })
+  const [tab, setTab] = useState<PricingTab>('models')
+  const form = useOptionSectionForm<PricingSectionDraft>({ saved: toDraft(optionsQuery.data) })
 
   const entries = useMemo(() => pricingQuery.data?.entries ?? [], [pricingQuery.data])
   const issuesByModel = useMemo(() => {
@@ -403,206 +345,217 @@ export function ModelPricingSection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Panel as="section">
-        <Panel.Header
-          description={t('Every model this deployment prices and the price it is charged at. Each change is saved for that model on its own.')}
-          title={t('Model pricing')}
-        />
-        <Panel.Body className="flex flex-col gap-4">
-          {pricingQuery.isError ? (
-            <Alert
-              action={
-                <Button onClick={() => void pricingQuery.refetch()} size="sm" variant="outline">
-                  {t('Try again')}
-                </Button>
-              }
-              tone="destructive"
-            >
-              {toErrorMessage(pricingQuery.error, t('Failed to load model pricing'))}
-            </Alert>
-          ) : null}
+      <Tabs onValueChange={(value) => setTab(value as PricingTab)} value={tab}>
+        <Tabs.List label={t('Model pricing')}>
+          <Tabs.Tab value="models">{t('Models')}</Tabs.Tab>
+          <Tabs.Tab value="unpriced">{t('Unpriced models')}</Tabs.Tab>
+          <Tabs.Tab value="tools">{t('Tool prices')}</Tabs.Tab>
+          <Tabs.Tab value="sync">{t('Upstream sync')}</Tabs.Tab>
+        </Tabs.List>
 
-          {issuesByModel.size > 0 ? (
-            <Alert
-              action={
-                sourceFilter === 'attention' ? (
-                  <Button onClick={() => setSourceFilter('all')} size="sm" variant="outline">
-                    {t('Show all models')}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={() => {
-                      setSourceFilter('attention')
-                      setPage(1)
-                    }}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {t('Review')}
-                  </Button>
-                )
-              }
-              icon={<TriangleAlertIcon aria-hidden="true" />}
-              title={t('{{count}} model(s) need a plugin price', { count: issuesByModel.size })}
-              tone="warning"
-            >
-              <p>{t('A task plugin serving these models has no usable price, so its tasks are refused. Open a model to see which plugin and what to change.')}</p>
-              {unlistedIssueModels.length > 0 ? (
-                <ul className="mt-2 flex flex-wrap gap-2">
-                  {unlistedIssueModels.map((name) => (
-                    <li key={name}>
-                      <Button aria-label={t('Set a price for {{model}}', { model: name })} onClick={() => void openUnlisted(name)} size="sm" variant="outline">
-                        <span className="mono">{name}</span>
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </Alert>
-          ) : null}
-
-          <Panel className="overflow-hidden" muted>
-            <DataTableToolbar
-              actions={(
-                <>
-                  {selectedNames.length === 0 ? null : (
-                    <Button onClick={() => setConfirmRestore(true)} size="sm" variant="danger">
-                      {t('Restore default price for {{count}} selected', { count: selectedNames.length })}
+        <Tabs.Panel className="flex flex-col gap-6 pt-4" value="models">
+          <Panel as="section">
+            <Panel.Header
+              description={t('Every model this deployment prices and the price it is charged at. Each change is saved for that model on its own.')}
+              title={t('Model pricing')}
+            />
+            <Panel.Body className="flex flex-col gap-4">
+              {pricingQuery.isError ? (
+                <Alert
+                  action={
+                    <Button onClick={() => void pricingQuery.refetch()} size="sm" variant="outline">
+                      {t('Try again')}
                     </Button>
+                  }
+                  tone="destructive"
+                >
+                  {toErrorMessage(pricingQuery.error, t('Failed to load model pricing'))}
+                </Alert>
+              ) : null}
+
+              {issuesByModel.size > 0 ? (
+                <Alert
+                  action={
+                    sourceFilter === 'attention' ? (
+                      <Button onClick={() => setSourceFilter('all')} size="sm" variant="outline">
+                        {t('Show all models')}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          setSourceFilter('attention')
+                          setPage(1)
+                        }}
+                        size="sm"
+                        variant="outline"
+                      >
+                        {t('Review')}
+                      </Button>
+                    )
+                  }
+                  icon={<TriangleAlertIcon aria-hidden="true" />}
+                  title={t('{{count}} model(s) need a plugin price', { count: issuesByModel.size })}
+                  tone="warning"
+                >
+                  <p>{t('A task plugin serving these models has no usable price, so its tasks are refused. Open a model to see which plugin and what to change.')}</p>
+                  {unlistedIssueModels.length > 0 ? (
+                    <ul className="mt-2 flex flex-wrap gap-2">
+                      {unlistedIssueModels.map((name) => (
+                        <li key={name}>
+                          <Button aria-label={t('Set a price for {{model}}', { model: name })} onClick={() => void openUnlisted(name)} size="sm" variant="outline">
+                            <span className="mono">{name}</span>
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </Alert>
+              ) : null}
+
+              <Panel className="overflow-hidden" muted>
+                <DataTableToolbar
+                  actions={(
+                    <>
+                      {selectedNames.length === 0 ? null : (
+                        <Button onClick={() => setConfirmRestore(true)} size="sm" variant="danger">
+                          {t('Restore default price for {{count}} selected', { count: selectedNames.length })}
+                        </Button>
+                      )}
+                      <Button disabled={pricingQuery.isPending} onClick={() => setEditor({ entry: undefined })} size="sm">
+                        <PlusIcon aria-hidden="true" />
+                        {t('Add a model')}
+                      </Button>
+                    </>
                   )}
-                  <Button disabled={pricingQuery.isPending} onClick={() => setEditor({ entry: undefined })} size="sm">
-                    <PlusIcon aria-hidden="true" />
-                    {t('Add a model')}
-                  </Button>
-                </>
-              )}
-              filters={(
-                <>
-                  <NativeSelect
-                    className="w-40"
-                    hideLabel
-                    label={t('Billing mode')}
-                    onChange={(event) => {
-                      setModeFilter(event.target.value as PricingMode | 'all')
-                      setPage(1)
-                    }}
-                    options={[
-                      { label: t('All modes'), value: 'all' },
-                      ...(['expression', 'per-token', 'per-request'] as const).map((mode) => ({ label: modeLabel(mode, t), value: mode })),
-                    ]}
-                    size="sm"
-                    value={modeFilter}
-                  />
-                  <NativeSelect
-                    className="w-48"
-                    hideLabel
-                    label={t('Price source')}
-                    onChange={(event) => {
-                      setSourceFilter(event.target.value as SourceFilter)
-                      setPage(1)
-                    }}
-                    options={[
-                      { label: t('All prices'), value: 'all' },
-                      { label: t('Set here only'), value: 'stored' },
-                      { label: t('Built-in or default price'), value: 'inherited' },
-                      { label: t('Needs attention'), value: 'attention' },
-                    ]}
-                    size="sm"
-                    value={sourceFilter}
-                  />
-                </>
-              )}
-              filtersLabel={t('Billing mode filter')}
-              isResetDisabled={search === '' && modeFilter === 'all' && sourceFilter === 'all'}
-              label={t('Model pricing filters')}
-              onReset={() => {
-                setSearch('')
-                setModeFilter('all')
-                setSourceFilter('all')
-                setPage(1)
-              }}
-              search={(
-                <SearchInput
-                  hideLabel
-                  label={t('Search models')}
-                  onValueChange={(value) => {
-                    setSearch(value)
+                  filters={(
+                    <>
+                      <NativeSelect
+                        className="w-40"
+                        hideLabel
+                        label={t('Billing mode')}
+                        onChange={(event) => {
+                          setModeFilter(event.target.value as PricingMode | 'all')
+                          setPage(1)
+                        }}
+                        options={[
+                          { label: t('All modes'), value: 'all' },
+                          ...(['expression', 'per-token', 'per-request'] as const).map((mode) => ({ label: modeLabel(mode, t), value: mode })),
+                        ]}
+                        size="sm"
+                        value={modeFilter}
+                      />
+                      <NativeSelect
+                        className="w-48"
+                        hideLabel
+                        label={t('Price source')}
+                        onChange={(event) => {
+                          setSourceFilter(event.target.value as SourceFilter)
+                          setPage(1)
+                        }}
+                        options={[
+                          { label: t('All prices'), value: 'all' },
+                          { label: t('Set here only'), value: 'stored' },
+                          { label: t('Built-in or default price'), value: 'inherited' },
+                          { label: t('Needs attention'), value: 'attention' },
+                        ]}
+                        size="sm"
+                        value={sourceFilter}
+                      />
+                    </>
+                  )}
+                  filtersLabel={t('Billing mode filter')}
+                  isResetDisabled={search === '' && modeFilter === 'all' && sourceFilter === 'all'}
+                  label={t('Model pricing filters')}
+                  onReset={() => {
+                    setSearch('')
+                    setModeFilter('all')
+                    setSourceFilter('all')
                     setPage(1)
                   }}
-                  placeholder={t('Search models')}
-                  value={search}
+                  search={(
+                    <SearchInput
+                      hideLabel
+                      label={t('Search models')}
+                      onValueChange={(value) => {
+                        setSearch(value)
+                        setPage(1)
+                      }}
+                      placeholder={t('Search models')}
+                      value={search}
+                    />
+                  )}
                 />
-              )}
-            />
 
-            <DataTable
-              emptyDescription={rows.length === 0 ? t('No model is priced yet. Add one, or enable a channel for a model with a built-in price.') : t('No model matches this search.')}
-              emptyIcon={<CoinsIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
-              emptyTitle={rows.length === 0 ? t('No model pricing configured') : t('Nothing matches')}
-              isLoading={pricingQuery.isPending}
-              label={t('Configured model prices')}
-              minWidthClassName="min-w-[52rem]"
-              table={table}
-            />
+                <DataTable
+                  emptyDescription={rows.length === 0 ? t('No model is priced yet. Add one, or enable a channel for a model with a built-in price.') : t('No model matches this search.')}
+                  emptyIcon={<CoinsIcon aria-hidden="true" className="mx-auto size-7 text-muted" />}
+                  emptyTitle={rows.length === 0 ? t('No model pricing configured') : t('Nothing matches')}
+                  isLoading={pricingQuery.isPending}
+                  label={t('Configured model prices')}
+                  minWidthClassName="min-w-[52rem]"
+                  table={table}
+                />
 
-            {sorted.length > 0 ? (
-              <div className="border-t border-border p-3">
-                <DataTablePagination {...paginationControls} label={t('Model pricing pages')} />
-              </div>
-            ) : null}
+                {sorted.length > 0 ? (
+                  <div className="border-t border-border p-3">
+                    <DataTablePagination {...paginationControls} label={t('Model pricing pages')} />
+                  </div>
+                ) : null}
+              </Panel>
+            </Panel.Body>
           </Panel>
-        </Panel.Body>
-      </Panel>
 
-      <UnpricedModelsPanel
-        disabled={pricingQuery.isPending}
-        entries={entries}
-        onSetPrice={(model) => setEditor({ entry: undefined, initialName: model })}
-      />
+          <SettingsSection
+            description={t('What the public pricing page reveals.')}
+            form={form}
+            saveMode="section"
+            title={t('Pricing options')}
+          >
+            <SwitchRow
+              checked={form.values.ExposeRatioEnabled}
+              description={t('Publishes the model ratios on the public pricing endpoint. Off keeps your margins private.')}
+              disabled={disabled}
+              label={t('Expose model ratios publicly')}
+              onCheckedChange={(checked) => form.setField('ExposeRatioEnabled', checked)}
+            />
 
-      <SettingsSection
-        description={t('What the public pricing page reveals, and the extra charges for built-in tools.')}
-        form={form}
-        saveMode="section"
-        title={t('Pricing options')}
-      >
-        <SwitchRow
-          checked={form.values.ExposeRatioEnabled}
-          description={t('Publishes the model ratios on the public pricing endpoint. Off keeps your margins private.')}
-          disabled={disabled}
-          label={t('Expose model ratios publicly')}
-          onCheckedChange={(checked) => form.setField('ExposeRatioEnabled', checked)}
-        />
+          </SettingsSection>
 
-        <Textarea
-          description={t('Extra per-call charges for built-in tools, as {"tool name": price}. The server rejects anything that is not a JSON object before storing it.')}
-          disabled={disabled}
-          error={form.errors['tool_price_setting.prices']}
-          label={t('Tool prices')}
-          onChange={(event) => form.setField('tool_price_setting.prices', event.target.value)}
-          rows={4}
-          textareaClassName="mono text-xs"
-          value={form.values['tool_price_setting.prices']}
-        />
-      </SettingsSection>
+          <Panel as="section">
+            <Panel.Header
+              description={t('Replaces the entire model ratio map with the gateway’s built-in defaults, on the server, straight away.')}
+              title={t('Reset model ratios')}
+            />
+            <Panel.Body>
+              <p className="text-sm leading-6 text-muted">
+                {t('This is not part of the draft above and there is no save step. Every model ratio set by hand on this deployment is replaced. Fixed prices, expressions and the other ratio keys are left alone.')}
+              </p>
+            </Panel.Body>
+            <Panel.Footer align="end">
+              <Button disabled={resetting} onClick={() => setConfirmReset(true)} variant="danger">
+                <RotateCcwIcon aria-hidden="true" />
+                {t('Reset model ratios')}
+              </Button>
+            </Panel.Footer>
+          </Panel>
+        </Tabs.Panel>
 
-      <Panel as="section">
-        <Panel.Header
-          description={t('Replaces the entire model ratio map with the gateway’s built-in defaults, on the server, straight away.')}
-          title={t('Reset model ratios')}
-        />
-        <Panel.Body>
-          <p className="text-sm leading-6 text-muted">
-            {t('This is not part of the draft above and there is no save step. Every model ratio set by hand on this deployment is replaced. Fixed prices, expressions and the other ratio keys are left alone.')}
-          </p>
-        </Panel.Body>
-        <Panel.Footer align="end">
-          <Button disabled={resetting} onClick={() => setConfirmReset(true)} variant="danger">
-            <RotateCcwIcon aria-hidden="true" />
-            {t('Reset model ratios')}
-          </Button>
-        </Panel.Footer>
-      </Panel>
+        <Tabs.Panel className="pt-4" value="unpriced">
+          <UnpricedModelsPanel
+            disabled={pricingQuery.isPending}
+            entries={entries}
+            onSetPrice={(model) => setEditor({ entry: undefined, initialName: model })}
+          />
+        </Tabs.Panel>
+
+        <Tabs.Panel className="pt-4" value="tools">
+          <ToolPricesPanel />
+        </Tabs.Panel>
+
+        <Tabs.Panel className="pt-4" value="sync">
+          <PriceSyncPanel />
+        </Tabs.Panel>
+      </Tabs>
 
       {editor === null ? null : (
         <ModelPricingEditor
