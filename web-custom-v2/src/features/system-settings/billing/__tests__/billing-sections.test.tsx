@@ -1244,6 +1244,162 @@ describe('ModelPricingSection, trying a price', () => {
   })
 })
 
+describe('PaymentSection, Waffo Pancake binding', () => {
+  const CATALOG = {
+    stores: [
+      { id: 'st_a', name: 'Main', onetimeProducts: [{ id: 'pr_1', name: 'Top-up', status: 'active' }, { id: 'pr_2', name: 'Top-up v2', status: 'active' }], prodEnabled: true, status: 'active' },
+      { id: 'st_b', name: 'Spare', onetimeProducts: [], prodEnabled: false, status: 'active' },
+    ],
+  }
+
+  beforeEach(() => {
+    server.stored.WaffoPancakeMerchantID = 'm_1'
+    server.stored.WaffoPancakeStoreID = 'st_a'
+    server.stored.WaffoPancakeProductID = 'pr_1'
+    server.stored.WaffoPancakeReturnURL = 'https://example.com/wallet'
+    const fallback = get.getMockImplementation()!
+    get.mockImplementation((url: string, config?: unknown) => {
+      if (url === '/api/option/waffo-pancake/catalog') return Promise.resolve({ data: { data: CATALOG, message: 'success' } })
+      return fallback(url, config)
+    })
+    post.mockImplementation((url: string) => {
+      if (url === '/api/option/waffo-pancake/save') return Promise.resolve({ data: { data: { product_id: 'x', store_id: 'y' }, message: 'success' } })
+      if (url === '/api/option/waffo-pancake/pair') {
+        return Promise.resolve({ data: { data: { product_id: 'pr_new', product_name: 'new-api-charge-product', store_id: 'st_new', store_name: 'new-api-store' }, message: 'success' } })
+      }
+      throw new Error(`unmocked POST ${url}`)
+    })
+  })
+
+  async function openPancake() {
+    renderSection(<PaymentSection />)
+    await settled('Minimum top-up')
+    fireEvent.click(screen.getByRole('tab', { name: 'Waffo Pancake' }))
+    await screen.findByLabelText('Pancake merchant id')
+  }
+
+  function catalogCalls() {
+    return get.mock.calls.filter((call) => call[0] === '/api/option/waffo-pancake/catalog').map((call) => (call[1] as { params?: unknown }).params)
+  }
+
+  it('loads the catalog with the stored credentials and saves the five settings together', async () => {
+    await openPancake()
+    fireEvent.click(screen.getByRole('button', { name: 'Check credentials and load stores' }))
+
+    // Untouched credentials are not sent; the server uses the stored ones.
+    await waitFor(() => expect(catalogCalls()).toEqual([{}]))
+    expect(await screen.findByLabelText('Store')).toHaveValue('st_a')
+    expect(screen.getByLabelText('One-time product')).toHaveValue('pr_1')
+
+    fireEvent.change(screen.getByLabelText('One-time product'), { target: { value: 'pr_2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Pancake binding' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      '/api/option/waffo-pancake/save',
+      { merchant_id: 'm_1', private_key: '', product_id: 'pr_2', return_url: 'https://example.com/wallet', store_id: 'st_a' },
+      expect.anything(),
+    ))
+    // These keys never go through the one-key-at-a-time option write.
+    expect(writtenKeys().filter((key) => key.startsWith('WaffoPancake'))).toEqual([])
+  })
+
+  it('asks for the private key of a different merchant before using it', async () => {
+    await openPancake()
+    fireEvent.change(screen.getByLabelText('Pancake merchant id'), { target: { value: 'm_2' } })
+
+    expect(screen.getByText('Enter the private key of this merchant.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Check credentials and load stores' })).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText('Pancake private key'), { target: { value: 'PEM' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Check credentials and load stores' }))
+    await waitFor(() => expect(catalogCalls()).toEqual([{ merchant_id: 'm_2', private_key: 'PEM' }]))
+  })
+
+  it('creates a store and product and selects them', async () => {
+    await openPancake()
+    fireEvent.click(screen.getByRole('button', { name: 'Check credentials and load stores' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Create a new store and product' }))
+
+    expect(await screen.findByText('Created new-api-store with new-api-charge-product. Save to use it.')).toBeInTheDocument()
+    expect(post).toHaveBeenCalledWith('/api/option/waffo-pancake/pair', { return_url: 'https://example.com/wallet' }, expect.anything())
+  })
+})
+
+describe('PaymentSection, list editors', () => {
+  function written(key: string): unknown {
+    const write = writes().find((item) => item.key === key)
+    return write === undefined ? undefined : JSON.parse(write.value)
+  }
+
+  it('adds a payment method with a text minimum and keeps the fields it does not show', async () => {
+    renderSection(<PaymentSection />)
+    await settled('Minimum top-up')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a payment method' }))
+    fireEvent.change(screen.getByLabelText('Name of alipay'), { target: { value: 'Stripe card' } })
+    fireEvent.change(screen.getByLabelText('Type of Stripe card'), { target: { value: 'stripe' } })
+    fireEvent.change(screen.getByLabelText('Minimum top-up of Stripe card'), { target: { value: '50' } })
+    await save()
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(written('PayMethods')).toEqual([
+      { icon: 'SiAlipay', name: '支付宝', type: 'alipay' },
+      { min_topup: '50', name: 'Stripe card', type: 'stripe' },
+    ])
+  })
+
+  it('refuses a fractional amount instead of dropping it', async () => {
+    renderSection(<PaymentSection />)
+    await settled('Minimum top-up')
+
+    fireEvent.change(screen.getByLabelText('New amount'), { target: { value: '12.5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add amount' }))
+    await save()
+
+    expect(writes()).toHaveLength(0)
+    expect(await screen.findByText(/General · Top-up amounts/)).toBeInTheDocument()
+  })
+
+  it('refuses two discounts for the same amount, which JSON would silently merge', async () => {
+    renderSection(<PaymentSection />)
+    await settled('Minimum top-up')
+
+    for (let index = 1; index <= 2; index += 1) {
+      fireEvent.click(screen.getByRole('button', { name: 'Add a discount' }))
+      fireEvent.change(screen.getByLabelText(`Top-up amount of discount ${index}`), { target: { value: '100' } })
+      fireEvent.change(screen.getByLabelText(`Price multiplier of discount ${index}`), { target: { value: index === 1 ? '0.9' : '0.8' } })
+    }
+    expect(screen.getByText('10% off')).toBeInTheDocument()
+    await save()
+
+    expect(writes()).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove discount 2' }))
+    await save()
+    await waitFor(() => expect(written('payment_setting.amount_discount')).toEqual({ 100: 0.9 }))
+  })
+
+  it('writes a Creem product with numbers, and refuses a fractional quota', async () => {
+    renderSection(<PaymentSection />)
+    await settled('Minimum top-up')
+    fireEvent.click(screen.getByRole('tab', { name: 'Creem' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a Creem product' }))
+    fireEvent.change(screen.getByLabelText('Product id of new product'), { target: { value: 'prod_1' } })
+    fireEvent.change(screen.getByLabelText('Name of prod_1'), { target: { value: 'Starter' } })
+    fireEvent.change(screen.getByLabelText('Price of Starter'), { target: { value: '9.99' } })
+    fireEvent.change(screen.getByLabelText('Quota credited by Starter'), { target: { value: '500000.5' } })
+    await save()
+
+    expect(await screen.findAllByText('Every Creem product needs a whole-number quota above zero.')).not.toHaveLength(0)
+    expect(writes()).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText('Quota credited by Starter'), { target: { value: '500000' } })
+    await save()
+    await waitFor(() => expect(written('CreemProducts')).toEqual([{ currency: 'USD', name: 'Starter', price: 9.99, productId: 'prod_1', quota: 500000 }]))
+  })
+})
+
 describe('GroupPricingSection', () => {
   it('shows a group that is priced but that no user can select', async () => {
     renderSection(<GroupPricingSection />)
@@ -1382,7 +1538,7 @@ describe('PaymentSection', () => {
     // this input while `toDraft` never read it, so the field rendered blank against a
     // stored price. The draft is now a plain literal, and TypeScript catches the next one.
     renderSection(<PaymentSection />)
-    await settled(/Minimum top-up/)
+    await settled('Minimum top-up')
 
     fireEvent.click(screen.getByRole('tab', { name: 'Waffo' }))
     await settled('Waffo unit price')
@@ -1394,7 +1550,7 @@ describe('PaymentSection', () => {
     // the payload rather than masked. An empty box therefore means "unknown", and an
     // untouched one must not write the empty string over a working credential.
     renderSection(<PaymentSection />)
-    await settled(/Minimum top-up/)
+    await settled('Minimum top-up')
 
     fireEvent.click(screen.getByRole('tab', { name: 'Stripe' }))
     // Exact, not a regex: the clear action's accessible name also names the credential.
@@ -1409,7 +1565,7 @@ describe('PaymentSection', () => {
 
   it('writes a credential only once it has been typed into', async () => {
     renderSection(<PaymentSection />)
-    await settled(/Minimum top-up/)
+    await settled('Minimum top-up')
 
     fireEvent.click(screen.getByRole('tab', { name: 'Stripe' }))
     fireEvent.change(await screen.findByLabelText('Stripe API secret'), {
@@ -1421,10 +1577,49 @@ describe('PaymentSection', () => {
     expect(writes()[0]).toEqual({ key: 'StripeApiSecret', value: 'sk_live_example' })
   })
 
+  it('switches Epay to RSA, writing both keys before the sign type the server checks them against', async () => {
+    renderSection(<PaymentSection />)
+    await settled('Minimum top-up')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Epay' }))
+    expect(await screen.findByLabelText('Merchant key')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: /^RSA/ }))
+    // The MD5 merchant key is not used under RSA, so it is not offered.
+    expect(screen.queryByLabelText('Merchant key')).not.toBeInTheDocument()
+
+    // A PEM key keeps its line breaks, which a single-line input would drop.
+    const pem = '-----BEGIN PRIVATE KEY-----\nMIIBVQIBADANBg\n-----END PRIVATE KEY-----'
+    fireEvent.change(screen.getByLabelText('Merchant private key'), { target: { value: pem } })
+    fireEvent.change(screen.getByLabelText('Platform public key'), { target: { value: 'MIIBIjANBgkqhkiG9w0BAQEFAAOC' } })
+    await save()
+
+    await waitFor(() => expect(writes()).toHaveLength(3))
+    expect(writes()).toEqual([
+      { key: 'payment_setting.epay_merchant_private_key', value: pem },
+      { key: 'payment_setting.epay_platform_public_key', value: 'MIIBIjANBgkqhkiG9w0BAQEFAAOC' },
+      { key: 'payment_setting.epay_sign_type', value: 'RSA' },
+    ])
+  })
+
+  it('refuses RSA without the platform public key', async () => {
+    renderSection(<PaymentSection />)
+    await settled('Minimum top-up')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Epay' }))
+    fireEvent.click(await screen.findByRole('radio', { name: /^RSA/ }))
+    await save()
+
+    expect(await screen.findAllByText('RSA signing needs the platform public key.')).not.toHaveLength(0)
+    expect(writes()).toHaveLength(0)
+  })
+
   it('blocks a numeric min_topup, the write that is refused after it destroys the list', async () => {
     renderSection(<PaymentSection />)
-    await settled(/Minimum top-up/)
+    await settled('Minimum top-up')
 
+    // The table always writes min_topup as text; raw JSON is where a number can still be typed.
+    const methods = screen.getByText('Payment methods').closest('div')!.parentElement!
+    fireEvent.click(within(methods).getByRole('button', { name: 'Edit as JSON' }))
     fireEvent.change(screen.getByLabelText('Payment methods'), {
       target: { value: '[{"name":"probe","type":"alipay","min_topup":50}]' },
     })
@@ -1442,9 +1637,9 @@ describe('PaymentSection', () => {
   it('rejects a fractional minimum, which the server silently stores as zero', async () => {
     // model/option.go reads MinTopUp with strconv.Atoi and discards the error.
     renderSection(<PaymentSection />)
-    await settled(/Minimum top-up/)
+    await settled('Minimum top-up')
 
-    fireEvent.change(screen.getByLabelText(/Minimum top-up/), { target: { value: '2.5' } })
+    fireEvent.change(screen.getByLabelText('Minimum top-up'), { target: { value: '2.5' } })
     await save()
 
     expect(
@@ -1460,7 +1655,7 @@ describe('PaymentSection', () => {
     // stops the save while its message is not rendered anywhere, which is indistinguishable
     // from a dead Save button unless the section says so itself.
     renderSection(<PaymentSection />)
-    await settled(/Minimum top-up/)
+    await settled('Minimum top-up')
 
     fireEvent.click(screen.getByRole('tab', { name: 'Waffo' }))
     fireEvent.change(await screen.findByLabelText('Waffo unit price'), { target: { value: '0' } })

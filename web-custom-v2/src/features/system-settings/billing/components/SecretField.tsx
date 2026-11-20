@@ -1,14 +1,14 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { PasswordInput } from '@/components/form'
+import { PasswordInput, Textarea } from '@/components/form'
 import { Button } from '@/components/ui'
 
 /**
  * A WRITE-ONLY CREDENTIAL FIELD.
  *
  * `controller.GetOptions` skips every option key ending in `Token`, `Secret`, `Key`,
- * `secret` or `api_key` before serialising the payload. They are not masked — they are
+ * `secret`, `api_key` or `private_key` before serialising the payload. They are not masked — they are
  * ABSENT. `EpayKey`, `StripeApiSecret`, `StripeWebhookSecret`, `NowPaymentsAPIKey`,
  * `NowPaymentsIPNSecret`, `CreemApiKey`, `CreemWebhookSecret`, `WaffoApiKey`,
  * `WaffoPrivateKey`, `WaffoSandboxApiKey`, `WaffoSandboxPrivateKey` and
@@ -38,6 +38,11 @@ type SecretFieldProps = {
   /** Names the stored credential in the clear button's accessible name. */
   clearLabel: string
   placeholder?: string
+  /**
+   * A multi-line value such as a PEM key. A single-line input drops the line breaks a PEM
+   * block needs, so the key would no longer parse; it is shown as plain text instead.
+   */
+  multiline?: boolean
 }
 
 export function SecretField(props: SecretFieldProps) {
@@ -45,15 +50,30 @@ export function SecretField(props: SecretFieldProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <PasswordInput
-        autoComplete="off"
-        description={props.description ?? t('Stored write-only. The server never returns it, so this box stays empty; type a value to replace what is stored, or leave it alone to keep it.')}
-        disabled={props.disabled}
-        label={props.label}
-        onChange={(event) => props.onChange(event.target.value)}
-        placeholder={props.placeholder}
-        value={props.value}
-      />
+      {props.multiline ? (
+        <Textarea
+          autoComplete="off"
+          description={props.description ?? t('Stored write-only. The server never returns it, so this box stays empty; type a value to replace what is stored, or leave it alone to keep it.')}
+          disabled={props.disabled}
+          label={props.label}
+          onChange={(event) => props.onChange(event.target.value)}
+          placeholder={props.placeholder}
+          rows={5}
+          spellCheck={false}
+          textareaClassName="mono text-xs"
+          value={props.value}
+        />
+      ) : (
+        <PasswordInput
+          autoComplete="off"
+          description={props.description ?? t('Stored write-only. The server never returns it, so this box stays empty; type a value to replace what is stored, or leave it alone to keep it.')}
+          disabled={props.disabled}
+          label={props.label}
+          onChange={(event) => props.onChange(event.target.value)}
+          placeholder={props.placeholder}
+          value={props.value}
+        />
+      )}
       {props.onClear ? (
         <div>
           <Button

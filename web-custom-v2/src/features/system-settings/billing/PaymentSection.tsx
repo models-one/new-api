@@ -5,12 +5,21 @@ import ShieldAlertIcon from 'lucide-react/dist/esm/icons/shield-alert'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Input, NumberInput, SwitchRow, Textarea } from '@/components/form'
+import { Input, NumberInput, RadioGroup, SwitchRow, Textarea } from '@/components/form'
 import { ConfirmDialog, toErrorMessage, toast } from '@/components/overlay'
 import { Tabs } from '@/components/disclosure'
 import { Alert, Badge, Button, Panel } from '@/components/ui'
 import { SaveBlockedNotice } from '@/features/system-settings/billing/components/SaveBlockedNotice'
 import { SecretField } from '@/features/system-settings/billing/components/SecretField'
+import { WaffoPancakeBinding } from '@/features/system-settings/billing/components/WaffoPancakeBinding'
+import {
+  AmountDiscountEditor,
+  AmountOptionsEditor,
+  checkCreemProducts,
+  CreemProductsEditor,
+  PayMethodsEditor,
+  type CreemProblem,
+} from '@/features/system-settings/billing/components/PaymentListEditors'
 import {
   readPaymentCompliance,
   useConfirmPaymentCompliance,
@@ -21,8 +30,6 @@ import {
   checkAmountDiscount,
   checkAmountOptions,
   checkPayMethods,
-  parsePayMethods,
-  PROVIDER_PAY_METHOD_TYPES,
 } from '@/features/system-settings/billing/pay-methods'
 import { SettingsSection } from '@/features/system-settings/components/SettingsSection'
 import {
@@ -30,6 +37,7 @@ import {
   readOptionNumber,
   readOptionString,
   systemOptionsQuery,
+  useInvalidateSystemOptions,
   useSystemOptionMutation,
   type SystemOptionMap,
 } from '@/features/system-settings/options-store'
@@ -50,14 +58,18 @@ import { topUpInfoQuery, type TopUpInfo } from '@/lib/api/topup'
  *     WaffoEnabled WaffoSandbox WaffoMerchantId WaffoCurrency WaffoUnitPrice
  *     WaffoMinTopUp WaffoNotifyUrl WaffoReturnUrl WaffoSubscriptionReturnUrl
  *     WaffoPublicCert WaffoSandboxPublicCert WaffoPayMethods
+ *     WaffoPancakeUnitPrice WaffoPancakeMinTopUp
+ *     payment_setting.epay_sign_type payment_setting.epay_platform_public_key
+ *
+ *   SAVED TOGETHER by `POST /api/option/waffo-pancake/save` (see WaffoPancakeBinding):
  *     WaffoPancakeMerchantID WaffoPancakeReturnURL WaffoPancakeStoreID
- *     WaffoPancakeProductID WaffoPancakeUnitPrice WaffoPancakeMinTopUp
+ *     WaffoPancakeProductID WaffoPancakePrivateKey
  *
  *   WRITE-ONLY — stripped from the read payload by `controller.GetOptions` because the key
  *   name ends in Key/Secret, so they are ABSENT rather than masked:
  *     EpayKey StripeApiSecret StripeWebhookSecret NowPaymentsAPIKey NowPaymentsIPNSecret
  *     CreemApiKey CreemWebhookSecret WaffoApiKey WaffoPrivateKey WaffoSandboxApiKey
- *     WaffoSandboxPrivateKey WaffoPancakePrivateKey
+ *     WaffoSandboxPrivateKey payment_setting.epay_merchant_private_key
  *
  *   READ-ONLY — refused by `PUT /api/option/` outright:
  *     payment_setting.compliance_* (five keys)
@@ -87,7 +99,7 @@ const SECRET_KEYS = [
   'WaffoPrivateKey',
   'WaffoSandboxApiKey',
   'WaffoSandboxPrivateKey',
-  'WaffoPancakePrivateKey',
+  'payment_setting.epay_merchant_private_key',
 ] as const
 
 type SecretKey = (typeof SECRET_KEYS)[number]
@@ -95,6 +107,16 @@ type SecretKey = (typeof SECRET_KEYS)[number]
 type PaymentDraft = Record<SecretKey, string> & {
   PayAddress: string
   EpayId: string
+  /**
+   * `MD5` signs with the merchant key; `RSA` signs requests with the merchant private key
+   * and checks callbacks with the platform public key. The server checks a switch to RSA
+   * against the keys already stored, so both keys are written before the sign type — the
+   * section saves keys in sorted order, and `payment_setting.epay_m…` / `…_p…` sort before
+   * `payment_setting.epay_s…`.
+   */
+  'payment_setting.epay_sign_type': string
+  /** Readable: only `…private_key` and the other secret suffixes are withheld. */
+  'payment_setting.epay_platform_public_key': string
   Price: number
   MinTopUp: number
   CustomCallbackAddress: string
@@ -122,10 +144,6 @@ type PaymentDraft = Record<SecretKey, string> & {
   WaffoPublicCert: string
   WaffoSandboxPublicCert: string
   WaffoPayMethods: string
-  WaffoPancakeMerchantID: string
-  WaffoPancakeReturnURL: string
-  WaffoPancakeStoreID: string
-  WaffoPancakeProductID: string
   WaffoPancakeUnitPrice: number
   WaffoPancakeMinTopUp: number
 }
@@ -160,6 +178,8 @@ function toDraft(options: SystemOptionMap | undefined): PaymentDraft {
     NowPaymentsMinTopUp: readOptionNumber(options, 'NowPaymentsMinTopUp', 1),
     NowPaymentsUnitPrice: readOptionNumber(options, 'NowPaymentsUnitPrice', 1),
     PayAddress: readOptionString(options, 'PayAddress'),
+    'payment_setting.epay_platform_public_key': readOptionString(options, 'payment_setting.epay_platform_public_key'),
+    'payment_setting.epay_sign_type': readOptionString(options, 'payment_setting.epay_sign_type', 'MD5') === 'RSA' ? 'RSA' : 'MD5',
     'payment_setting.amount_discount': readOptionString(
       options,
       'payment_setting.amount_discount',
@@ -181,11 +201,7 @@ function toDraft(options: SystemOptionMap | undefined): PaymentDraft {
     WaffoMerchantId: readOptionString(options, 'WaffoMerchantId'),
     WaffoMinTopUp: readOptionNumber(options, 'WaffoMinTopUp', 1),
     WaffoNotifyUrl: readOptionString(options, 'WaffoNotifyUrl'),
-    WaffoPancakeMerchantID: readOptionString(options, 'WaffoPancakeMerchantID'),
     WaffoPancakeMinTopUp: readOptionNumber(options, 'WaffoPancakeMinTopUp', 1),
-    WaffoPancakeProductID: readOptionString(options, 'WaffoPancakeProductID'),
-    WaffoPancakeReturnURL: readOptionString(options, 'WaffoPancakeReturnURL'),
-    WaffoPancakeStoreID: readOptionString(options, 'WaffoPancakeStoreID'),
     WaffoPancakeUnitPrice: readOptionNumber(options, 'WaffoPancakeUnitPrice', 1),
     WaffoPayMethods: readOptionString(options, 'WaffoPayMethods', '[]'),
     WaffoPublicCert: readOptionString(options, 'WaffoPublicCert'),
@@ -212,10 +228,6 @@ const serializePayment: Partial<Record<keyof PaymentDraft, (value: string | numb
   StripePriceId: trimmed,
   WaffoMerchantId: trimmed,
   WaffoNotifyUrl: trimmed,
-  WaffoPancakeMerchantID: trimmed,
-  WaffoPancakeProductID: trimmed,
-  WaffoPancakeReturnURL: withoutTrailingSlash,
-  WaffoPancakeStoreID: trimmed,
   WaffoReturnUrl: trimmed,
   WaffoSubscriptionReturnUrl: trimmed,
 }
@@ -249,6 +261,8 @@ const FIELD_LOCATIONS: Partial<Record<keyof PaymentDraft, { tab: PaymentTabId; l
   NowPaymentsMinTopUp: { label: 'NOWPayments minimum top-up', tab: 'nowpayments' },
   NowPaymentsUnitPrice: { label: 'NOWPayments unit price', tab: 'nowpayments' },
   PayAddress: { label: 'Epay address', tab: 'epay' },
+  'payment_setting.epay_platform_public_key': { label: 'Platform public key', tab: 'epay' },
+  'payment_setting.epay_sign_type': { label: 'Signature', tab: 'epay' },
   'payment_setting.amount_discount': { label: 'Amount discounts', tab: 'general' },
   'payment_setting.amount_options': { label: 'Top-up amounts', tab: 'general' },
   PayMethods: { label: 'Payment methods', tab: 'general' },
@@ -258,7 +272,6 @@ const FIELD_LOCATIONS: Partial<Record<keyof PaymentDraft, { tab: PaymentTabId; l
   WaffoMinTopUp: { label: 'Waffo minimum top-up', tab: 'waffo' },
   WaffoNotifyUrl: { label: 'Waffo notification address', tab: 'waffo' },
   WaffoPancakeMinTopUp: { label: 'Pancake minimum top-up', tab: 'waffo-pancake' },
-  WaffoPancakeReturnURL: { label: 'Pancake return address', tab: 'waffo-pancake' },
   WaffoPancakeUnitPrice: { label: 'Pancake unit price', tab: 'waffo-pancake' },
   WaffoPayMethods: { label: 'Waffo payment methods', tab: 'waffo' },
   WaffoReturnUrl: { label: 'Waffo return address', tab: 'waffo' },
@@ -340,8 +353,14 @@ export function PaymentSection() {
         if (!(values[key] > 0)) errors[key] = notPositive
       }
 
-      for (const key of ['PayAddress', 'CustomCallbackAddress', 'WaffoNotifyUrl', 'WaffoReturnUrl', 'WaffoSubscriptionReturnUrl', 'WaffoPancakeReturnURL'] as const) {
+      for (const key of ['PayAddress', 'CustomCallbackAddress', 'WaffoNotifyUrl', 'WaffoReturnUrl', 'WaffoSubscriptionReturnUrl'] as const) {
         if (!isHttpUrl(values[key])) errors[key] = badUrl
+      }
+
+      if (values['payment_setting.epay_sign_type'] === 'RSA' && values['payment_setting.epay_platform_public_key'].trim() === '') {
+        // On the sign type too: a save is blocked only by an error on a key it writes.
+        errors['payment_setting.epay_platform_public_key'] = t('RSA signing needs the platform public key.')
+        errors['payment_setting.epay_sign_type'] = t('RSA signing needs the platform public key.')
       }
 
       const payMethods = checkPayMethods(values.PayMethods)
@@ -357,12 +376,8 @@ export function PaymentSection() {
         errors['payment_setting.amount_discount'] = amountDiscountMessage(discount, t)
       }
 
-      const creem = checkJsonShape(values.CreemProducts, 'array')
-      if (creem !== undefined) {
-        errors.CreemProducts = creem === 'syntax'
-          ? t('This is not valid JSON.')
-          : t('This must be a JSON array.')
-      }
+      const creem = checkCreemProducts(values.CreemProducts)
+      if (creem !== undefined) errors.CreemProducts = creemMessage(creem, t)
 
       const waffoMethods = checkJsonShape(values.WaffoPayMethods, 'array')
       if (waffoMethods !== undefined) {
@@ -376,8 +391,14 @@ export function PaymentSection() {
   })
 
   const disabled = optionsQuery.isPending || form.isSaving
+  const invalidateOptions = useInvalidateSystemOptions()
+  const pancakeBinding = {
+    merchantId: readOptionString(optionsQuery.data, 'WaffoPancakeMerchantID'),
+    productId: readOptionString(optionsQuery.data, 'WaffoPancakeProductID'),
+    returnUrl: readOptionString(optionsQuery.data, 'WaffoPancakeReturnURL'),
+    storeId: readOptionString(optionsQuery.data, 'WaffoPancakeStoreID'),
+  }
   const statuses = gatewayStatuses(topUpQuery.data)
-  const methods = parsePayMethods(form.values.PayMethods)
 
   const clearStoredSecret = async () => {
     if (pendingClear === undefined) return
@@ -575,66 +596,30 @@ export function PaymentSection() {
                 />
               </div>
 
-              <Textarea
-                description={t('The tiles on the top-up page, as a JSON array. Every value must be text — a numeric min_topup is refused and destroys the stored list on the way. The type routes the payment: stripe, nowpayments, waffo and waffo_pancake go to those providers, anything else goes to Epay.')}
+              <PayMethodsEditor
+                description={t('The tiles on the top-up page, in order. Stripe, NOWPayments, Waffo and Waffo Pancake go to those gateways; every other type is sent to Epay.')}
                 disabled={disabled}
                 error={form.errors.PayMethods}
                 label={t('Payment methods')}
-                onChange={(event) => form.setField('PayMethods', event.target.value)}
-                rows={6}
-                textareaClassName="mono text-xs"
+                onChange={(value) => form.setField('PayMethods', value)}
                 value={form.values.PayMethods}
               />
 
-              {methods.length > 0 ? (
-                <ul className="flex flex-wrap gap-2">
-                  {methods.map((method) => (
-                    <li key={method.type}>
-                      <Badge
-                        tone={
-                          (PROVIDER_PAY_METHOD_TYPES as readonly string[]).includes(method.type)
-                            ? 'info'
-                            : 'muted'
-                        }
-                      >
-                        {method.name}
-                        <span className="mono text-[0.6875rem] opacity-70">{method.type}</span>
-                        {method.min_topup === undefined ? null : (
-                          <span className="text-[0.6875rem] opacity-70">
-                            {t('min {{amount}}', { amount: method.min_topup })}
-                          </span>
-                        )}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-xs leading-5 text-muted">
-                  {t('No payment method is configured, so the top-up page has nothing to offer even when a gateway is live.')}
-                </p>
-              )}
-
               <div className="grid gap-5 md:grid-cols-2">
-                <Textarea
-                  description={t('The preset amounts on the top-up page, as a JSON array of whole numbers.')}
+                <AmountOptionsEditor
+                  description={t('The preset amounts on the top-up page. Whole numbers only.')}
                   disabled={disabled}
                   error={form.errors['payment_setting.amount_options']}
                   label={t('Top-up amounts')}
-                  onChange={(event) =>
-                    form.setField('payment_setting.amount_options', event.target.value)}
-                  rows={3}
-                  textareaClassName="mono text-xs"
+                  onChange={(value) => form.setField('payment_setting.amount_options', value)}
                   value={form.values['payment_setting.amount_options']}
                 />
-                <Textarea
-                  description={t('Discounts by amount, as {"100": 0.9} for ten percent off a hundred. Leave as {} for none.')}
+                <AmountDiscountEditor
+                  description={t('What a top-up of an amount pays, as a multiplier of its price: 0.9 is ten percent off.')}
                   disabled={disabled}
                   error={form.errors['payment_setting.amount_discount']}
                   label={t('Amount discounts')}
-                  onChange={(event) =>
-                    form.setField('payment_setting.amount_discount', event.target.value)}
-                  rows={3}
-                  textareaClassName="mono text-xs"
+                  onChange={(value) => form.setField('payment_setting.amount_discount', value)}
                   value={form.values['payment_setting.amount_discount']}
                 />
               </div>
@@ -663,7 +648,43 @@ export function PaymentSection() {
                   onChange={(event) => form.setField('EpayId', event.target.value)}
                   value={form.values.EpayId}
                 />
-                <SecretField {...secretProps('EpayKey', t('Merchant key'))} />
+                <RadioGroup<string>
+                  className="md:col-span-2"
+                  disabled={disabled}
+                  label={t('Signature')}
+                  onValueChange={(value) => form.setField('payment_setting.epay_sign_type', value)}
+                  options={[
+                    { description: t('Signs with the merchant key. What every Epay provider supports.'), label: 'MD5', value: 'MD5' },
+                    { description: t('Signs requests with your merchant private key and checks callbacks with the provider’s public key.'), label: 'RSA', value: 'RSA' },
+                  ]}
+                  orientation="horizontal"
+                  value={form.values['payment_setting.epay_sign_type']}
+                  variant="card"
+                />
+                {form.values['payment_setting.epay_sign_type'] === 'RSA' ? (
+                  <>
+                    <SecretField
+                      {...secretProps('payment_setting.epay_merchant_private_key', t('Merchant private key'))}
+                      description={t('PEM or Base64, PKCS#8 or PKCS#1. Stored write-only: leave empty to keep the stored key. The server refuses RSA until a valid key is stored.')}
+                      multiline
+                      placeholder="-----BEGIN PRIVATE KEY-----"
+                    />
+                    <Textarea
+                      description={t('The provider’s RSA public key, PEM or Base64. Callbacks not signed with the matching private key are rejected.')}
+                      disabled={disabled}
+                      error={form.errors['payment_setting.epay_platform_public_key']}
+                      label={t('Platform public key')}
+                      onChange={(event) => form.setField('payment_setting.epay_platform_public_key', event.target.value)}
+                      placeholder="-----BEGIN PUBLIC KEY-----"
+                      rows={5}
+                      spellCheck={false}
+                      textareaClassName="mono text-xs"
+                      value={form.values['payment_setting.epay_platform_public_key']}
+                    />
+                  </>
+                ) : (
+                  <SecretField {...secretProps('EpayKey', t('Merchant key'))} />
+                )}
                 <Input
                   description={t('Where the provider sends its callback. A top-level address only, with no path. Leave empty to use the server address.')}
                   disabled={disabled}
@@ -775,14 +796,12 @@ export function PaymentSection() {
                 <SecretField {...secretProps('CreemApiKey', t('Creem API key'))} />
                 <SecretField {...secretProps('CreemWebhookSecret', t('Creem webhook secret'))} />
               </div>
-              <Textarea
-                description={t('The Creem products users may buy, as a JSON array.')}
+              <CreemProductsEditor
+                description={t('The Creem products users may buy. Each credits its quota when bought.')}
                 disabled={disabled}
                 error={form.errors.CreemProducts}
                 label={t('Creem products')}
-                onChange={(event) => form.setField('CreemProducts', event.target.value)}
-                rows={5}
-                textareaClassName="mono text-xs"
+                onChange={(value) => form.setField('CreemProducts', value)}
                 value={form.values.CreemProducts}
               />
               <SwitchRow
@@ -798,42 +817,18 @@ export function PaymentSection() {
           <Tabs.Panel className="pt-5" value="waffo-pancake">
             <div className="flex flex-col gap-5">
               <p className="text-xs leading-5 text-muted">
-                {t('Waffo Pancake goes live once the merchant id, the private key and a product id are all set. The store and product are normally minted by the provider’s pairing flow, which this console does not run — paste the ids it produced.')}
+                {t('Waffo Pancake goes live once the merchant id, the private key and a product are all set.')}
               </p>
+              {optionsQuery.data === undefined ? null : (
+                <WaffoPancakeBinding
+                  disabled={disabled}
+                  // Re-read after a save, so the draft starts from what is stored.
+                  key={`${pancakeBinding.merchantId}|${pancakeBinding.storeId}|${pancakeBinding.productId}|${pancakeBinding.returnUrl}`}
+                  onSaved={invalidateOptions}
+                  stored={pancakeBinding}
+                />
+              )}
               <div className="grid gap-5 md:grid-cols-2">
-                <Input
-                  disabled={disabled}
-                  inputClassName="mono"
-                  label={t('Pancake merchant id')}
-                  onChange={(event) => form.setField('WaffoPancakeMerchantID', event.target.value)}
-                  value={form.values.WaffoPancakeMerchantID}
-                />
-                <SecretField {...secretProps('WaffoPancakePrivateKey', t('Pancake private key'))} />
-                <Input
-                  description={t('Identifies the store the checkout belongs to.')}
-                  disabled={disabled}
-                  inputClassName="mono"
-                  label={t('Pancake store id')}
-                  onChange={(event) => form.setField('WaffoPancakeStoreID', event.target.value)}
-                  value={form.values.WaffoPancakeStoreID}
-                />
-                <Input
-                  description={t('Identifies the one-time product the top-up is charged against.')}
-                  disabled={disabled}
-                  inputClassName="mono"
-                  label={t('Pancake product id')}
-                  onChange={(event) => form.setField('WaffoPancakeProductID', event.target.value)}
-                  value={form.values.WaffoPancakeProductID}
-                />
-                <Input
-                  description={t('Where the user lands after paying. A trailing slash is removed when saved.')}
-                  disabled={disabled}
-                  error={form.errors.WaffoPancakeReturnURL}
-                  label={t('Pancake return address')}
-                  onChange={(event) => form.setField('WaffoPancakeReturnURL', event.target.value)}
-                  placeholder="https://example.com/wallet"
-                  value={form.values.WaffoPancakeReturnURL}
-                />
                 <NumberInput
                   disabled={disabled}
                   error={form.errors.WaffoPancakeUnitPrice}
@@ -1054,6 +1049,20 @@ function amountDiscountMessage(
   if (problem === 'not-object') return t('This must be a JSON object.')
   if (problem === 'bad-key') return t('Each key must be a whole-number amount.')
   return t('Each discount must be a number above zero.')
+}
+
+function creemMessage(problem: CreemProblem, t: (key: string) => string): string {
+  const messages: Record<CreemProblem, string> = {
+    'bad-currency': 'Every Creem product needs a currency of USD or EUR.',
+    'bad-price': 'Every Creem product needs a price above zero.',
+    'bad-quota': 'Every Creem product needs a whole-number quota above zero.',
+    'duplicate-id': 'Two Creem products have the same product id.',
+    'missing-id': 'Every Creem product needs its Creem product id.',
+    'missing-name': 'Every Creem product needs a name.',
+    'not-array': 'This must be a JSON array of products.',
+    syntax: 'This is not valid JSON.',
+  }
+  return t(messages[problem])
 }
 
 function payMethodMessage(
