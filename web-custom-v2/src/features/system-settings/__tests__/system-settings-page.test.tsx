@@ -157,11 +157,11 @@ describe('the root guard', () => {
 })
 
 describe('the group and section navigation', () => {
-  it('lists all seven groups and marks the resolved one current', async () => {
+  it('lists every group and marks the resolved one current', async () => {
     renderPage()
     const groups = within(await screen.findByRole('navigation', { name: 'Settings groups' }))
 
-    expect(groups.getAllByRole('link')).toHaveLength(7)
+    expect(groups.getAllByRole('link')).toHaveLength(SETTINGS_GROUPS.length)
     for (const group of SETTINGS_GROUPS) {
       expect(groups.getByRole('link', { name: new RegExp(group.title, 'i') })).toBeInTheDocument()
     }
@@ -190,6 +190,16 @@ describe('the group and section navigation', () => {
 
     fireEvent.click(sections.getByRole('link', { name: 'System notice' }), { button: 0 })
     expect(historyPush).toHaveBeenCalledWith('/system-settings/site/notice')
+  })
+
+  it('sends a bookmark of a section that moved to its new group', async () => {
+    routeParams = { group: 'models', section: 'routing-reliability' }
+    renderPage()
+
+    const groups = within(await screen.findByRole('navigation', { name: 'Settings groups' }))
+    expect(groups.getByRole('link', { name: /Request policy/i })).toHaveAttribute('aria-current', 'page')
+    const sections = within(screen.getByRole('navigation', { name: 'Settings sections' }))
+    expect(sections.getByRole('link', { name: 'Channel health' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('falls back to the first group and section when the URL segments are unknown', async () => {

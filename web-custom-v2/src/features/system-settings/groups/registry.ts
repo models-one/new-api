@@ -3,6 +3,7 @@ import { billingGroup } from '@/features/system-settings/groups/billing'
 import { contentGroup } from '@/features/system-settings/groups/content'
 import { modelsGroup } from '@/features/system-settings/groups/models'
 import { operationsGroup } from '@/features/system-settings/groups/operations'
+import { requestPoliciesGroup } from '@/features/system-settings/groups/request-policies'
 import { securityGroup } from '@/features/system-settings/groups/security'
 import { siteGroup } from '@/features/system-settings/groups/site'
 import type {
@@ -11,7 +12,7 @@ import type {
 } from '@/features/system-settings/groups/types'
 
 /**
- * The seven groups and their 41 leaf sections, in the order the legacy console lists
+ * The eight groups and their leaf sections, in the order the legacy console lists
  * them. This file is written once and never needs editing again — a section is filled in
  * by adding its `Component` inside its own group file.
  */
@@ -20,6 +21,7 @@ export const SETTINGS_GROUPS: readonly [SettingsGroupDefinition, ...SettingsGrou
   authGroup,
   contentGroup,
   modelsGroup,
+  requestPoliciesGroup,
   billingGroup,
   operationsGroup,
   securityGroup,
@@ -46,16 +48,25 @@ export function findSettingsGroup(groupId: string | undefined): SettingsGroupDef
  * throwing: a stale bookmark pointing at a section id that no longer exists should land
  * on that group's first section, not on an error page.
  */
+/** Sections that moved to another group, so a bookmark of the old address still lands on them. */
+const MOVED_SECTIONS: Readonly<Record<string, readonly [string, string]>> = {
+  'models/channel-affinity': ['request-policies', 'routing'],
+  'models/routing-reliability': ['request-policies', 'health'],
+}
+
 export function resolveSettingsLocation(
-  groupId: string | undefined,
-  sectionId: string | undefined,
+  requestedGroupId: string | undefined,
+  requestedSectionId: string | undefined,
 ): ResolvedSettingsLocation {
+  const moved = MOVED_SECTIONS[`${requestedGroupId}/${requestedSectionId}`]
+  const groupId = moved?.[0] ?? requestedGroupId
+  const sectionId = moved?.[1] ?? requestedSectionId
   const group = findSettingsGroup(groupId) ?? SETTINGS_GROUPS[0]
   const section = group.sections.find((candidate) => candidate.id === sectionId) ?? group.sections[0]
 
   return {
     group,
-    redirected: group.id !== groupId || section.id !== sectionId,
+    redirected: group.id !== requestedGroupId || section.id !== requestedSectionId,
     section,
   }
 }

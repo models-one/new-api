@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import RefreshCwIcon from 'lucide-react/dist/esm/icons/refresh-cw'
 import RouteIcon from 'lucide-react/dist/esm/icons/route'
 import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -12,7 +12,7 @@ import {
   useDataTable,
   type DataTableColumns,
 } from '@/components/data'
-import { NumberInput, SwitchRow, Textarea } from '@/components/form'
+import { Input, NumberInput, RadioGroup, SwitchRow, Textarea } from '@/components/form'
 import { ConfirmDialog, toErrorMessage, toast } from '@/components/overlay'
 import { Alert, Badge, Button, Panel, Separator } from '@/components/ui'
 import { SettingsSection } from '@/features/system-settings/components/SettingsSection'
@@ -20,10 +20,18 @@ import {
   readOptionBoolean,
   readOptionNumber,
   readOptionString,
-  systemOptionsQuery,
   type SystemOptionMap,
 } from '@/features/system-settings/options-store'
-import { useOptionSectionForm } from '@/features/system-settings/section-form'
+import { AffinityRuleDialog, globalModeLabel } from '@/features/system-settings/request-policy/AffinityRuleDialog'
+import {
+  effectiveSessionMode,
+  newAffinityRule,
+  readAffinityRules,
+  writeAffinityRules,
+  type AffinityRule,
+} from '@/features/system-settings/request-policy/affinity-rules'
+import { usePolicySectionForm } from '@/features/system-settings/request-policy/api'
+import { parseStatusCodeRules } from '@/features/system-settings/models-operations/status-code-rules'
 import {
   channelAffinityCacheQuery,
   clearChannelAffinityCache,
@@ -37,7 +45,7 @@ import {
 import { formatCompactNumber } from '@/lib/format'
 
 /**
- * `/system-settings/models/channel-affinity`
+ * `/system-settings/request-policies/routing`
  *
  * Sticky routing: once a request identified by some key has been served by a channel, the
  * next request carrying the same key goes back to that channel. Six keys, all present in
@@ -63,7 +71,7 @@ import { formatCompactNumber } from '@/lib/format'
  * a zero that would read as "this rule is idle".
  */
 
-type AffinityRule = {
+type RawRule = {
   name?: unknown
   model_regex?: unknown
   path_regex?: unknown
@@ -74,14 +82,14 @@ type AffinityRule = {
 }
 
 /** Total: a malformed blob yields an empty list, and the editor still shows the raw text. */
-function parseRules(raw: string): AffinityRule[] {
+function parseRules(raw: string): RawRule[] {
   const trimmed = raw.trim()
   if (trimmed === '') return []
   try {
     const parsed: unknown = JSON.parse(trimmed)
     if (!Array.isArray(parsed)) return []
     return parsed.filter(
-      (entry): entry is AffinityRule =>
+      (entry): entry is RawRule =>
         typeof entry === 'object' && entry !== null && !Array.isArray(entry),
     )
   } catch {
@@ -89,7 +97,7 @@ function parseRules(raw: string): AffinityRule[] {
   }
 }
 
-function readRuleName(rule: AffinityRule): string {
+function readRuleName(rule: RawRule): string {
   return typeof rule.name === 'string' && rule.name.trim() !== '' ? rule.name : ''
 }
 
@@ -120,6 +128,8 @@ type AffinityRuleRow = {
   keySources: string[]
   ttlSeconds: number
   skipRetry: boolean
+  /** The mode the rule runs in, as the server resolves it. */
+  mode: 'off' | 'prefer' | 'strict'
   /** True when the rule tags its cache entries, which is what makes a per-rule clear possible. */
   tracked: boolean
   /** Undefined when the rule is not tracked — a 0 there would read as "idle", not "unknown". */
@@ -128,6 +138,10 @@ type AffinityRuleRow = {
 
 type AffinityDraft = {
   'channel_affinity_setting.enabled': boolean
+  /** off | prefer | strict; '' (never saved) runs as prefer. */
+  'channel_affinity_setting.session_mode': string
+  RetryTimes: number
+  AutomaticRetryStatusCodes: string
   'channel_affinity_setting.switch_on_success': boolean
   'channel_affinity_setting.keep_on_channel_disabled': boolean
   'channel_affinity_setting.max_entries': number
@@ -137,6 +151,9 @@ type AffinityDraft = {
 
 function toDraft(options: SystemOptionMap | undefined): AffinityDraft {
   return {
+    AutomaticRetryStatusCodes: readOptionString(options, 'AutomaticRetryStatusCodes'),
+    RetryTimes: readOptionNumber(options, 'RetryTimes'),
+    'channel_affinity_setting.session_mode': readOptionString(options, 'channel_affinity_setting.session_mode'),
     'channel_affinity_setting.default_ttl_seconds': readOptionNumber(
       options,
       'channel_affinity_setting.default_ttl_seconds',
@@ -167,23 +184,33 @@ function toDraft(options: SystemOptionMap | undefined): AffinityDraft {
 }
 
 const serializeAffinity = {
+  AutomaticRetryStatusCodes: (value: string | number | boolean) => parseStatusCodeRules(String(value)).normalized,
   'channel_affinity_setting.rules': (value: string | number | boolean) =>
     compactJson(String(value), '[]'),
 }
 
-export function ChannelAffinitySection() {
+export function SessionsRetriesSection() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const optionsQuery = useQuery(systemOptionsQuery())
 
   const [clearAllOpen, setClearAllOpen] = useState(false)
   const [ruleToClear, setRuleToClear] = useState<string | undefined>(undefined)
 
-  const form = useOptionSectionForm<AffinityDraft>({
-    saved: toDraft(optionsQuery.data),
+  const [editing, setEditing] = useState<{ index: number | null; rule: AffinityRule } | null>(null)
+  const [jsonView, setJsonView] = useState(false)
+
+  const { form, isPending } = usePolicySectionForm<AffinityDraft>({
     serialize: serializeAffinity,
+    toDraft,
     validate: (values) => {
       const errors: Partial<Record<keyof AffinityDraft, string>> = {}
+      const retryRules = parseStatusCodeRules(values.AutomaticRetryStatusCodes)
+      if (!retryRules.ok) {
+        errors.AutomaticRetryStatusCodes = t('Not a status code or range: {{tokens}}', { tokens: retryRules.invalidTokens.join(', ') })
+      }
+      if (!Number.isInteger(values.RetryTimes) || values.RetryTimes < 0 || values.RetryTimes > 10) {
+        errors.RetryTimes = t('Enter a whole number between 0 and 10.')
+      }
 
       errors['channel_affinity_setting.rules'] = jsonErrorMessage(
         validateJsonText(values['channel_affinity_setting.rules'], 'object-array'),
@@ -214,7 +241,7 @@ export function ChannelAffinitySection() {
   })
 
   const affinityEnabled = form.values['channel_affinity_setting.enabled']
-  const cacheQuery = useQuery(channelAffinityCacheQuery(!optionsQuery.isPending))
+  const cacheQuery = useQuery(channelAffinityCacheQuery(!isPending))
 
   const clearMutation = useMutation({
     mutationFn: (target: { all: true } | { ruleName: string }) => clearChannelAffinityCache(target),
@@ -227,7 +254,13 @@ export function ChannelAffinitySection() {
     },
   })
 
-  const disabled = optionsQuery.isPending || form.isSaving
+  const disabled = isPending || form.isSaving
+  const globalMode = form.values['channel_affinity_setting.session_mode'] || 'prefer'
+  const editableRules = readAffinityRules(form.values['channel_affinity_setting.rules'])
+  const setRules = (next: AffinityRule[]) => form.setField('channel_affinity_setting.rules', formatJsonForEditing(writeAffinityRules(next)))
+  // The rule columns are memoised; they reach the current setter through this ref.
+  const setRulesRef = useRef(setRules)
+  setRulesRef.current = setRules
   const rules = parseRules(form.values['channel_affinity_setting.rules'])
   const cache = cacheQuery.data
 
@@ -238,9 +271,11 @@ export function ChannelAffinitySection() {
         // `include_rule_name` is what makes the gateway tag its cache entries with the rule,
         // so without it there is no per-rule count and no per-rule clear.
         const tracked = rule.include_rule_name === true && name !== ''
+        const typed = editableRules?.[index]
         return {
           entries: tracked ? (cache?.by_rule_name[name] ?? 0) : undefined,
           index,
+          mode: typed === undefined ? 'prefer' : effectiveSessionMode(typed, globalMode),
           keySources: describeKeySources(rule.key_sources),
           models: readStringList(rule.model_regex),
           name,
@@ -249,7 +284,7 @@ export function ChannelAffinitySection() {
           ttlSeconds: typeof rule.ttl_seconds === 'number' ? rule.ttl_seconds : 0,
         }
       }),
-    [cache, rules],
+    [cache, editableRules, globalMode, rules],
   )
 
   const ruleColumns = useMemo<DataTableColumns<AffinityRuleRow>>(
@@ -260,11 +295,9 @@ export function ChannelAffinitySection() {
             <span className="mono font-semibold text-foreground">
               {row.original.name === '' ? t('(unnamed)') : row.original.name}
             </span>
-            {row.original.skipRetry ? (
-              <Badge size="sm" tone="warning">
-                {t('No retry')}
-              </Badge>
-            ) : null}
+            <Badge size="sm" tone={row.original.mode === 'strict' ? 'warning' : 'muted'}>
+              {t(globalModeLabel(row.original.mode))}
+            </Badge>
           </span>
         ),
         enableSorting: false,
@@ -312,6 +345,25 @@ export function ChannelAffinitySection() {
       },
       {
         cell: ({ row }) => (
+          <span className="flex justify-end gap-1">
+          <Button
+            aria-label={t('Edit rule {{rule}}', { rule: row.original.name })}
+            disabled={disabled || editableRules === null}
+            onClick={() => editableRules && setEditing({ index: row.original.index, rule: editableRules[row.original.index] })}
+            size="sm"
+            variant="quiet"
+          >
+            {t('Edit')}
+          </Button>
+          <Button
+            aria-label={t('Remove rule {{rule}}', { rule: row.original.name })}
+            disabled={disabled || editableRules === null}
+            onClick={() => editableRules && setRulesRef.current(editableRules.filter((_, at) => at !== row.original.index))}
+            size="sm"
+            variant="quiet"
+          >
+            {t('Remove')}
+          </Button>
           <Button
             disabled={!row.original.tracked || clearMutation.isPending}
             onClick={() => setRuleToClear(row.original.name)}
@@ -325,6 +377,7 @@ export function ChannelAffinitySection() {
           >
             {t('Clear')}
           </Button>
+          </span>
         ),
         enableSorting: false,
         header: () => <span className="sr-only">{t('Actions')}</span>,
@@ -332,7 +385,7 @@ export function ChannelAffinitySection() {
         meta: { align: 'right', label: t('Actions') },
       },
     ],
-    [clearMutation.isPending, t],
+    [clearMutation.isPending, disabled, editableRules, t],
   )
 
   const { table: ruleTable } = useDataTable<AffinityRuleRow>({
@@ -399,17 +452,6 @@ export function ChannelAffinitySection() {
                 </Badge>
               </div>
 
-              <DataTable
-                columns={ruleColumns}
-                emptyDescription={t('No affinity rule is configured, so every request is routed normally. Add a rule above to start pinning conversations to a channel.')}
-                emptyIcon={<RouteIcon aria-hidden="true" />}
-                emptyTitle={t('No affinity rules')}
-                isFetching={cacheQuery.isFetching}
-                label={t('Affinity rules and their cached entries')}
-                minWidthClassName="min-w-[46rem]"
-                table={ruleTable}
-              />
-
               <p className="text-xs leading-5 text-muted">
                 {t('A rule is only counted separately when its include_rule_name flag is set; without it the entries are pooled and can only be cleared all at once.')}
               </p>
@@ -420,11 +462,12 @@ export function ChannelAffinitySection() {
   return (
     <div className="flex flex-col gap-6">
       <SettingsSection
-        description={t('Sends a conversation back to the channel that already served it, keyed by something in the request.')}
+        description={t('Sends a conversation back to the channel that already served it, and decides how a failed request is retried.')}
         form={form}
-        note={t('Nothing here is validated by the server. A malformed rule list is accepted and stored, after which no rule matches and no error is reported anywhere — which is why this page refuses to write one.')}
-        saveMode="section"
-        title={t('Channel affinity')}
+        note={t('Saved together with retries and channel health as one policy: the server checks all of it, every rule and pattern included, before storing any of it.')}
+        atomic
+      saveMode="section"
+        title={t('Sessions and retries')}
       >
         <SwitchRow
           checked={affinityEnabled}
@@ -486,21 +529,113 @@ export function ChannelAffinitySection() {
           />
         </div>
 
+        <RadioGroup<string>
+          description={t('Used by every rule set to “Same as global”.')}
+          disabled={disabled || !affinityEnabled}
+          label={t('Global session mode')}
+          onValueChange={(mode) => form.setField('channel_affinity_setting.session_mode', mode)}
+          options={[
+            { description: t('Rules match but never remember or reuse a channel.'), label: t('Off'), value: 'off' },
+            { description: t('Reuse the remembered channel while it is usable; otherwise another channel serves and retries work as usual. Fewer cache hits upstream than strict.'), label: t('Prefer'), value: 'prefer' },
+            { description: t('Only the remembered channel. If it cannot serve, the request fails with 503 and is not retried elsewhere.'), label: t('Strict'), value: 'strict' },
+          ]}
+          orientation="horizontal"
+          value={globalMode}
+          variant="card"
+        />
+
         <Separator />
 
-        <Textarea
-          description={t('A JSON array of rule objects: name, model_regex, path_regex, key_sources, ttl_seconds and the include_* flags that decide what the cache key is built from. Each rule must carry a unique name.')}
-          disabled={disabled}
-          error={form.errors['channel_affinity_setting.rules']}
-          invalid={form.errors['channel_affinity_setting.rules'] !== undefined}
-          label={t('Affinity rules')}
-          onChange={(event) => form.setField('channel_affinity_setting.rules', event.target.value)}
-          rows={14}
-          spellCheck={false}
-          textareaClassName="mono text-xs"
-          value={form.values['channel_affinity_setting.rules']}
-        />
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium text-foreground">{t('Affinity rules')}</p>
+              <p className="text-xs leading-5 text-muted">{t('Which requests stick to a channel, and the request value that identifies them. The first matching rule applies.')}</p>
+            </div>
+            <span className="flex gap-2">
+              <Button disabled={disabled || editableRules === null} onClick={() => setEditing({ index: null, rule: newAffinityRule() })} size="sm" variant="outline">
+                {t('Add rule')}
+              </Button>
+              <Button onClick={() => setJsonView(!jsonView)} size="sm" variant="quiet">
+                {jsonView ? t('Hide JSON') : t('Edit as JSON')}
+              </Button>
+            </span>
+          </div>
+          {editableRules === null && !jsonView ? (
+            <Alert tone="warning">{t('The stored rules are not a JSON array of objects. Fix them as JSON.')}</Alert>
+          ) : null}
+                <DataTable
+                  columns={ruleColumns}
+                  emptyDescription={t('No affinity rule is configured, so every request is routed normally. Add a rule above to start pinning conversations to a channel.')}
+                  emptyIcon={<RouteIcon aria-hidden="true" />}
+                  emptyTitle={t('No affinity rules')}
+                  isFetching={cacheQuery.isFetching}
+                  label={t('Affinity rules and their cached entries')}
+                  minWidthClassName="min-w-[46rem]"
+                  table={ruleTable}
+                />
+          {jsonView || editableRules === null ? (
+            <Textarea
+              description={t('A JSON array of rule objects: name, model_regex, path_regex, key_sources, ttl_seconds and the include_* flags that decide what the cache key is built from. Each rule must carry a unique name.')}
+              disabled={disabled}
+              error={form.errors['channel_affinity_setting.rules']}
+              invalid={form.errors['channel_affinity_setting.rules'] !== undefined}
+              label={t('Affinity rules')}
+              onChange={(event) => form.setField('channel_affinity_setting.rules', event.target.value)}
+              rows={14}
+              spellCheck={false}
+              textareaClassName="mono text-xs"
+              value={form.values['channel_affinity_setting.rules']}
+            />
+          ) : null}
+          {form.errors['channel_affinity_setting.rules'] && !jsonView ? (
+            <p className="text-xs text-destructive" role="alert">{form.errors['channel_affinity_setting.rules']}</p>
+          ) : null}
+        </div>
+        <Separator />
+
+        <div className="flex flex-col gap-4">
+          <p className="eyebrow">{t('Request retry')}</p>
+          <div className="grid gap-5 md:grid-cols-2">
+            <NumberInput
+              description={t('How many other channels one failed request may be re-sent to before the caller gets the error. 0 means the first failure is returned. Requests under a strict rule are never retried.')}
+              disabled={disabled}
+              error={form.errors.RetryTimes}
+              invalid={form.errors.RetryTimes !== undefined}
+              label={t('Retry attempts')}
+              max={10}
+              min={0}
+              onValueChange={(value) => form.setField('RetryTimes', value ?? Number.NaN)}
+              step={1}
+              value={form.values.RetryTimes}
+            />
+            <Input
+              description={t('Comma separated codes and inclusive ranges, e.g. 429,500-599. A response in this set is retried on another channel; it does not disable anything.')}
+              disabled={disabled}
+              error={form.errors.AutomaticRetryStatusCodes}
+              invalid={form.errors.AutomaticRetryStatusCodes !== undefined}
+              label={t('Status codes that trigger a retry')}
+              onChange={(event) => form.setField('AutomaticRetryStatusCodes', event.target.value)}
+              placeholder="429,500-599"
+              value={form.values.AutomaticRetryStatusCodes}
+            />
+          </div>
+        </div>
       </SettingsSection>
+
+      {editing === null || editableRules === null ? null : (
+        <AffinityRuleDialog
+          globalMode={globalMode}
+          isNew={editing.index === null}
+          onCancel={() => setEditing(null)}
+          onDone={(rule) => {
+            setRules(editing.index === null ? [...editableRules, rule] : editableRules.map((item, at) => (at === editing.index ? rule : item)))
+            setEditing(null)
+          }}
+          others={editableRules.filter((_, at) => at !== editing.index)}
+          rule={editing.rule}
+        />
+      )}
 
       <Panel as="section">
         <Panel.Header

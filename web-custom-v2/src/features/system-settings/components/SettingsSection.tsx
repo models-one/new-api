@@ -18,6 +18,11 @@ type SettingsSectionProps = {
   saveMode: OptionSaveMode
   /** Extra footnote rendered under the controls, e.g. a caveat about a key. */
   note?: ReactNode
+  /**
+   * The section saves every change in one request that succeeds or fails as a whole, so a
+   * refusal means nothing was saved — not that the other keys were.
+   */
+  atomic?: boolean
   children: ReactNode
 }
 
@@ -55,11 +60,13 @@ export function SettingsSection(props: SettingsSectionProps) {
             dismissible
             icon={<TriangleAlertIcon aria-hidden="true" />}
             onDismiss={form.dismissFailures}
-            title={t('The server refused some of these settings')}
+            title={props.atomic ? t('The server refused these settings') : t('The server refused some of these settings')}
             tone="destructive"
           >
             <p>
-              {t('Each setting is written on its own, so the rest were saved. The refused ones still hold your value — fix them and save again.')}
+              {props.atomic
+                ? t('These settings are saved together, so none of them were saved. Your values are kept — fix the problem and save again.')
+                : t('Each setting is written on its own, so the rest were saved. The refused ones still hold your value — fix them and save again.')}
             </p>
             <ul className="mt-2 flex flex-col gap-1">
               {form.failures.map((failure) => (

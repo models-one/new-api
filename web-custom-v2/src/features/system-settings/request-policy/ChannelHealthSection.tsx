@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
 import { useTranslation } from 'react-i18next'
 
@@ -9,17 +8,16 @@ import {
   readOptionBoolean,
   readOptionNumber,
   readOptionString,
-  systemOptionsQuery,
   type SystemOptionMap,
 } from '@/features/system-settings/options-store'
-import { useOptionSectionForm } from '@/features/system-settings/section-form'
+import { usePolicySectionForm } from '@/features/system-settings/request-policy/api'
 import {
   countStatusCodes,
   parseStatusCodeRules,
 } from '@/features/system-settings/models-operations/status-code-rules'
 
 /**
- * `/system-settings/models/routing-reliability`
+ * `/system-settings/request-policies/health`
  *
  * THE SECTION THAT CAN TAKE THE DEPLOYMENT OFFLINE. Auto-disable acts on a channel the
  * moment a rule matches, and a channel that is disabled serves nothing. The controls below
@@ -38,8 +36,8 @@ import {
  *                                on its own. Off means every disable is permanent until an
  *                                operator clears it by hand.
  *
- * Ten keys, all present in `GET /api/option/`. Saved per SECTION: retry, disable and test
- * settings are one policy and are set together.
+ * Read from and saved through `/api/option/request_policy`, which validates the whole
+ * policy before writing any key. Retries live with session affinity in the routing section.
  *
  * Both status-code keys are ALSO validated server-side —
  * `operation_setting.ParseHTTPStatusCodeRanges` refuses `999-abc` with
@@ -55,9 +53,8 @@ export function toChannelTestMode(value: string): ChannelTestMode {
   return (CHANNEL_TEST_MODES as readonly string[]).includes(value) ? (value as ChannelTestMode) : 'scheduled_all'
 }
 
-type RoutingDraft = {
-  RetryTimes: number
-  AutomaticRetryStatusCodes: string
+type HealthDraft = {
+  'monitor_setting.channel_test_concurrency': number
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.channel_test_mode': string
   'monitor_setting.auto_test_channel_minutes': number
@@ -68,7 +65,7 @@ type RoutingDraft = {
   AutomaticDisableKeywords: string
 }
 
-function toDraft(options: SystemOptionMap | undefined): RoutingDraft {
+function toDraft(options: SystemOptionMap | undefined): HealthDraft {
   return {
     AutomaticDisableChannelEnabled: readOptionBoolean(options, 'AutomaticDisableChannelEnabled'),
     // Pasted from an editor this can arrive with CRLF; the backend matches on the raw text.
@@ -78,7 +75,6 @@ function toDraft(options: SystemOptionMap | undefined): RoutingDraft {
     ),
     AutomaticDisableStatusCodes: readOptionString(options, 'AutomaticDisableStatusCodes'),
     AutomaticEnableChannelEnabled: readOptionBoolean(options, 'AutomaticEnableChannelEnabled'),
-    AutomaticRetryStatusCodes: readOptionString(options, 'AutomaticRetryStatusCodes'),
     ChannelDisableThreshold: readOptionNumber(options, 'ChannelDisableThreshold', 5),
     'monitor_setting.auto_test_channel_enabled': readOptionBoolean(
       options,
@@ -92,29 +88,26 @@ function toDraft(options: SystemOptionMap | undefined): RoutingDraft {
     'monitor_setting.channel_test_mode': toChannelTestMode(
       readOptionString(options, 'monitor_setting.channel_test_mode', 'scheduled_all'),
     ),
-    RetryTimes: readOptionNumber(options, 'RetryTimes'),
+    'monitor_setting.channel_test_concurrency': readOptionNumber(options, 'monitor_setting.channel_test_concurrency', 1),
   }
 }
 
 /** Both rule strings are normalised on the way out, exactly as the server stores them. */
-const serializeRouting = {
+const serializeHealth = {
   AutomaticDisableKeywords: (value: string | number | boolean) =>
     String(value).replace(/\r\n/g, '\n'),
   AutomaticDisableStatusCodes: (value: string | number | boolean) =>
     parseStatusCodeRules(String(value)).normalized,
-  AutomaticRetryStatusCodes: (value: string | number | boolean) =>
-    parseStatusCodeRules(String(value)).normalized,
 }
 
-export function RoutingReliabilitySection() {
+export function ChannelHealthSection() {
   const { t } = useTranslation()
-  const optionsQuery = useQuery(systemOptionsQuery())
 
-  const form = useOptionSectionForm<RoutingDraft>({
-    saved: toDraft(optionsQuery.data),
-    serialize: serializeRouting,
+  const { form, isPending } = usePolicySectionForm<HealthDraft>({
+    serialize: serializeHealth,
+    toDraft,
     validate: (values) => {
-      const errors: Partial<Record<keyof RoutingDraft, string>> = {}
+      const errors: Partial<Record<keyof HealthDraft, string>> = {}
 
       const disableRules = parseStatusCodeRules(values.AutomaticDisableStatusCodes)
       if (!disableRules.ok) {
@@ -123,15 +116,9 @@ export function RoutingReliabilitySection() {
         })
       }
 
-      const retryRules = parseStatusCodeRules(values.AutomaticRetryStatusCodes)
-      if (!retryRules.ok) {
-        errors.AutomaticRetryStatusCodes = t('Not a status code or range: {{tokens}}', {
-          tokens: retryRules.invalidTokens.join(', '),
-        })
-      }
-
-      if (values.RetryTimes < 0 || values.RetryTimes > 10) {
-        errors.RetryTimes = t('Enter a whole number between 0 and 10.')
+      const concurrency = values['monitor_setting.channel_test_concurrency']
+      if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 32) {
+        errors['monitor_setting.channel_test_concurrency'] = t('Enter a whole number between 1 and 32.')
       }
       if (values.ChannelDisableThreshold < 0) {
         errors.ChannelDisableThreshold = t('Enter zero or more seconds.')
@@ -143,11 +130,10 @@ export function RoutingReliabilitySection() {
     },
   })
 
-  const disabled = optionsQuery.isPending || form.isSaving
+  const disabled = isPending || form.isSaving
   const values = form.values
 
   const disableRules = parseStatusCodeRules(values.AutomaticDisableStatusCodes)
-  const retryRules = parseStatusCodeRules(values.AutomaticRetryStatusCodes)
   const testMode = toChannelTestMode(values['monitor_setting.channel_test_mode'])
   const TEST_MODE_DESCRIPTIONS: Record<ChannelTestMode, string> = {
     auto_ban_only: t('Periodically checks only channels with auto-disable enabled, excluding manually disabled channels.'),
@@ -168,7 +154,7 @@ export function RoutingReliabilitySection() {
    * announce a rewrite that is never going to happen.
    */
   const normalisedHint = (
-    key: 'AutomaticDisableStatusCodes' | 'AutomaticRetryStatusCodes',
+    key: 'AutomaticDisableStatusCodes',
     parsed: ReturnType<typeof parseStatusCodeRules>,
   ) =>
     form.isFieldDirty(key) && parsed.ok && parsed.normalized !== values[key].trim()
@@ -177,11 +163,12 @@ export function RoutingReliabilitySection() {
 
   return (
     <SettingsSection
-      description={t('How a failing upstream is retried, when a channel is taken out of rotation, and what brings it back.')}
+      description={t('When a channel is taken out of rotation, how channels are tested, and what brings one back.')}
       form={form}
       note={t('A disabled channel serves no traffic at all. If nothing here can re-enable a channel, every automatic disable has to be undone by hand on the channels page.')}
+      atomic
       saveMode="section"
-      title={t('Routing reliability')}
+      title={t('Channel health')}
     >
       {autoDisableOn && !values.AutomaticEnableChannelEnabled ? (
         <Alert
@@ -192,39 +179,6 @@ export function RoutingReliabilitySection() {
           {t('A channel taken down by a matching status code, keyword or slow test stays down until someone re-enables it by hand. Turn on “Bring a channel back after a successful test” unless that is what you intend.')}
         </Alert>
       ) : null}
-
-      <div className="flex flex-col gap-4">
-        <p className="eyebrow">{t('Request retry')}</p>
-        <div className="grid gap-5 md:grid-cols-2">
-          <NumberInput
-            description={t('How many other channels one failed request may be re-sent to before the caller gets the error. 0 means the first failure is returned.')}
-            disabled={disabled}
-            error={form.errors.RetryTimes}
-            invalid={form.errors.RetryTimes !== undefined}
-            label={t('Retry attempts')}
-            max={10}
-            min={0}
-            onValueChange={(value) => form.setField('RetryTimes', value ?? Number.NaN)}
-            step={1}
-            value={values.RetryTimes}
-          />
-          <Input
-            description={
-              normalisedHint('AutomaticRetryStatusCodes', retryRules)
-              ?? t('Comma separated codes and inclusive ranges, e.g. 429,500-599. A response in this set is retried on another channel; it does not disable anything.')
-            }
-            disabled={disabled}
-            error={form.errors.AutomaticRetryStatusCodes}
-            invalid={form.errors.AutomaticRetryStatusCodes !== undefined}
-            label={t('Status codes that trigger a retry')}
-            onChange={(event) => form.setField('AutomaticRetryStatusCodes', event.target.value)}
-            placeholder="429,500-599"
-            value={values.AutomaticRetryStatusCodes}
-          />
-        </div>
-      </div>
-
-      <Separator />
 
       <div className="flex flex-col gap-4">
         <p className="eyebrow">{t('Channel health checks')}</p>
@@ -271,6 +225,18 @@ export function RoutingReliabilitySection() {
             }
             step={1}
             value={values['monitor_setting.auto_test_channel_minutes']}
+          />
+          <NumberInput
+            description={t('How many channels a test pass checks at once, 1 to 32. Higher finishes sooner but sends more test requests at the same time.')}
+            disabled={disabled}
+            error={form.errors['monitor_setting.channel_test_concurrency']}
+            invalid={form.errors['monitor_setting.channel_test_concurrency'] !== undefined}
+            label={t('Channels tested at once')}
+            max={32}
+            min={1}
+            onValueChange={(value) => form.setField('monitor_setting.channel_test_concurrency', value ?? Number.NaN)}
+            step={1}
+            value={values['monitor_setting.channel_test_concurrency']}
           />
         </div>
       </div>

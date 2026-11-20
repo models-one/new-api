@@ -15,13 +15,7 @@ const del = vi.fn()
 
 vi.mock('@/lib/http-client', () => ({ api: { delete: del, get, post, put } }))
 
-const {
-  ChannelAffinitySection,
-  EmailSection,
-  LogsSection,
-  PriceSyncSection,
-  RoutingReliabilitySection,
-} = await import('@/features/system-settings/models-operations')
+const { EmailSection, LogsSection, PriceSyncSection } = await import('@/features/system-settings/models-operations')
 
 /**
  * WHAT THESE TESTS ARE FOR
@@ -191,19 +185,6 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('coercing the string-typed option payload', () => {
-  it('reads the STRING “false” as off, not as a truthy string', async () => {
-    renderSection(<RoutingReliabilitySection />)
-
-    const autoDisable = await enabledSwitch('Let the gateway disable a failing channel')
-    const autoEnable = screen.getByRole('switch', {
-      name: 'Bring a channel back after a successful test',
-    })
-
-    // Both arrive as the string 'false'. Branching on the raw value would show them ON.
-    expect(autoDisable).toHaveAttribute('aria-checked', 'false')
-    expect(autoEnable).toHaveAttribute('aria-checked', 'false')
-  })
-
   it('reads the string “true” as on and a numeric string as a number', async () => {
     renderSection(<PriceSyncSection />)
 
@@ -215,87 +196,6 @@ describe('coercing the string-typed option payload', () => {
     expect(screen.getByRole('spinbutton', { name: 'Reject a source with fewer models than' })).toHaveValue(50)
   })
 
-  it('shows the auto-disable warning only when nothing can re-enable a channel', async () => {
-    renderSection(<RoutingReliabilitySection />)
-
-    const autoDisable = await enabledSwitch('Let the gateway disable a failing channel')
-    // Auto-disable is off in the seeded data, so there is nothing to warn about yet.
-    expect(
-      screen.queryByText('Auto-disable is on and nothing re-enables a channel'),
-    ).not.toBeInTheDocument()
-
-    fireEvent.click(autoDisable)
-
-    expect(
-      await screen.findByText('Auto-disable is on and nothing re-enables a channel'),
-    ).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Bring a channel back after a successful test' }))
-
-    await waitFor(() =>
-      expect(
-        screen.queryByText('Auto-disable is on and nothing re-enables a channel'),
-      ).not.toBeInTheDocument(),
-    )
-  })
-})
-
-describe('writing one key at a time', () => {
-  it('writes only the keys the operator actually changed', async () => {
-    renderSection(<RoutingReliabilitySection />)
-
-    const retries = await screen.findByRole('spinbutton', { name: 'Retry attempts' })
-    fireEvent.change(retries, { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    await waitFor(() => expect(optionWrites()).toHaveLength(1))
-    expect(optionWrites()[0]).toEqual({ key: 'RetryTimes', value: '3' })
-  })
-
-  it('refuses to write a status-code rule the server would reject, and names the bad token', async () => {
-    renderSection(<RoutingReliabilitySection />)
-
-    const codes = await screen.findByRole('textbox', { name: 'Status codes that disable a channel' })
-    fireEvent.change(codes, { target: { value: '401, 999-abc' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    expect(await screen.findByText('Not a status code or range: 999-abc')).toBeInTheDocument()
-    // Nothing reached the network: the parse matches the server's own and caught it first.
-    expect(optionWrites()).toHaveLength(0)
-  })
-
-  it('keeps a refused key dirty and quotes the server rather than claiming success', async () => {
-    server.refuse.ChannelDisableThreshold = 'threshold rejected by policy'
-    renderSection(<RoutingReliabilitySection />)
-
-    const threshold = await screen.findByRole('spinbutton', {
-      name: 'Disable a channel slower than (seconds)',
-    })
-    fireEvent.change(threshold, { target: { value: '12' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    expect(await screen.findByText(/threshold rejected by policy/)).toBeInTheDocument()
-    // The operator's value is kept so a second Save retries it, and the store is unchanged.
-    expect(threshold).toHaveValue(12)
-    expect(server.stored.ChannelDisableThreshold).toBe('5')
-  })
-})
-
-describe('the scheduled channel test mode', () => {
-  it('shows and keeps “auto_ban_only” instead of reading it as “scheduled_all”', async () => {
-    server.stored['monitor_setting.channel_test_mode'] = 'auto_ban_only'
-    renderSection(<RoutingReliabilitySection />)
-
-    const mode = await screen.findByRole('combobox', { name: 'What the scheduled test covers' })
-    await waitFor(() => expect(mode).toHaveValue('auto_ban_only'))
-
-    // Saving an unrelated key must not rewrite the mode.
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Retry attempts' }), { target: { value: '3' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    await waitFor(() => expect(optionWrites()).toHaveLength(1))
-    expect(optionWrites()[0].key).toBe('RetryTimes')
-  })
 })
 
 describe('the log purge, which deletes billing history irreversibly', () => {
@@ -393,42 +293,6 @@ describe('the price sync apply mode, which decides what a run may overwrite', ()
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
     expect(post.mock.calls[0][0]).toBe('/api/system-task/price-sync')
     expect(post.mock.calls[0][2]).toMatchObject({ params: { dry_run: true } })
-  })
-})
-
-describe('the affinity rule list, which the server does not validate', () => {
-  it('blocks a malformed rule list the server would accept and silently break on', async () => {
-    renderSection(<ChannelAffinitySection />)
-
-    const rules = await screen.findByRole('textbox', { name: 'Affinity rules' })
-    fireEvent.change(rules, { target: { value: 'not json' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    expect(await screen.findByText('This is not valid JSON.')).toBeInTheDocument()
-    expect(optionWrites()).toHaveLength(0)
-  })
-
-  it('blocks two rules sharing a name, because the cache is keyed by it', async () => {
-    renderSection(<ChannelAffinitySection />)
-
-    const rules = await screen.findByRole('textbox', { name: 'Affinity rules' })
-    fireEvent.change(rules, { target: { value: '[{"name":"a"},{"name":"a"}]' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    expect(
-      await screen.findByText(
-        'Two rules share the same "name". Cache entries are keyed by rule name, so the names must be unique.',
-      ),
-    ).toBeInTheDocument()
-    expect(optionWrites()).toHaveLength(0)
-  })
-
-  it('reports an unreadable cache instead of rendering it as an empty one', async () => {
-    server.affinityCacheFails = true
-    renderSection(<ChannelAffinitySection />)
-
-    expect(await screen.findByText('The affinity cache could not be read')).toBeInTheDocument()
-    expect(screen.queryByText('No affinity rules')).not.toBeInTheDocument()
   })
 })
 

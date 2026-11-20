@@ -1,14 +1,12 @@
 import NetworkIcon from 'lucide-react/dist/esm/icons/network'
 
 import {
-  ChannelAffinitySection,
   ClaudeSection,
   GeminiSection,
   GlobalModelsSection,
   GrokSection,
   ModelDeploymentSection,
   PriceSyncSection,
-  RoutingReliabilitySection,
 } from '@/features/system-settings/models-operations'
 import type { SettingsGroupDefinition } from '@/features/system-settings/groups/types'
 
@@ -28,7 +26,7 @@ import type { SettingsGroupDefinition } from '@/features/system-settings/groups/
  */
 export const modelsGroup: SettingsGroupDefinition = {
   Icon: NetworkIcon,
-  description: 'Per-vendor behaviour, routing reliability and price synchronisation.',
+  description: 'Per-vendor behaviour and price synchronisation.',
   id: 'models',
   sections: [
     {
@@ -36,12 +34,6 @@ export const modelsGroup: SettingsGroupDefinition = {
       description: 'Pass-through requests, thinking blacklist and keep-alive pings.',
       id: 'global',
       title: 'Global model configuration',
-    },
-    {
-      Component: RoutingReliabilitySection,
-      description: 'Retries, automatic channel disabling and channel testing.',
-      id: 'routing-reliability',
-      title: 'Routing reliability',
     },
     {
       Component: PriceSyncSection,
@@ -66,12 +58,6 @@ export const modelsGroup: SettingsGroupDefinition = {
       description: 'The deduction applied to a violation response.',
       id: 'grok',
       title: 'Grok',
-    },
-    {
-      Component: ChannelAffinitySection,
-      description: 'Sticky routing of a conversation to the channel that served it.',
-      id: 'channel-affinity',
-      title: 'Channel affinity',
     },
     {
       Component: ModelDeploymentSection,
