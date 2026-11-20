@@ -93,9 +93,12 @@ func isSensitiveURLQueryKey(key string) bool {
 		"x-amz-signature":
 		return true
 	}
+	// "private" covers private_key, which the Waffo Pancake catalog lookup
+	// takes in its query string.
 	return strings.Contains(normalized, "token") ||
 		strings.Contains(normalized, "secret") ||
-		strings.Contains(normalized, "signature")
+		strings.Contains(normalized, "signature") ||
+		strings.Contains(normalized, "private")
 }
 
 func GetAPIVersion(c *gin.Context) string {
