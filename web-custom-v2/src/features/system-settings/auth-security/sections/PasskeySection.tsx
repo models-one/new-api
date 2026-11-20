@@ -1,9 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import ShieldAlertIcon from 'lucide-react/dist/esm/icons/shield-alert'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Input, NativeSelect, SwitchRow, Textarea } from '@/components/form'
+import { ConfirmDialog } from '@/components/overlay'
 import { Alert } from '@/components/ui'
+import {
+  previewPasskeyDomains,
+  savePasskeyDomains,
+  type PasskeyDomainChange,
+  type PasskeyDomains,
+} from '@/features/system-settings/auth-security/passkey-domains'
 import { isAbsoluteHttpUrl } from '@/features/system-settings/auth-security/oauth-config'
 import { splitCommas, splitLines } from '@/features/system-settings/auth-security/validation'
 import { SettingsSection } from '@/features/system-settings/components/SettingsSection'
@@ -46,7 +54,11 @@ import { useOptionSectionForm } from '@/features/system-settings/section-form'
 const USER_VERIFICATION_VALUES = ['required', 'preferred', 'discouraged'] as const
 const ATTACHMENT_VALUES = ['', 'platform', 'cross-platform'] as const
 
+/** Saved together through `PUT /api/option/passkey/domains`; see `passkey-domains.ts`. */
+const DOMAIN_KEYS = ['passkey.rp_id', 'passkey.legacy_rp_ids', 'passkey.origins'] as const
+
 type PasskeyDraft = {
+  'passkey.legacy_rp_ids': string
   'passkey.enabled': boolean
   'passkey.rp_display_name': string
   'passkey.rp_id': string
@@ -71,6 +83,8 @@ function toDraft(options: SystemOptionMap | undefined): PasskeyDraft {
       '',
     ),
     'passkey.enabled': readOptionBoolean(options, 'passkey.enabled'),
+    // Kept exactly as stored: older passkeys hash the precise id they were made under.
+    'passkey.legacy_rp_ids': splitCommas(readOptionString(options, 'passkey.legacy_rp_ids')).join('\n'),
     'passkey.origins': splitCommas(readOptionString(options, 'passkey.origins')).join('\n'),
     'passkey.rp_display_name': readOptionString(options, 'passkey.rp_display_name'),
     'passkey.rp_id': readOptionString(options, 'passkey.rp_id'),
@@ -83,14 +97,41 @@ function toDraft(options: SystemOptionMap | undefined): PasskeyDraft {
 }
 
 const serializePasskey = {
+  'passkey.legacy_rp_ids': (value: string | number | boolean) => splitLines(String(value)).join(','),
   'passkey.origins': (value: string | number | boolean) => splitLines(String(value)).join(','),
+}
+
+function domainsOf(values: PasskeyDraft): PasskeyDomains {
+  return {
+    legacy_rp_ids: serializePasskey['passkey.legacy_rp_ids'](values['passkey.legacy_rp_ids']),
+    origins: serializePasskey['passkey.origins'](values['passkey.origins']),
+    rp_id: values['passkey.rp_id'].trim(),
+  }
 }
 
 export function PasskeySection() {
   const { t } = useTranslation()
   const optionsQuery = useQuery(systemOptionsQuery())
 
+  // A domain change that strands stored passkeys waits here for the operator's answer.
+  const [pendingRemoval, setPendingRemoval] = useState<{ change: PasskeyDomainChange; answer: (confirmed: boolean) => void } | null>(null)
+
   const form = useOptionSectionForm<PasskeyDraft>({
+    groupWrite: {
+      keys: DOMAIN_KEYS,
+      write: async (values) => {
+        const domains = domainsOf(values)
+        const preview = await previewPasskeyDomains(domains)
+        let confirmation = ''
+        if (preview.confirmation_required) {
+          const confirmed = await new Promise<boolean>((answer) => setPendingRemoval({ answer, change: preview }))
+          setPendingRemoval(null)
+          if (!confirmed) throw new Error(t('Not saved: the domain change was cancelled.'))
+          confirmation = preview.removal_confirmation
+        }
+        await savePasskeyDomains(domains, confirmation)
+      },
+    },
     saved: toDraft(optionsQuery.data),
     serialize: serializePasskey,
     validate: (values) => {
@@ -180,7 +221,7 @@ export function PasskeySection() {
           value={values['passkey.rp_display_name']}
         />
         <Input
-          description={t('The bare domain a passkey is bound to. A passkey created under one relying party ID cannot be used under another, so changing this invalidates every existing passkey.')}
+          description={t('The bare domain a passkey is bound to. When it changes, the previous one is kept below as a legacy domain so existing passkeys keep working.')}
           disabled={disabled}
           error={form.errors['passkey.rp_id']}
           invalid={form.errors['passkey.rp_id'] !== undefined}
@@ -203,6 +244,17 @@ export function PasskeySection() {
         value={values['passkey.origins']}
       />
 
+      <Textarea
+        description={t('Earlier relying party IDs whose passkeys are still accepted, one per line. Removing one makes the passkeys registered under it stop working; you are asked to confirm first.')}
+        disabled={disabled}
+        label={t('Legacy relying party IDs')}
+        onChange={(event) => form.setField('passkey.legacy_rp_ids', event.target.value)}
+        placeholder="old.example.com"
+        rows={3}
+        spellCheck={false}
+        value={values['passkey.legacy_rp_ids']}
+      />
+
       <div className="grid gap-5 md:grid-cols-2">
         <NativeSelect
           description={t('How hard the authenticator must work to confirm the person present.')}
@@ -221,6 +273,27 @@ export function PasskeySection() {
           value={values['passkey.attachment_preference']}
         />
       </div>
+
+      <ConfirmDialog
+        cancelLabel={t('Keep the passkeys working')}
+        confirmLabel={t('Remove and save')}
+        description={
+          pendingRemoval === null
+            ? ''
+            : t('This change stops accepting {{domains}}. {{affected}} stored passkey(s) registered under them, and {{unknown}} with no recorded domain, will no longer sign in. Their owners will need to register a new passkey.', {
+                affected: pendingRemoval.change.affected_credentials,
+                domains: (pendingRemoval.change.removed_rp_ids ?? []).join(', '),
+                unknown: pendingRemoval.change.unknown_credentials,
+              })
+        }
+        destructive
+        onConfirm={() => pendingRemoval?.answer(true)}
+        onOpenChange={(open) => {
+          if (!open) pendingRemoval?.answer(false)
+        }}
+        open={pendingRemoval !== null}
+        title={t('Stop accepting existing passkeys?')}
+      />
     </SettingsSection>
   )
 }

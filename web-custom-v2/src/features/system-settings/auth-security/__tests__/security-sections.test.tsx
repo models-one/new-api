@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import '@/i18n/config'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -45,6 +45,36 @@ const seeded: Record<string, string> = {
 let stored: Record<string, string>
 let refuse: Record<string, string>
 
+/** How many stored passkeys a domain change would strand, as `UpdatePasskeyDomainOptions` counts them. */
+let strandedPasskeys = 0
+
+function passkeyDomains(body: Record<string, unknown>) {
+  const change = {
+    affected_credentials: strandedPasskeys,
+    confirmation_required: strandedPasskeys > 0,
+    effective_rp_id: String(body.rp_id),
+    legacy_rp_ids: String(body.legacy_rp_ids),
+    origins: String(body.origins),
+    previous_rp_id: stored['passkey.rp_id'] ?? '',
+    removal_confirmation: 'token-1',
+    removed_rp_ids: strandedPasskeys > 0 ? ['old.example.com'] : [],
+    rp_id: String(body.rp_id),
+    unknown_credentials: 0,
+  }
+  if (body.preview === true) return Promise.resolve({ data: { data: change, message: '', success: true } })
+  if (change.confirmation_required && body.removal_confirmation !== 'token-1') {
+    return Promise.reject(Object.assign(new Error('Request failed with status code 409'), { isAxiosError: true, response: { data: { message: 'confirm again', success: false }, status: 409 } }))
+  }
+  stored['passkey.rp_id'] = change.rp_id
+  stored['passkey.legacy_rp_ids'] = change.legacy_rp_ids
+  stored['passkey.origins'] = change.origins
+  return Promise.resolve({ data: { data: change, message: '', success: true } })
+}
+
+function domainWrites(): Record<string, unknown>[] {
+  return put.mock.calls.filter((call) => call[0] === '/api/option/passkey/domains').map((call) => call[1] as Record<string, unknown>)
+}
+
 function writes(): { key: string; value: string }[] {
   return put.mock.calls
     .filter((call) => call[0] === '/api/option/')
@@ -82,6 +112,7 @@ async function renderTokenLimits() {
 }
 
 beforeEach(() => {
+  strandedPasskeys = 0
   stored = { ...seeded }
   refuse = {}
 
@@ -108,7 +139,8 @@ beforeEach(() => {
     throw new Error(`unmocked GET ${url}`)
   })
 
-  put.mockImplementation((url: string, body: { key: string; value: string }) => {
+  put.mockImplementation((url: string, body: { key: string; value: string } & Record<string, unknown>) => {
+    if (url === '/api/option/passkey/domains') return passkeyDomains(body)
     if (url !== '/api/option/') throw new Error(`unmocked PUT ${url}`)
     // A refusal is HTTP 200 with success:false, not a 4xx.
     const refusal = refuse[body.key]
@@ -292,11 +324,32 @@ describe('PasskeySection', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await waitFor(() => expect(writes()).toHaveLength(1))
-    expect(writes()[0]).toEqual({
-      key: 'passkey.origins',
-      value: 'https://a.example.com,https://b.example.com',
-    })
+    // Domain settings are previewed, then saved together — never one key at a time.
+    await waitFor(() => expect(domainWrites()).toHaveLength(2))
+    expect(domainWrites()[1]).toEqual({ legacy_rp_ids: '', origins: 'https://a.example.com,https://b.example.com', removal_confirmation: '', rp_id: '' })
+    expect(writes()).toHaveLength(0)
+  })
+
+  it('asks before stranding stored passkeys, and saves nothing when declined', async () => {
+    strandedPasskeys = 3
+    stored['passkey.legacy_rp_ids'] = 'old.example.com'
+    await renderLoaded(<PasskeySection />, PASSKEY_READY)
+
+    fireEvent.change(screen.getByLabelText('Legacy relying party IDs'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Stop accepting existing passkeys?' })
+    expect(within(dialog).getByText(/3 stored passkey\(s\) registered under them/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep the passkeys working' }))
+
+    expect(await screen.findByText(/Not saved: the domain change was cancelled/)).toBeInTheDocument()
+    expect(stored['passkey.legacy_rp_ids']).toBe('old.example.com')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Stop accepting existing passkeys?' })).getByRole('button', { name: 'Remove and save' }))
+
+    await waitFor(() => expect(stored['passkey.legacy_rp_ids']).toBe(''))
+    expect(domainWrites().at(-1)).toMatchObject({ legacy_rp_ids: '', removal_confirmation: 'token-1' })
   })
 
   it('refuses an http:// origin while insecure origins are off', async () => {
@@ -326,11 +379,9 @@ describe('PasskeySection', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Allow insecure origins' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await waitFor(() => expect(writes()).toHaveLength(2))
-    expect(writes().map((write) => write.key).sort()).toEqual([
-      'passkey.allow_insecure_origin',
-      'passkey.origins',
-    ])
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0].key).toBe('passkey.allow_insecure_origin')
+    expect(domainWrites().at(-1)).toMatchObject({ origins: 'http://localhost:3000' })
   })
 
   it('rejects a relying party ID that was typed as a URL', async () => {
