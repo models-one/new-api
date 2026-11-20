@@ -296,6 +296,33 @@ describe('the price sync apply mode, which decides what a run may overwrite', ()
   })
 })
 
+describe('log access and history', () => {
+  it('reads the defaults, writes only what changed, and refuses less than one day', async () => {
+    renderSection(<LogsSection />)
+    const range = await screen.findByRole('spinbutton', { name: 'Longest log range (days)' })
+    await waitFor(() => expect(range).toBeEnabled())
+    expect(range).toHaveValue(365)
+    expect(screen.getByRole('switch', { name: 'Users can export their logs' })).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Keep system task history (days)' }), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText('Enter a whole number of days, at least 1.')).toBeInTheDocument()
+    expect(optionWrites()).toHaveLength(0)
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Keep system task history (days)' }), { target: { value: '90' } })
+    fireEvent.change(range, { target: { value: '31' } })
+    fireEvent.click(screen.getByRole('switch', { name: 'Users can export their logs' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(optionWrites()).toHaveLength(3))
+    expect(optionWrites()).toEqual([
+      { key: 'log_setting.max_range_days', value: '31' },
+      { key: 'log_setting.user_export_enabled', value: 'false' },
+      { key: 'system_task_setting.retention_days', value: '90' },
+    ])
+  })
+})
+
 describe('choosing between SMTP and Resend', () => {
   async function openResend() {
     renderSection(<EmailSection />)

@@ -9,6 +9,7 @@ import { Alert, Badge, Button, DescriptionList, Panel, ProgressBar, Separator } 
 import { SettingsSection } from '@/features/system-settings/components/SettingsSection'
 import {
   readOptionBoolean,
+  readOptionNumber,
   systemOptionsQuery,
   type SystemOptionMap,
 } from '@/features/system-settings/options-store'
@@ -84,12 +85,42 @@ function toDraft(options: SystemOptionMap | undefined): LogsDraft {
   return { LogConsumeEnabled: readOptionBoolean(options, 'LogConsumeEnabled', true) }
 }
 
+/**
+ * How far users reach into their logs (`operation_setting.LogSetting`) and how long system
+ * task history is kept (`SystemTaskSetting`). Both day counts are refused below 1 by the
+ * server (`ValidateLogMaxRangeDays`, `ValidateSystemTaskRetentionDays`).
+ */
+type LogAccessDraft = {
+  'log_setting.user_export_enabled': boolean
+  'log_setting.max_range_days': number
+  'system_task_setting.retention_days': number
+}
+
+function toAccessDraft(options: SystemOptionMap | undefined): LogAccessDraft {
+  return {
+    'log_setting.max_range_days': readOptionNumber(options, 'log_setting.max_range_days', 365),
+    'log_setting.user_export_enabled': readOptionBoolean(options, 'log_setting.user_export_enabled', true),
+    'system_task_setting.retention_days': readOptionNumber(options, 'system_task_setting.retention_days', 30),
+  }
+}
+
 export function LogsSection() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const optionsQuery = useQuery(systemOptionsQuery())
 
   const form = useOptionSectionForm<LogsDraft>({ saved: toDraft(optionsQuery.data) })
+  const accessForm = useOptionSectionForm<LogAccessDraft>({
+    saved: toAccessDraft(optionsQuery.data),
+    validate: (values) => {
+      const errors: Partial<Record<keyof LogAccessDraft, string>> = {}
+      for (const key of ['log_setting.max_range_days', 'system_task_setting.retention_days'] as const) {
+        if (!Number.isInteger(values[key]) || values[key] < 1) errors[key] = t('Enter a whole number of days, at least 1.')
+      }
+      return errors
+    },
+  })
+  const accessDisabled = optionsQuery.isPending || accessForm.isSaving
 
   const [cutoffText, setCutoffText] = useState(() => toLocalInputValue(daysAgo(30)))
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false)
@@ -249,6 +280,45 @@ export function LogsSection() {
           label={t('Record a log row for every request')}
           onCheckedChange={(checked) => form.commitField('LogConsumeEnabled', checked)}
         />
+      </SettingsSection>
+
+      <SettingsSection
+        description={t('What users may do with their own logs, and how long system task history is kept.')}
+        form={accessForm}
+        saveMode="section"
+        title={t('Log access and history')}
+      >
+        <SwitchRow
+          checked={accessForm.values['log_setting.user_export_enabled']}
+          description={t('Lets users export their own usage logs. Administrators can always export.')}
+          disabled={accessDisabled}
+          label={t('Users can export their logs')}
+          onCheckedChange={(checked) => accessForm.setField('log_setting.user_export_enabled', checked)}
+        />
+        <div className="grid gap-5 md:grid-cols-2">
+          <NumberInput
+            description={t('The longest time range a user can search in their logs and dashboard, and the longest any export can cover.')}
+            disabled={accessDisabled}
+            error={accessForm.errors['log_setting.max_range_days']}
+            invalid={accessForm.errors['log_setting.max_range_days'] !== undefined}
+            label={t('Longest log range (days)')}
+            min={1}
+            onValueChange={(value) => accessForm.setField('log_setting.max_range_days', value ?? Number.NaN)}
+            step={1}
+            value={accessForm.values['log_setting.max_range_days']}
+          />
+          <NumberInput
+            description={t('Finished system tasks older than this are deleted by a daily task.')}
+            disabled={accessDisabled}
+            error={accessForm.errors['system_task_setting.retention_days']}
+            invalid={accessForm.errors['system_task_setting.retention_days'] !== undefined}
+            label={t('Keep system task history (days)')}
+            min={1}
+            onValueChange={(value) => accessForm.setField('system_task_setting.retention_days', value ?? Number.NaN)}
+            step={1}
+            value={accessForm.values['system_task_setting.retention_days']}
+          />
+        </div>
       </SettingsSection>
 
       <Panel as="section">
