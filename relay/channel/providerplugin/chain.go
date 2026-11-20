@@ -55,7 +55,7 @@ func (a *Adaptor) runChain(c *gin.Context, info *relaycommon.RelayInfo, first js
 		if err != nil {
 			return nil, err
 		}
-		canRenew := a.canRenew()
+		canRenew := !c.GetBool("pelican_test") && a.canRenew()
 		rejected := canRenew && a.rejected(c, info, resp)
 		outcome, err := a.readStep(c, info, resp, step, state, followUps == 0)
 		if err != nil {
@@ -280,7 +280,7 @@ func (a *Adaptor) openWebSocket(c *gin.Context, info *relaycommon.RelayInfo, con
 	request := converted.WebSocket
 	session, err := a.dialWebSocket(c, info, request)
 	var dialErr *types.NewAPIError
-	if err != nil && errors.As(err, &dialErr) && dialErr.StatusCode == http.StatusUnauthorized && a.canRenew() && a.renew(c, info) == nil {
+	if err != nil && errors.As(err, &dialErr) && dialErr.StatusCode == http.StatusUnauthorized && !c.GetBool("pelican_test") && a.canRenew() && a.renew(c, info) == nil {
 		session, err = a.dialWebSocket(c, info, request)
 	}
 	if err != nil {
@@ -358,6 +358,7 @@ func (a *Adaptor) dialWebSocket(c *gin.Context, info *relaycommon.RelayInfo, req
 	if info.ChannelSetting.TLSInsecureSkipVerify {
 		dialer.TLSClientConfig = common2.InsecureTLSConfig
 	}
+	channel.ObservePelicanUpstream(c, target, header)
 	session, resp, err := dialer.DialContext(c.Request.Context(), target.String(), header)
 	if err != nil {
 		statusCode := http.StatusBadGateway

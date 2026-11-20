@@ -86,7 +86,8 @@ func GetOptions(c *gin.Context) {
 	optionValues := make(map[string]string)
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
-		if k == "theme.frontend" || k == "billing_setting.billing_mode" || k == "billing_setting.billing_expr" || k == "ResendKeyConfigured" {
+		if k == "theme.frontend" || k == "billing_setting.billing_mode" || k == "billing_setting.billing_expr" || k == "ResendKeyConfigured" ||
+			k == system_setting.PelicanConnectionOptionKey || k == system_setting.PelicanTestTokenOptionKey {
 			continue
 		}
 		value := common.Interface2String(v)
@@ -189,6 +190,11 @@ func UpdateOption(c *gin.Context) {
 	err := common.DecodeJson(c.Request.Body, &option)
 	if err != nil {
 		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Invalid parameters"))
+		return
+	}
+	switch option.Key {
+	case system_setting.PelicanServiceURLOptionKey, system_setting.PelicanConnectionOptionKey, system_setting.PelicanTestTokenOptionKey:
+		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Change this value in the artifact service settings"))
 		return
 	}
 	switch option.Value.(type) {

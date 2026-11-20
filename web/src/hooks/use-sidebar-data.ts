@@ -139,6 +139,11 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             icon: Radio,
           },
           {
+            title: t('Pelican tests'),
+            url: '/pelican-management',
+            icon: FlaskConical,
+          },
+          {
             title: t('Models'),
             url: '/models/metadata',
             icon: Box,

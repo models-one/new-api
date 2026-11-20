@@ -67,6 +67,11 @@ func newAwsClient(c *gin.Context, info *relaycommon.RelayInfo) (*bedrockruntime.
 		return nil, fmt.Errorf("new proxy http client failed: %w", err)
 	}
 
+	configureProbe := func(options *bedrockruntime.Options) {
+		if c.GetBool("pelican_test") {
+			options.RetryMaxAttempts = 1
+		}
+	}
 	awsSecret := strings.Split(info.ApiKey, "|")
 	var client *bedrockruntime.Client
 	switch len(awsSecret) {
@@ -77,7 +82,7 @@ func newAwsClient(c *gin.Context, info *relaycommon.RelayInfo) (*bedrockruntime.
 			Region:                  region,
 			BearerAuthTokenProvider: bearer.StaticTokenProvider{Token: bearer.Token{Value: apiKey}},
 			HTTPClient:              httpClient,
-		})
+		}, configureProbe)
 	case 3:
 		ak := awsSecret[0]
 		sk := awsSecret[1]
@@ -86,7 +91,7 @@ func newAwsClient(c *gin.Context, info *relaycommon.RelayInfo) (*bedrockruntime.
 			Region:      region,
 			Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(ak, sk, "")),
 			HTTPClient:  httpClient,
-		})
+		}, configureProbe)
 	default:
 		return nil, errors.New("invalid aws secret key")
 	}

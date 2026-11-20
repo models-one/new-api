@@ -74,6 +74,7 @@ const primaryNavigation: NavigationItem[] = [
 ]
 
 const workspaceNavigation: NavigationItem[] = [
+  { labelKey: 'Pelican tests', to: '/pelican', icon: ImageIcon },
   { labelKey: 'API Logs', to: '/logs', icon: FileClockIcon },
   // URL kept as /organization: router/web-router.go only serves this console for a fixed
   // path whitelist, and /referral is not on it yet.
@@ -85,6 +86,7 @@ const workspaceNavigation: NavigationItem[] = [
 ]
 
 const administrationNavigation: NavigationItem[] = [
+  { labelKey: 'Manage tests', to: '/pelican-management', icon: ListChecksIcon, adminOnly: true },
   { labelKey: 'Users', to: '/users', icon: UsersRoundIcon, adminOnly: true },
   { labelKey: 'Channels', to: '/channels', icon: PlugZapIcon, adminOnly: true },
   { labelKey: 'Plugins', to: '/task-plugins', icon: PuzzleIcon, adminOnly: true, rootOnly: true },
@@ -180,12 +182,15 @@ export function Sidebar(props: SidebarProps) {
   const accountEmail = storedUser?.email ?? selfQuery.data?.email ?? ''
   const accountGroup = storedUser?.group ?? selfQuery.data?.group ?? ''
 
+  const visibleWorkspace = workspaceNavigation.filter(
+    (item) => item.to !== '/pelican' || statusQuery.data?.pelican_enabled === true,
+  )
   const visibleAdministration = administrationNavigation.filter(
     (item) =>
       (!item.adminOnly || (role !== undefined && role >= ADMIN_ROLE)) &&
       (!item.rootOnly || (role !== undefined && role >= ROOT_ROLE)),
   )
-  const allItems = [...primaryNavigation, ...workspaceNavigation, ...visibleAdministration]
+  const allItems = [...primaryNavigation, ...visibleWorkspace, ...visibleAdministration]
   const activePath = activeNavigationPath(pathname, allItems)
   const isActive = (item: NavigationItem) => navigationBase(item) === activePath
 
@@ -302,7 +307,7 @@ export function Sidebar(props: SidebarProps) {
             <div className="flex flex-col gap-2">
               <p className="eyebrow px-3">{t('Workspace')}</p>
               <div className="flex flex-col gap-1">
-                {workspaceNavigation.map((item) => (
+                {visibleWorkspace.map((item) => (
                   <NavigationLink
                     active={isActive(item)}
                     item={item}

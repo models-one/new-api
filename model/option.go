@@ -86,6 +86,7 @@ func InitOptionMap() {
 	common.OptionMap["ServerAddress"] = ""
 	common.OptionMap["TaskPublicAddress"] = system_setting.TaskPublicAddress
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
+	common.OptionMap[system_setting.PelicanServiceURLOptionKey] = ""
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
 	common.OptionMap["WorkerAllowHttpImageRequestEnabled"] = strconv.FormatBool(system_setting.WorkerAllowHttpImageRequestEnabled)
 	common.OptionMap["PayAddress"] = ""
@@ -242,6 +243,10 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
+	if key == system_setting.PelicanServiceURLOptionKey {
+		_, err := system_setting.NormalizePelicanServiceURL(value)
+		return err
+	}
 	if key == legacyAccessTokenRetireAtKey {
 		return errLegacyRetireAtReadOnly
 	}
@@ -291,6 +296,9 @@ func validateOptionValue(key string, value string) error {
 }
 
 func UpdateOption(key string, value string) error {
+	if key == system_setting.PelicanServiceURLOptionKey {
+		return UpdateOptionsBulk(map[string]string{key: value})
+	}
 	if IsRequestPolicyOption(key) {
 		return UpdateRequestPolicyOptions(map[string]string{key: value})
 	}
@@ -328,6 +336,14 @@ func UpdateOption(key string, value string) error {
 func UpdateOptionsBulk(values map[string]string) error {
 	if len(values) == 0 {
 		return nil
+	}
+	if value, ok := values[system_setting.PelicanServiceURLOptionKey]; ok {
+		normalized, err := system_setting.NormalizePelicanServiceURL(value)
+		if err != nil {
+			return err
+		}
+		values = maps.Clone(values)
+		values[system_setting.PelicanServiceURLOptionKey] = normalized
 	}
 	for key := range values {
 		if IsPasskeyDomainOption(key) {
@@ -389,6 +405,12 @@ func UpdateOptionsBulk(values map[string]string) error {
 }
 
 func updateOptionMap(key string, value string) (err error) {
+	if key == system_setting.PelicanServiceURLOptionKey {
+		value, err = system_setting.NormalizePelicanServiceURL(value)
+		if err != nil {
+			return err
+		}
+	}
 	if key == retiredThemeOptionKey || key == legacyAccessTokenRetireAtKey {
 		common.OptionMapRWMutex.Lock()
 		delete(common.OptionMap, key)

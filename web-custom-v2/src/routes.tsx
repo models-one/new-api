@@ -240,6 +240,18 @@ const dashboardRoute = createRoute({
   component: lazyRouteComponent(() => import('@/features/dashboard/DashboardPage'), 'DashboardPage'),
 })
 
+const pelicanRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/pelican',
+  component: lazyRouteComponent(() => import('@/features/pelican/gallery'), 'PelicanGallery'),
+})
+
+const pelicanManagementRoute = createRoute({
+  getParentRoute: () => consoleRoute,
+  path: '/pelican-management',
+  component: lazyRouteComponent(() => import('@/features/pelican/admin'), 'PelicanAdmin'),
+})
+
 const settingsRoute = createRoute({
   getParentRoute: () => consoleRoute,
   path: '/settings',
@@ -659,6 +671,8 @@ const routeTree = rootRoute.addChildren([
   rankingsRoute,
   consoleRoute.addChildren([
     dashboardRoute,
+    pelicanRoute,
+    pelicanManagementRoute,
     settingsRoute,
     modelsRoute,
     usageRoute,

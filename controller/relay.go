@@ -71,6 +71,8 @@ func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewA
 }
 
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
+	observation, _ := c.Get(pelicanContextKey)
+	pelican, _ := observation.(*pelicanObservation)
 
 	requestId := c.GetString(common.RequestIdKey)
 	//group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
@@ -97,13 +99,22 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	// hooks receive the request once the client has the whole response and
 	// the request has settled.
 	defer func() {
-		requestplugin.Report(c, relayFormat, relayInfo, ingressRecord, newAPIError)
+		// Probe diagnostics are sanitized after Relay returns; never export the
+		// unsanitized response through asynchronous report hooks.
+		if pelican == nil {
+			requestplugin.Report(c, relayFormat, relayInfo, ingressRecord, newAPIError)
+		}
 	}()
 
 	defer func() {
 		if newAPIError != nil {
+			if pelican != nil {
+				pelican.Err = newAPIError
+			}
 			service.RecordRequestPolicyTermination(c, newAPIError)
-			logger.LogError(c, common.LogText("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
+			if pelican == nil {
+				logger.LogError(c, common.LogText("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
+			}
 			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
 			upstreamURLs := common.UpstreamAddresses(c)
 			if relayFormat != types.RelayFormatOpenAIRealtime && c.Writer.Written() &&
@@ -162,6 +173,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 	relayInfo.SetRequestPluginIngress(ingressSteps, ingressRecord)
+	if pelican != nil {
+		pelican.Info = relayInfo
+	}
 
 	defer func() {
 		recovered := recover()
@@ -169,7 +183,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if recovered != nil {
 			resultErr = types.NewError(fmt.Errorf("relay panic: %v", recovered), types.ErrorCodeBadResponse)
 		}
-		if relayFormat != types.RelayFormatOpenAIRealtime {
+		if relayFormat != types.RelayFormatOpenAIRealtime && pelican == nil {
 			perfmetrics.RecordRelayResult(c.Request.Context(), relayInfo, resultErr)
 		}
 		if recovered != nil {
@@ -255,7 +269,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		decision := service.DecideRelayRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry())
 		service.RecordPolicyFailure(c, channel.Id, newAPIError, decision)
-		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, relayInfo)
+		if pelican == nil {
+			processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, relayInfo)
+		}
 
 		if decision.Action != "retry" {
 			break
