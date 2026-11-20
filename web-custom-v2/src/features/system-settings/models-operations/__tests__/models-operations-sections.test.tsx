@@ -296,6 +296,55 @@ describe('the price sync apply mode, which decides what a run may overwrite', ()
   })
 })
 
+describe('choosing between SMTP and Resend', () => {
+  async function openResend() {
+    renderSection(<EmailSection />)
+    const resend = await screen.findByRole('radio', { name: /^Resend/ })
+    await waitFor(() => expect(resend).toBeEnabled())
+    fireEvent.click(resend)
+  }
+
+  it('stores the Resend key and sender before switching to Resend, which the server checks them against', async () => {
+    await openResend()
+    fireEvent.change(screen.getByLabelText('Resend API key'), { target: { value: ' re_123 ' } })
+    fireEvent.change(screen.getByLabelText('Sender'), { target: { value: 'Acme <noreply@acme.test>' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(optionWrites()).toHaveLength(3))
+    expect(optionWrites()).toEqual([
+      { key: 'ResendApiKey', value: 're_123' },
+      { key: 'ResendFrom', value: 'Acme <noreply@acme.test>' },
+      { key: 'EmailProvider', value: 'resend' },
+    ])
+  })
+
+  it('refuses Resend without a key when none is stored, or with a bad sender', async () => {
+    await openResend()
+    fireEvent.change(screen.getByLabelText('Sender'), { target: { value: 'not an address' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(await screen.findByText('No Resend API key is stored yet. Enter one to send with Resend.')).toBeInTheDocument()
+    expect(screen.getByText('Enter the sender as an address, or a display name with one in angle brackets.')).toBeInTheDocument()
+    expect(optionWrites()).toHaveLength(0)
+  })
+
+  it('keeps a stored key when switching back, writing the provider first', async () => {
+    server.stored.EmailProvider = 'resend'
+    server.stored.ResendFrom = 'noreply@acme.test'
+    server.stored.ResendKeyConfigured = 'true'
+    renderSection(<EmailSection />)
+    const smtp = await screen.findByRole('radio', { name: /^SMTP/ })
+    await waitFor(() => expect(smtp).toBeEnabled())
+    expect(screen.getByText('A key is stored. Leave empty to keep it; anything you type replaces it.')).toBeInTheDocument()
+
+    fireEvent.click(smtp)
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(optionWrites()).toHaveLength(1))
+    expect(optionWrites()[0]).toEqual({ key: 'EmailProvider', value: 'smtp' })
+  })
+})
+
 describe('the write-only SMTP password', () => {
   it('opens empty and never claims the stored password is unset', async () => {
     renderSection(<EmailSection />)

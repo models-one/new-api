@@ -178,7 +178,7 @@ describe('the group and section navigation', () => {
       'href',
       '/system-settings/operations/behavior',
     )
-    expect(sections.getByRole('link', { name: 'SMTP e-mail' })).toHaveAttribute(
+    expect(sections.getByRole('link', { name: 'E-mail' })).toHaveAttribute(
       'href',
       '/system-settings/operations/email',
     )

@@ -40,9 +40,9 @@ export const operationsGroup: SettingsGroupDefinition = {
     },
     {
       Component: EmailSection,
-      description: 'The mail server used for verification and password resets.',
+      description: 'How verification and password-reset mail is sent: SMTP or Resend.',
       id: 'email',
-      title: 'SMTP e-mail',
+      title: 'E-mail',
     },
     {
       Component: WorkerSection,
