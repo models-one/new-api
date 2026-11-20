@@ -12,6 +12,7 @@ import {
   writePriceTable,
   type PriceTable,
 } from '@/features/system-settings/billing/task-plugin-pricing'
+import { PriceSimulator } from '@/features/system-settings/billing/components/PriceSimulator'
 import { PluginIcon } from '@/features/task-plugins/components/PluginIcon'
 import { localizedText } from '@/features/task-plugins/presentation'
 import { taskExpressionCompatible } from '@/lib/billing-expression/plugin-pricing'
@@ -272,6 +273,8 @@ function OwnPrice(props: OwnPriceProps) {
           value={props.expression}
         />
       )}
+
+      {props.expression.trim() !== '' && compatible !== false ? <PriceSimulator expression={props.expression} kind="task" schema={props.schema} /> : null}
 
       {compatible === false ? (
         <Alert tone="warning">{t('This price reads something this plugin does not report, so the server will refuse it.')}</Alert>

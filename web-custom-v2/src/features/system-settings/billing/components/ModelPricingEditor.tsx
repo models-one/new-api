@@ -7,6 +7,7 @@ import TriangleAlertIcon from 'lucide-react/dist/esm/icons/triangle-alert'
 import { Input, NumberInput, RadioGroup, Textarea, type RadioOption } from '@/components/form'
 import { ConfirmDialog, Dialog, toErrorMessage } from '@/components/overlay'
 import { Alert, Badge, Button, Panel, SegmentedControl } from '@/components/ui'
+import { PriceSimulator } from '@/features/system-settings/billing/components/PriceSimulator'
 import { TaskPluginPrices } from '@/features/system-settings/billing/components/TaskPluginPrices'
 import { TieredExpressionEditor, type TieredResult } from '@/features/system-settings/billing/components/TieredExpressionEditor'
 import {
@@ -360,6 +361,9 @@ export function ModelPricingEditor(props: ModelPricingEditorProps) {
                   />
                 </div>
               ) : null}
+
+              {/* An incomplete tiered draft still holds the last complete expression; trying it would mislead. */}
+              {draft.expression.trim() !== '' && !tieredBlocked ? <PriceSimulator expression={draft.expression} kind="token" /> : null}
             </section>
           ) : null}
 

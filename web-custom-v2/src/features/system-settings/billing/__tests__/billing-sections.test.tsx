@@ -1199,6 +1199,51 @@ describe('ModelPricingSection, upstream sync', () => {
   })
 })
 
+describe('ModelPricingSection, trying a price', () => {
+  it('prices a sample request, request rules included, without saving anything', async () => {
+    const expr = '(len <= 32000 ? tier("short", p * 2 + c * 8) : tier("long", p * 4 + c * 16)) * (param("service_tier") == "priority" ? 2 : 1)'
+    server.stored['billing_setting.billing_mode'] = '{"claude-x":"tiered_expr"}'
+    server.stored['billing_setting.billing_expr'] = JSON.stringify({ 'claude-x': expr })
+    renderSection(<ModelPricingSection />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit pricing for claude-x' }))
+    const dialog = await screen.findByRole('dialog')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Try this price' }))
+    fireEvent.change(within(dialog).getByLabelText('Input tokens'), { target: { value: '10000' } })
+    fireEvent.change(within(dialog).getByLabelText('Output tokens'), { target: { value: '1000' } })
+
+    // 10,000 × $2 + 1,000 × $8 per 1M = $0.028, short tier, no priority.
+    expect(await within(dialog).findByText('This request costs $0.028')).toBeInTheDocument()
+    expect(within(dialog).getByText('Tier: short')).toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText('Sample request body'), { target: { value: '{"service_tier":"priority"}' } })
+    expect(await within(dialog).findByText('This request costs $0.056')).toBeInTheDocument()
+    expect(within(dialog).getByText(/^Applied ×2/)).toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText('Full input length'), { target: { value: '50000' } })
+    expect(await within(dialog).findByText('Tier: long')).toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText('Sample request body'), { target: { value: '[1]' } })
+    expect(await within(dialog).findByText('Request body must be a JSON object.')).toBeInTheDocument()
+    expect(patch).not.toHaveBeenCalled()
+  })
+
+  it('prices a plugin task from the usage it reports', async () => {
+    server.stored.ModelPrice = '{"veo-3":0.5}'
+    server.stored[PLUGIN_KEY] = JSON.stringify({ 'vertex::veo-3': 'u("resolution") == "4k" ? tier("4k", u("seconds") * 0.6) : tier("hd", u("seconds") * 0.2)' })
+    server.plugins['veo-3'] = [{ key: 'vertex', schema: { resolution: { enum: ['hd', '4k'], type: 'number' }, seconds: { type: 'number', unit: 'second' } } }]
+    renderSection(<ModelPricingSection />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit pricing for veo-3' }))
+    const dialog = await screen.findByRole('dialog')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Try this price' }))
+    fireEvent.change(within(dialog).getByLabelText('resolution'), { target: { value: '4k' } })
+    fireEvent.change(within(dialog).getByLabelText('seconds'), { target: { value: '8' } })
+
+    expect(await within(dialog).findByText('This task costs $4.8')).toBeInTheDocument()
+  })
+})
+
 describe('GroupPricingSection', () => {
   it('shows a group that is priced but that no user can select', async () => {
     renderSection(<GroupPricingSection />)
